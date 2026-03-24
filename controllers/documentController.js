@@ -26,8 +26,13 @@ exports.getUserDocuments = async (req, res) => {
     try {
         const { username } = req.params;
         
-        const user = await prisma.user.findUnique({
-            where: { username },
+        const user = await prisma.user.findFirst({
+            where: { 
+                username: {
+                    equals: username,
+                    mode: 'insensitive'
+                }
+            },
             include: {
                 documents: {
                     select: {
