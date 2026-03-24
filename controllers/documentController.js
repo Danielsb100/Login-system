@@ -24,9 +24,12 @@ exports.uploadDocument = async (req, res) => {
 
 exports.getUserDocuments = async (req, res) => {
     try {
-        const { username } = req.params;
+        let { username } = req.params;
+        username = username ? username.trim() : '';
         
-        const user = await prisma.user.findFirst({
+        console.log(`[DEBUG] Assets Lookup: username='${username}' (length: ${username.length})`);
+        
+        let user = await prisma.user.findFirst({
             where: { 
                 username: {
                     equals: username,
@@ -44,6 +47,24 @@ exports.getUserDocuments = async (req, res) => {
                 }
             }
         });
+
+        // LAST RESORT FALLBACK: If findFirst fails, scan manually
+        if (!user) {
+            console.warn(`[REDUNDANCY] findFirst failed for '${username}'. Scanning all users...`);
+            const allUsers = await prisma.user.findMany({ include: { documents: true } });
+            user = allUsers.find(u => u.username.toLowerCase().trim() === username.toLowerCase());
+            
+            if (user) {
+                 console.log(`[SUCCESS] Redundancy found user: '${user.username}' (ID: ${user.id})`);
+                 // Re-map documents to safe format (strip binary data)
+                 user.documents = user.documents.map(d => ({
+                    id: d.id,
+                    name: d.name,
+                    type: d.type,
+                    createdAt: d.createdAt
+                 }));
+            }
+        }
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
