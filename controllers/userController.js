@@ -21,6 +21,22 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+const resetDatabase = async (req, res) => {
+  try {
+    // Exclui todos do banco de dados, MENOS o MASTER que chamou a função!
+    await prisma.user.deleteMany({
+      where: {
+        id: { not: req.user.id }
+      }
+    });
+    res.status(200).json({ message: 'Todos os usuários comuns foram limpos do banco!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Falha ao tentar resetar os usuários.' });
+  }
+};
+
 module.exports = {
-  getAllUsers
+  getAllUsers,
+  resetDatabase
 };

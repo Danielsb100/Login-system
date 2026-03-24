@@ -51,8 +51,13 @@
         <!-- Admin Panel Section (Hidden for normal users) -->
         <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
             <div class="section-header">
-                <h2>Admin Control Panel</h2>
-                <p>Manage and view all registered users.</p>
+                <div>
+                    <h2>Admin Control Panel</h2>
+                    <p>Manage and view all registered users.</p>
+                </div>
+                <button onclick="resetDatabase()" id="btn-reset-db" class="btn btn-secondary btn-sm hidden" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">
+                   Limpar Dados (Reset)
+                </button>
             </div>
             
             <div class="table-container">

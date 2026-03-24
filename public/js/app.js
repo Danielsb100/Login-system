@@ -138,6 +138,11 @@ async function loadDashboard() {
         // If user is ADMIN or MASTER, load admin panel
         if (user.role === 'ADMIN' || user.role === 'MASTER') {
             await loadAdminPanel();
+
+            if (user.role === 'MASTER') {
+                const btnReset = document.getElementById('btn-reset-db');
+                if (btnReset) btnReset.classList.remove('hidden');
+            }
         }
 
     } catch (error) {
@@ -177,5 +182,28 @@ async function loadAdminPanel() {
         
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="5" style="color: var(--error); text-align: center;">Failed to load users: ${error.message}</td></tr>`;
+    }
+}
+
+async function resetDatabase() {
+    const confirmation = confirm("TEM CERTEZA ABSOLUTA?\n\nIsso irá deletar TODOS os usuários do sistema, deixando apenas a sua própria conta MASTER ativa. Essa ação não pode ser desfeita!");
+    if (!confirmation) return;
+
+    try {
+        const btnReset = document.getElementById('btn-reset-db');
+        const originalText = btnReset.textContent;
+        btnReset.textContent = "Apagando...";
+        btnReset.disabled = true;
+
+        const res = await apiCall('/api/users/reset', 'POST');
+        alert(res.message);
+        
+        // Recarrega a lista para mostrar que esvaziou
+        await loadAdminPanel(); 
+
+        btnReset.textContent = originalText;
+        btnReset.disabled = false;
+    } catch (err) {
+        alert('Erro ao resetar: ' + err.message);
     }
 }

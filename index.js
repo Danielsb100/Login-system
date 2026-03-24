@@ -6,6 +6,8 @@ const authenticateToken = require('./middleware/authMiddleware');
 const userController = require('./controllers/userController');
 const roleMiddleware = require('./middleware/roleMiddleware');
 const path = require('path');
+const bcrypt = require('bcrypt');
+const prisma = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,12 +29,45 @@ app.get('/auth/verify', authenticateToken, authController.verify);
 // Admin / Master route to fetch all users
 app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), userController.getAllUsers);
 
+// Rota exclusiva para o MASTER resetar a database
+app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
+
 // Root endpoint test
 app.get('/', (req, res) => {
   res.send('Authentication API is running.');
 });
 
 // Start server
-app.listen(PORT, () => {
+const seedMasterUser = async () => {
+  try {
+      // Se não houver variáveis, usa o padrão abaixo:
+      const username = process.env.MASTER_USERNAME || 'admin';
+      const email = process.env.MASTER_EMAIL || 'admin@master.com';
+      const password = process.env.MASTER_PASSWORD || 'master123';
+
+      const existingMaster = await prisma.user.findFirst({
+          where: { OR: [{ email }, { username }] }
+      });
+
+      if (!existingMaster) {
+          const password_hash = await bcrypt.hash(password, 10);
+          await prisma.user.create({
+              data: { username, email, password_hash, role: 'MASTER' }
+          });
+          console.log(`✅ [Automático] Master user criado: ${username} / ${password}`);
+      } else if (existingMaster.role !== 'MASTER') {
+          await prisma.user.update({
+              where: { id: existingMaster.id },
+              data: { role: 'MASTER' }
+          });
+          console.log(`✅ [Automático] Conta de ${username} convertida para MASTER.`);
+      }
+  } catch (err) {
+      console.error('Falha ao criar o Master User automaticamente:', err);
+  }
+};
+
+app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
+  await seedMasterUser();
 });
