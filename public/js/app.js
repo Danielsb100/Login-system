@@ -149,8 +149,15 @@ async function loadDashboard() {
         await loadUserDocuments();
 
     } catch (error) {
-        console.error('Session expired or invalid', error);
-        logout();
+        console.error('Dashboard error:', error);
+        // Only logout if it's a 401 or specific auth error
+        if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
+            alert('Sessão expirada. Por favor, faça login novamente.');
+            logout();
+        } else {
+            console.error('Critical Dashboard failure: ', error.message);
+            // Optionally show error on screen instead of logging out
+        }
     }
 }
 
