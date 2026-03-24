@@ -1,0 +1,1 @@
+const { Client } = require('pg'); require('dotenv').config(); const client = new Client({ connectionString: process.env.DATABASE_URL }); client.connect().then(() = console.log('Connected'); process.exit(0); }).catch(e = console.error('Error:', e.message); process.exit(1); });  
