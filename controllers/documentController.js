@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+// SYNC_CHECK: 24/03/2026 16:40
 
 exports.uploadDocument = async (req, res) => {
     try {

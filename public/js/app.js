@@ -1,4 +1,5 @@
 const API_URL = ''; // Same origin
+// SYNC_CHECK: 24/03/2026 16:40
 
 // --- UI Helpers ---
 function showMessage(elementId, message, isError = false) {
@@ -90,6 +91,7 @@ if (registerForm) {
         const password = document.getElementById('register-password').value;
         const btn = registerForm.querySelector('button');
 
+        // SYNC_CHECK: 24/03/2026 16:40
         try {
             btn.textContent = 'Creating account...';
             btn.disabled = true;
