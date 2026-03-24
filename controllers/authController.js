@@ -41,7 +41,8 @@ const register = async (req, res) => {
       user: {
         id: newUser.id,
         username: newUser.username,
-        email: newUser.email
+        email: newUser.email,
+        role: newUser.role
       }
     });
   } catch (error) {
@@ -71,7 +72,7 @@ const login = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user.id, username: user.username, email: user.email },
+      { id: user.id, username: user.username, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -82,7 +83,8 @@ const login = async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        role: user.role
       }
     });
   } catch (error) {

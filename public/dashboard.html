@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="mesh-blob blob-1"></div>
+        <div class="mesh-blob blob-2"></div>
+    </div>
+    
+    <nav class="navbar glassmorphism">
+        <div class="nav-content">
+            <h1 class="logo">System Dashboard</h1>
+            <div class="nav-actions">
+                <div class="user-badge" id="nav-user-badge">Loading...</div>
+                <button onclick="logout()" class="btn btn-secondary btn-sm">Log Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container dashboard-container">
+        
+        <!-- Profile Section -->
+        <section class="card glassmorphism section-profile fade-in">
+            <div class="section-header">
+                <h2>Your Profile</h2>
+                <div class="role-badge" id="profile-role">USER</div>
+            </div>
+            
+            <div class="profile-details">
+                <div class="detail-item">
+                    <span class="detail-label">Username</span>
+                    <span class="detail-value" id="profile-username">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Email</span>
+                    <span class="detail-value" id="profile-email">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">User ID</span>
+                    <span class="detail-value" id="profile-id">-</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Panel Section (Hidden for normal users) -->
+        <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
+            <div class="section-header">
+                <h2>Admin Control Panel</h2>
+                <p>Manage and view all registered users.</p>
+            </div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Created At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--text-muted);">Loading users...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        // Check authentication immediately
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+        });
+    </script>
+</body>
+</html>
