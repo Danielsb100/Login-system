@@ -25,55 +25,69 @@
 
     <div class="container dashboard-container">
         
-        <!-- Profile Section -->
+        <!-- PERSONAL SESSION -->
         <section class="card glassmorphism section-profile fade-in">
             <div class="section-header">
                 <h2>Your Profile</h2>
                 <div class="role-badge" id="profile-role">USER</div>
             </div>
             
-        </section>
-        
-        <!-- Documents Section -->
-        <section class="card glassmorphism section-docs slide-up fade-in">
-            <div class="section-header">
-                <h2>Your Shared Assets</h2>
-                <div class="header-actions">
-                    <input type="file" id="doc-upload-input" accept=".pdf" style="display: none;">
-                    <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload PDF</button>
-                    <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">🔄</button>
+            <div class="profile-details">
+                <div class="detail-item">
+                    <span class="detail-label">Username</span>
+                    <span class="detail-value" id="profile-username">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Email</span>
+                    <span class="detail-value" id="profile-email">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">User ID</span>
+                    <span class="detail-value" id="profile-id">-</span>
                 </div>
             </div>
-            
-            <div id="doc-message" class="form-message"></div>
-            
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Date</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="docs-table-body">
-                        <tr>
-                            <td colspan="3" style="text-align: center; color: var(--text-muted);">No documents shared yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
+
+            <!-- Expandable Assets Accordion -->
+            <div class="accordion slide-up" style="margin-top: 2rem;" id="personal-assets-accordion">
+                <div class="accordion-header glassmorphism" style="padding: 1rem; border-radius: 8px;" onclick="toggleAccordion('personal-assets-accordion')">
+                    <strong>Manage Shared Assets</strong>
+                </div>
+                <div class="accordion-content">
+                    <div class="header-actions" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
+                        <input type="file" id="doc-upload-input" accept=".pdf" style="display: none;">
+                        <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload PDF</button>
+                        <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">Refresh List</button>
+                    </div>
+                    <div id="doc-message" class="form-message"></div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="docs-table-body">
+                                <tr>
+                                    <td colspan="3" style="text-align: center; color: var(--text-muted);">No documents shared yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- Admin Panel Section (Hidden for normal users) -->
+        <!-- USERS LIST SESSION (Master Only) -->
         <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
             <div class="section-header">
                 <div>
-                    <h2>Admin Control Panel</h2>
-                    <p>Manage and view all registered users.</p>
+                    <h2>User Management</h2>
+                    <p>Click on a user to view their profile and assets.</p>
                 </div>
                 <button onclick="resetDatabase()" id="btn-reset-db" class="btn btn-secondary btn-sm hidden" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">
-                   Limpar Dados (Reset)
+                   Limpar Banco
                 </button>
             </div>
             
@@ -85,13 +99,11 @@
                             <th>Username</th>
                             <th>Email</th>
                             <th>Role</th>
-                            <th>Created At</th>
+                            <th>Created</th>
                         </tr>
                     </thead>
                     <tbody id="users-table-body">
-                        <tr>
-                            <td colspan="5" style="text-align: center; color: var(--text-muted);">Loading users...</td>
-                        </tr>
+                        <!-- Populated via JS -->
                     </tbody>
                 </table>
             </div>
@@ -99,12 +111,49 @@
 
     </div>
 
+    <!-- User Drilldown Modal -->
+    <div class="modal-overlay" id="user-drilldown-modal">
+        <div class="modal-card card glassmorphism">
+            <div class="section-header">
+                <h2 id="drill-name">User Profile</h2>
+                <button onclick="closeDrilldown()" class="btn btn-secondary btn-sm">Close</button>
+            </div>
+            <div class="profile-details" style="margin-bottom: 2rem;">
+                <div class="detail-item">
+                    <span class="detail-label">Email</span>
+                    <span id="drill-email">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Role</span>
+                    <span id="drill-role">-</span>
+                </div>
+            </div>
+            <h3>User's Shared Assets</h3>
+            <div class="table-container" style="margin-top: 1rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Download</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drill-assets-body">
+                        <!-- List -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/app.js"></script>
     <script>
-        // Check authentication immediately
         document.addEventListener('DOMContentLoaded', () => {
             loadDashboard();
         });
+        
+        function toggleAccordion(id) {
+            document.getElementById(id).classList.toggle('active');
+        }
     </script>
 </body>
 </html>

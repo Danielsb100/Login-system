@@ -129,7 +129,7 @@ async function loadDashboard() {
         
         document.getElementById('profile-username').textContent = user.username;
         document.getElementById('profile-email').textContent = user.email;
-        document.getElementById('profile-id').textContent = user.id;
+        document.getElementById('profile-id').textContent = `#${user.id}`;
         
         const roleBadge = document.getElementById('profile-role');
         roleBadge.textContent = user.role;
@@ -180,6 +180,8 @@ async function loadAdminPanel() {
         users.forEach(u => {
             const date = new Date(u.createdAt).toLocaleDateString();
             const tr = document.createElement('tr');
+            tr.className = 'clickable-row';
+            tr.onclick = () => viewUserDrilldown(u.username);
             tr.innerHTML = `
                 <td>#${u.id}</td>
                 <td><strong>${u.username}</strong></td>
@@ -318,4 +320,45 @@ if (docInput) {
             e.target.value = ''; // Reset
         }
     });
+}
+
+// --- Master Drilldown logic ---
+
+async function viewUserDrilldown(username) {
+    const modal = document.getElementById('user-drilldown-modal');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    document.getElementById('drill-name').textContent = `User: ${username}`;
+    document.getElementById('drill-assets-body').innerHTML = '<tr><td colspan="2">Loading assets...</td></tr>';
+
+    try {
+        const res = await apiCall(`/api/documents/user/${username}`);
+        const docs = res.documents;
+
+        if (docs.length === 0) {
+            document.getElementById('drill-assets-body').innerHTML = '<tr><td colspan="2" style="text-align: center;">No shared assets.</td></tr>';
+        } else {
+            document.getElementById('drill-assets-body').innerHTML = '';
+            docs.forEach(doc => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${doc.name}</td>
+                    <td><button onclick="downloadDocument(${doc.id}, '${doc.name}')" class="btn btn-secondary btn-sm">Download</button></td>
+                `;
+                document.getElementById('drill-assets-body').appendChild(tr);
+            });
+        }
+    } catch (err) {
+        document.getElementById('drill-assets-body').innerHTML = `<tr><td colspan="2" style="color: var(--error);">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function closeDrilldown() {
+    const modal = document.getElementById('user-drilldown-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function toggleAccordion(id) {
+    document.getElementById(id).classList.toggle('active');
 }
