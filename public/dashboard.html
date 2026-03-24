@@ -32,19 +32,36 @@
                 <div class="role-badge" id="profile-role">USER</div>
             </div>
             
-            <div class="profile-details">
-                <div class="detail-item">
-                    <span class="detail-label">Username</span>
-                    <span class="detail-value" id="profile-username">-</span>
+        </section>
+        
+        <!-- Documents Section -->
+        <section class="card glassmorphism section-docs slide-up fade-in">
+            <div class="section-header">
+                <h2>Your Shared Assets</h2>
+                <div class="header-actions">
+                    <input type="file" id="doc-upload-input" accept=".pdf" style="display: none;">
+                    <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload PDF</button>
+                    <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">🔄</button>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">Email</span>
-                    <span class="detail-value" id="profile-email">-</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">User ID</span>
-                    <span class="detail-value" id="profile-id">-</span>
-                </div>
+            </div>
+            
+            <div id="doc-message" class="form-message"></div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="docs-table-body">
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: var(--text-muted);">No documents shared yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 

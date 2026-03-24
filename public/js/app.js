@@ -145,6 +145,9 @@ async function loadDashboard() {
             }
         }
 
+        // Load personal shared assets
+        await loadUserDocuments();
+
     } catch (error) {
         console.error('Session expired or invalid', error);
         logout();
@@ -206,4 +209,106 @@ async function resetDatabase() {
     } catch (err) {
         alert('Erro ao resetar: ' + err.message);
     }
+}
+// --- Document Management logic ---
+
+async function loadUserDocuments() {
+    const tbody = document.getElementById('docs-table-body');
+    if (!tbody) return;
+
+    try {
+        const res = await apiCall('/api/documents');
+        const docs = res.documents;
+
+        if (docs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No documents shared yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        docs.forEach(doc => {
+            const date = new Date(doc.createdAt).toLocaleDateString();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${doc.name}</strong></td>
+                <td>${date}</td>
+                <td>
+                    <button onclick="downloadDocument(${doc.id}, '${doc.name}')" class="btn btn-secondary btn-sm">Download</button>
+                    <button onclick="deleteDocument(${doc.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" style="color: var(--error); text-align: center;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function uploadDocument(file) {
+    if (!file) return;
+    
+    const docMessage = 'doc-message';
+    try {
+        const formData = new FormData();
+        formData.append('document', file);
+
+        const res = await fetch(`${API_URL}/api/documents/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${getToken()}`
+            },
+            body: formData
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+        showMessage(docMessage, 'Document uploaded successfully!', false);
+        loadUserDocuments();
+    } catch (err) {
+        showMessage(docMessage, err.message, true);
+    }
+}
+
+async function downloadDocument(id, name) {
+    try {
+        const response = await fetch(`${API_URL}/api/documents/download/${id}`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        
+        if (!response.ok) throw new Error('Download failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Error downloading: ' + err.message);
+    }
+}
+
+async function deleteDocument(id) {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    try {
+        await apiCall(`/api/documents/${id}`, 'DELETE');
+        loadUserDocuments();
+    } catch (err) {
+        alert('Error deleting: ' + err.message);
+    }
+}
+
+// File input listener
+const docInput = document.getElementById('doc-upload-input');
+if (docInput) {
+    docInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            uploadDocument(e.target.files[0]);
+            e.target.value = ''; // Reset
+        }
+    });
 }

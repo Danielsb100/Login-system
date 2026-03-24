@@ -8,6 +8,12 @@ const roleMiddleware = require('./middleware/roleMiddleware');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const prisma = require('./config/db');
+const multer = require('multer');
+const documentController = require('./controllers/documentController');
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +37,17 @@ app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), us
 
 // Rota exclusiva para o MASTER resetar a database
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
+
+// Document routes
+app.post('/api/documents/upload', authenticateToken, upload.single('document'), documentController.uploadDocument);
+app.get('/api/documents', authenticateToken, (req, res) => {
+    // Wrap to pass username
+    req.params.username = req.user.username;
+    documentController.getUserDocuments(req, res);
+});
+app.get('/api/documents/user/:username', documentController.getUserDocuments);
+app.get('/api/documents/download/:id', documentController.downloadDocument);
+app.delete('/api/documents/:id', authenticateToken, documentController.deleteDocument);
 
 // Root endpoint test
 app.get('/', (req, res) => {
