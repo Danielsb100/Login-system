@@ -55,17 +55,23 @@
                 </div>
                 <div class="accordion-content">
                     <div class="header-actions" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
-                        <input type="file" id="doc-upload-input" accept=".pdf" style="display: none;">
-                        <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload PDF</button>
+                        <input type="file" id="doc-upload-input" accept=".pdf,.doc,.docx,image/*,video/*" style="display: none;">
+                        <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload File</button>
                         <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">Refresh List</button>
                     </div>
                     <div id="doc-message" class="form-message"></div>
-                    <div class="table-container">
-                        <table class="data-table">
+                    <div class="asset-tabs">
+                        <button class="tab-btn active" data-tab="image">Imagens</button>
+                        <button class="tab-btn" data-tab="video">Vídeos</button>
+                        <button class="tab-btn" data-tab="pdf">PDF</button>
+                        <button class="tab-btn" data-tab="word">Word</button>
+                    </div>
+                    <div id="personal-table-container">
+                        <table class="data-table" style="margin-top: 1rem;">
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>Date</th>
+                                    <th>Shared At</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -76,8 +82,28 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
+                    <div id="personal-grid-container" class="assets-grid hidden" style="margin-top: 1rem;"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Media Preview Modal -->
+    <div id="media-preview-modal" class="modal hidden">
+        <div class="modal-content glassmorphism" style="max-width: 900px; width: 95%;">
+            <div class="modal-header">
+                <h2>Media Preview</h2>
+                <span class="close" onclick="closeMediaPreview()">&times;</span>
+            </div>
+            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; max-height: 70vh; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2);">
+                <!-- Media here -->
+            </div>
+            <div style="margin-top: 1.5rem; display: flex; justify-content: center;">
+                <button id="btn-download-preview" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
         </section>
 
         <!-- USERS LIST SESSION (Master Only) -->
@@ -130,19 +156,25 @@
                 </div>
             </div>
             <h3>User's Shared Assets</h3>
-            <div class="table-container" style="margin-top: 1rem;">
-                <table class="data-table">
+            <div class="asset-tabs" style="margin-top: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <button class="tab-btn active" data-tab="image">Imagens</button>
+                <button class="tab-btn" data-tab="video">Vídeos</button>
+                <button class="tab-btn" data-tab="pdf">PDF</button>
+                <button class="tab-btn" data-tab="word">Word</button>
+            </div>
+            <div id="drill-table-container">
+                <table class="data-table" style="margin-top: 1rem;">
                     <thead>
                         <tr>
                             <th>Name</th>
-                            <th>Download</th>
+                            <th>Shared At</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="drill-assets-body">
-                        <!-- List -->
-                    </tbody>
+                    <tbody id="drill-assets-body"></tbody>
                 </table>
             </div>
+            <div id="drill-grid-container" class="assets-grid hidden" style="margin-top: 1rem;"></div>
         </div>
     </div>
 

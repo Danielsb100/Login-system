@@ -31,6 +31,11 @@ function logout() {
     window.location.href = '/index.html';
 }
 
+// --- Advanced Asset State ---
+let currentAssetTab = 'image';
+let personalAssets = [];
+let drilldownAssets = [];
+
 // --- API Calls ---
 
 async function apiCall(endpoint, method = 'GET', body = null) {
@@ -224,22 +229,59 @@ async function resetDatabase() {
 // --- Document Management logic ---
 
 async function loadUserDocuments() {
-    const tbody = document.getElementById('docs-table-body');
-    if (!tbody) return;
-
     try {
         const res = await apiCall('/api/documents');
-        const docs = res.documents;
+        personalAssets = res.documents || [];
+        renderAssets('personal', personalAssets);
+    } catch (err) {
+        console.error('Failed to load documents:', err);
+    }
+}
 
-        if (docs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No documents shared yet.</td></tr>';
-            return;
+function renderAssets(context, assets) {
+    const isPersonal = context === 'personal';
+    const prefix = isPersonal ? 'personal' : 'drill';
+    
+    const tableContainer = document.getElementById(`${prefix}-table-container`);
+    const gridContainer = document.getElementById(`${prefix}-grid-container`);
+    const tbody = document.getElementById(isPersonal ? 'docs-table-body' : 'drill-assets-body');
+
+    // Filter by current tab
+    const filtered = assets.filter(doc => {
+        const type = doc.type.toLowerCase();
+        if (currentAssetTab === 'image') return type.startsWith('image/');
+        if (currentAssetTab === 'video') return type.startsWith('video/');
+        if (currentAssetTab === 'pdf') return type === 'application/pdf';
+        if (currentAssetTab === 'word') return type.includes('msword') || type.includes('officedocument.wordprocessingml');
+        return false;
+    });
+
+    if (currentAssetTab === 'image' || currentAssetTab === 'video') {
+        if (tableContainer) tableContainer.classList.add('hidden');
+        if (gridContainer) {
+            gridContainer.classList.remove('hidden');
+            renderGrid(gridContainer, filtered);
         }
+    } else {
+        if (gridContainer) gridContainer.classList.add('hidden');
+        if (tableContainer) {
+            tableContainer.classList.remove('hidden');
+            renderTable(tbody, filtered, isPersonal);
+        }
+    }
+}
 
-        tbody.innerHTML = '';
-        docs.forEach(doc => {
-            const date = new Date(doc.createdAt).toLocaleDateString();
-            const tr = document.createElement('tr');
+function renderTable(tbody, assets, isEditable) {
+    if (assets.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${isEditable ? 3 : 2}" style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4);">Nenhum arquivo nesta categoria.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    assets.forEach(doc => {
+        const date = new Date(doc.createdAt).toLocaleDateString();
+        const tr = document.createElement('tr');
+        if (isEditable) {
             tr.innerHTML = `
                 <td><strong>${doc.name}</strong></td>
                 <td>${date}</td>
@@ -248,11 +290,81 @@ async function loadUserDocuments() {
                     <button onclick="deleteDocument(${doc.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Delete</button>
                 </td>
             `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color: var(--error); text-align: center;">Error: ${err.message}</td></tr>`;
+        } else {
+            tr.innerHTML = `
+                <td><strong>${doc.name}</strong></td>
+                <td>${date}</td>
+                <td><button onclick="downloadDocument(${doc.id}, '${doc.name}')" class="btn btn-secondary btn-sm">Download</button></td>
+            `;
+        }
+        tbody.appendChild(tr);
+    });
+}
+
+function renderGrid(container, assets) {
+    if (assets.length === 0) {
+        container.innerHTML = `<div style="text-align: center; width: 100%; padding: 3rem; color: rgba(255,255,255,0.4);">Nenhum arquivo nesta categoria.</div>`;
+        return;
     }
+
+    container.innerHTML = '';
+    assets.forEach(async doc => {
+        const card = document.createElement('div');
+        card.className = 'asset-card glassmorphism';
+        card.onclick = () => openMediaPreview(doc);
+
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb-wrapper';
+        
+        if (doc.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = `${API_URL}/api/documents/download/${doc.id}`;
+            img.loading = 'lazy';
+            thumb.appendChild(img);
+        } else if (doc.type.startsWith('video/')) {
+            const videoThumb = await createVideoThumbnail(`${API_URL}/api/documents/download/${doc.id}`);
+            thumb.appendChild(videoThumb);
+            const playIcon = document.createElement('div');
+            playIcon.innerHTML = '<i class="fas fa-play"></i>';
+            playIcon.style.cssText = 'position: absolute; color: white; font-size: 1.2rem; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));';
+            thumb.appendChild(playIcon);
+        }
+
+        const name = document.createElement('span');
+        name.className = 'filename';
+        name.innerText = doc.name;
+
+        card.appendChild(thumb);
+        card.appendChild(name);
+        container.appendChild(card);
+    });
+}
+
+function createVideoThumbnail(url) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.src = url;
+        video.crossOrigin = 'anonymous';
+        video.muted = true;
+        video.currentTime = 0.5;
+
+        video.onloadeddata = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 160;
+            canvas.height = 160;
+            const ctx = canvas.getContext('2d');
+            setTimeout(() => {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                resolve(canvas);
+                video.src = ''; 
+            }, 300);
+        };
+        video.onerror = () => {
+             const div = document.createElement('div');
+             div.innerHTML = '<i class="fas fa-video" style="font-size: 2rem; color: rgba(255,255,255,0.3);"></i>';
+             resolve(div);
+        };
+    });
 }
 
 async function uploadDocument(file) {
@@ -303,6 +415,41 @@ async function downloadDocument(id, name) {
     }
 }
 
+// --- Preview Logic ---
+function openMediaPreview(doc) {
+    const previewContent = document.getElementById('preview-content');
+    const previewModal = document.getElementById('media-preview-modal');
+    const downloadBtn = document.getElementById('btn-download-preview');
+    
+    previewContent.innerHTML = '';
+    downloadBtn.onclick = () => downloadDocument(doc.id, doc.name);
+
+    if (doc.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = `${API_URL}/api/documents/download/${doc.id}`;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '70vh';
+        previewContent.appendChild(img);
+    } else if (doc.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = `${API_URL}/api/documents/download/${doc.id}`;
+        video.controls = true;
+        video.autoplay = true;
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '70vh';
+        previewContent.appendChild(video);
+    }
+
+    previewModal.classList.remove('hidden');
+}
+
+function closeMediaPreview() {
+    const previewModal = document.getElementById('media-preview-modal');
+    const previewContent = document.getElementById('preview-content');
+    previewModal.classList.add('hidden');
+    previewContent.innerHTML = '';
+}
+
 async function deleteDocument(id) {
     if (!confirm('Are you sure you want to delete this document?')) return;
     try {
@@ -332,27 +479,19 @@ async function viewUserDrilldown(username) {
 
     modal.classList.add('active');
     document.getElementById('drill-name').textContent = `User: ${username}`;
-    document.getElementById('drill-assets-body').innerHTML = '<tr><td colspan="2">Loading assets...</td></tr>';
+    currentAssetTab = 'image'; // Default to image on drilldown
+    
+    // Reset tab buttons state
+    document.querySelectorAll('#user-drilldown-modal .tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === currentAssetTab);
+    });
 
     try {
         const res = await apiCall(`/api/documents/user/${username}`);
-        const docs = res.documents;
-
-        if (docs.length === 0) {
-            document.getElementById('drill-assets-body').innerHTML = '<tr><td colspan="2" style="text-align: center;">No shared assets.</td></tr>';
-        } else {
-            document.getElementById('drill-assets-body').innerHTML = '';
-            docs.forEach(doc => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${doc.name}</td>
-                    <td><button onclick="downloadDocument(${doc.id}, '${doc.name}')" class="btn btn-secondary btn-sm">Download</button></td>
-                `;
-                document.getElementById('drill-assets-body').appendChild(tr);
-            });
-        }
+        drilldownAssets = res.documents || [];
+        renderAssets('drill', drilldownAssets);
     } catch (err) {
-        document.getElementById('drill-assets-body').innerHTML = `<tr><td colspan="2" style="color: var(--error);">Error: ${err.message}</td></tr>`;
+        console.error('Drilldown error:', err);
     }
 }
 
@@ -364,3 +503,25 @@ function closeDrilldown() {
 function toggleAccordion(id) {
     document.getElementById(id).classList.toggle('active');
 }
+
+// Global Tab Listeners
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('tab-btn') && !e.target.id.startsWith('tab-')) {
+        const container = e.target.closest('.accordion-content') || e.target.closest('.modal-card');
+        if (!container) return;
+        
+        currentAssetTab = e.target.dataset.tab;
+        
+        // Toggle active class on buttons in THIS container
+        container.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === currentAssetTab);
+        });
+
+        // Re-render appropriate context
+        if (container.closest('#personal-assets-accordion')) {
+            renderAssets('personal', personalAssets);
+        } else if (container.closest('#user-drilldown-modal')) {
+            renderAssets('drill', drilldownAssets);
+        }
+    }
+});
