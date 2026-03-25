@@ -34,10 +34,8 @@ function logout() {
 // --- Advanced Asset State ---
 let currentAssetTab = 'image';
 let personalAssets = [];
-let drilldownAssets = [];
 let currentFilteredAssets = [];
 let currentIndex = -1;
-let currentContext = 'personal'; 
 
 // --- API Calls ---
 
@@ -190,8 +188,6 @@ async function loadAdminPanel() {
         users.forEach(u => {
             const date = new Date(u.createdAt).toLocaleDateString();
             const tr = document.createElement('tr');
-            tr.className = 'clickable-row';
-            tr.onclick = () => viewUserDrilldown(u.username);
             tr.innerHTML = `
                 <td>#${u.id}</td>
                 <td><strong>${u.username}</strong></td>
@@ -522,33 +518,6 @@ if (docInput) {
 
 // --- Master Drilldown logic ---
 
-async function viewUserDrilldown(username) {
-    const modal = document.getElementById('user-drilldown-modal');
-    if (!modal) return;
-
-    modal.classList.add('active');
-    document.getElementById('drill-name').textContent = `User: ${username}`;
-    currentAssetTab = 'image'; // Default to image on drilldown
-    
-    // Reset tab buttons state
-    document.querySelectorAll('#user-drilldown-modal .tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === currentAssetTab);
-    });
-
-    try {
-        const res = await apiCall(`/api/documents/user/${username}`);
-        drilldownAssets = res.documents || [];
-        renderAssets('drill', drilldownAssets);
-    } catch (err) {
-        console.error('Drilldown error:', err);
-    }
-}
-
-function closeDrilldown() {
-    const modal = document.getElementById('user-drilldown-modal');
-    if (modal) modal.classList.remove('active');
-}
-
 function toggleAccordion(id) {
     document.getElementById(id).classList.toggle('active');
 }
@@ -556,7 +525,7 @@ function toggleAccordion(id) {
 // Global Tab Listeners
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('tab-btn') && !e.target.id.startsWith('tab-')) {
-        const container = e.target.closest('.accordion-content') || e.target.closest('.modal-card');
+        const container = e.target.closest('.accordion-content');
         if (!container) return;
         
         currentAssetTab = e.target.dataset.tab;
@@ -566,11 +535,7 @@ document.addEventListener('click', (e) => {
             btn.classList.toggle('active', btn.dataset.tab === currentAssetTab);
         });
 
-        // Re-render appropriate context
-        if (container.closest('#personal-assets-accordion')) {
-            renderAssets('personal', personalAssets);
-        } else if (container.closest('#user-drilldown-modal')) {
-            renderAssets('drill', drilldownAssets);
-        }
+        // Re-render personal assets
+        renderAssets('personal', personalAssets);
     }
 });
