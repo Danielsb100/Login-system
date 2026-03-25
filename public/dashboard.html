@@ -89,12 +89,11 @@
 
     <!-- Media Preview Modal -->
     <div id="media-preview-modal" class="modal hidden">
-        <div class="modal-content glassmorphism" style="max-width: 900px; width: 95%;">
-            <div class="modal-header">
-                <h2>Media Preview</h2>
-                <span class="close" onclick="closeMediaPreview()">&times;</span>
+        <div class="modal-content glassmorphism" style="width: 100vw; height: 100vh; max-width: none; border-radius: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); border: none;">
+            <div class="modal-header" style="position: absolute; top: 2rem; right: 2rem; border: none; width: auto;">
+                <span class="close" onclick="closeMediaPreview()" style="font-size: 3rem; color: white; opacity: 0.8;">&times;</span>
             </div>
-            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; min-height: 400px; max-height: 80vh; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2); position: relative;">
+            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; width: 90vw; height: 80vh; overflow: hidden; background: transparent; position: relative;">
                 <!-- Media here -->
             </div>
             <button id="prev-preview" class="nav-arrow prev">&lsaquo;</button>
