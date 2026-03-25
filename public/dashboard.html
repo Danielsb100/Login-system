@@ -94,9 +94,11 @@
                 <h2>Media Preview</h2>
                 <span class="close" onclick="closeMediaPreview()">&times;</span>
             </div>
-            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; max-height: 70vh; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2);">
+            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; min-height: 400px; max-height: 80vh; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2); position: relative;">
                 <!-- Media here -->
             </div>
+            <button id="prev-preview" class="nav-arrow prev">&lsaquo;</button>
+            <button id="next-preview" class="nav-arrow next">&rsaquo;</button>
             <div style="margin-top: 1.5rem; display: flex; justify-content: center;">
                 <button id="btn-download-preview" class="btn btn-primary">
                     <i class="fas fa-download"></i> Download

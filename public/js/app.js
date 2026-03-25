@@ -35,6 +35,9 @@ function logout() {
 let currentAssetTab = 'image';
 let personalAssets = [];
 let drilldownAssets = [];
+let currentFilteredAssets = [];
+let currentIndex = -1;
+let currentContext = 'personal'; 
 
 // --- API Calls ---
 
@@ -239,6 +242,7 @@ async function loadUserDocuments() {
 }
 
 function renderAssets(context, assets) {
+    currentContext = context;
     const isPersonal = context === 'personal';
     const prefix = isPersonal ? 'personal' : 'drill';
     
@@ -247,7 +251,7 @@ function renderAssets(context, assets) {
     const tbody = document.getElementById(isPersonal ? 'docs-table-body' : 'drill-assets-body');
 
     // Filter by current tab
-    const filtered = assets.filter(doc => {
+    currentFilteredAssets = assets.filter(doc => {
         const type = doc.type.toLowerCase();
         if (currentAssetTab === 'image') return type.startsWith('image/');
         if (currentAssetTab === 'video') return type.startsWith('video/');
@@ -260,13 +264,13 @@ function renderAssets(context, assets) {
         if (tableContainer) tableContainer.classList.add('hidden');
         if (gridContainer) {
             gridContainer.classList.remove('hidden');
-            renderGrid(gridContainer, filtered);
+            renderGrid(gridContainer, currentFilteredAssets, isPersonal);
         }
     } else {
         if (gridContainer) gridContainer.classList.add('hidden');
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
-            renderTable(tbody, filtered, isPersonal);
+            renderTable(tbody, currentFilteredAssets, isPersonal);
         }
     }
 }
@@ -301,17 +305,17 @@ function renderTable(tbody, assets, isEditable) {
     });
 }
 
-function renderGrid(container, assets) {
+function renderGrid(container, assets, isEditable) {
     if (assets.length === 0) {
         container.innerHTML = `<div style="text-align: center; width: 100%; padding: 3rem; color: rgba(255,255,255,0.4);">Nenhum arquivo nesta categoria.</div>`;
         return;
     }
 
     container.innerHTML = '';
-    assets.forEach(async doc => {
+    assets.forEach(async (doc, index) => {
         const card = document.createElement('div');
         card.className = 'asset-card glassmorphism';
-        card.onclick = () => openMediaPreview(doc);
+        card.onclick = () => openMediaPreview(index);
 
         const thumb = document.createElement('div');
         thumb.className = 'thumb-wrapper';
@@ -328,6 +332,18 @@ function renderGrid(container, assets) {
             playIcon.innerHTML = '<i class="fas fa-play"></i>';
             playIcon.style.cssText = 'position: absolute; color: white; font-size: 1.2rem; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));';
             thumb.appendChild(playIcon);
+        }
+
+        // Deletion Red X for personal
+        if (isEditable) {
+            const delBtn = document.createElement('div');
+            delBtn.className = 'delete-badge';
+            delBtn.innerHTML = '&times;';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteDocument(doc.id);
+            };
+            card.appendChild(delBtn);
         }
 
         const name = document.createElement('span');
@@ -416,7 +432,11 @@ async function downloadDocument(id, name) {
 }
 
 // --- Preview Logic ---
-function openMediaPreview(doc) {
+function openMediaPreview(index) {
+    currentIndex = index;
+    const doc = currentFilteredAssets[currentIndex];
+    if (!doc) return;
+
     const previewContent = document.getElementById('preview-content');
     const previewModal = document.getElementById('media-preview-modal');
     const downloadBtn = document.getElementById('btn-download-preview');
@@ -441,7 +461,36 @@ function openMediaPreview(doc) {
     }
 
     previewModal.classList.remove('hidden');
+    
+    // UI Navigation Arrows
+    document.getElementById('prev-preview').style.display = currentFilteredAssets.length > 1 ? 'flex' : 'none';
+    document.getElementById('next-preview').style.display = currentFilteredAssets.length > 1 ? 'flex' : 'none';
 }
+
+function nextPreview() {
+    if (currentFilteredAssets.length <= 1) return;
+    currentIndex = (currentIndex + 1) % currentFilteredAssets.length;
+    openMediaPreview(currentIndex);
+}
+
+function prevPreview() {
+    if (currentFilteredAssets.length <= 1) return;
+    currentIndex = (currentIndex - 1 + currentFilteredAssets.length) % currentFilteredAssets.length;
+    openMediaPreview(currentIndex);
+}
+
+// Event bindings for dashboard arrows
+document.getElementById('next-preview').onclick = (e) => { e.stopPropagation(); nextPreview(); };
+document.getElementById('prev-preview').onclick = (e) => { e.stopPropagation(); prevPreview(); };
+
+// Keyboard support
+document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('media-preview-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    if (e.key === 'ArrowRight') nextPreview();
+    if (e.key === 'ArrowLeft') prevPreview();
+    if (e.key === 'Escape') closeMediaPreview();
+});
 
 function closeMediaPreview() {
     const previewModal = document.getElementById('media-preview-modal');
