@@ -78,7 +78,7 @@ app.post('/modules/:id/quiz/questions', authenticateToken, roleMiddleware(['MAST
 app.put('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(['MASTER']), contentController.updateQuizQuestion);
 app.delete('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteQuizQuestion);
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
-app.get('/modules/:id/quiz/submissions', authenticateToken, moduleController.getQuizzesSubmissions); // Moved to moduleController or contentController? Check export.
+app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
 
 // Forum Management
 app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
