@@ -150,6 +150,9 @@ async function loadDashboard() {
             if (user.role === 'MASTER') {
                 const btnReset = document.getElementById('btn-reset-db');
                 if (btnReset) btnReset.classList.remove('hidden');
+                
+                // NEW: Load Teaching Modules for Master
+                await loadModulesPanel();
             }
         }
 
@@ -539,3 +542,396 @@ document.addEventListener('click', (e) => {
         renderAssets('personal', personalAssets);
     }
 });
+
+// --- Teaching Modules Logic ---
+
+let currentModuleId = null;
+let currentModuleData = null;
+
+async function loadModulesPanel() {
+    const modulesPanel = document.getElementById('modules-panel');
+    if (!modulesPanel) return;
+    modulesPanel.classList.remove('hidden');
+
+    const modulesList = document.getElementById('modules-list');
+    const counter = document.getElementById('module-counter');
+
+    try {
+        const modules = await apiCall('/modules/my');
+        counter.textContent = `Limite: ${modules.length}/5 módulos criados`;
+        
+        // Block creation if limit reached
+        const btnCreate = document.getElementById('btn-create-module');
+        if (btnCreate) btnCreate.disabled = modules.length >= 5;
+
+        if (modules.length === 0) {
+            modulesList.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Você ainda não criou nenhum módulo.</div>';
+            return;
+        }
+
+        modulesList.innerHTML = '';
+        modules.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'module-card glassmorphism';
+            card.innerHTML = `
+                <span class="status-indicator status-${m.status.toLowerCase()}">${m.status}</span>
+                <h3>${m.title}</h3>
+                <p>${m.description || 'Sem descrição.'}</p>
+                <div class="module-stats-mini">
+                    <span><i class="fas fa-video"></i> ${m._count.videos}</span>
+                    <span><i class="fas fa-file-alt"></i> ${m._count.documents}</span>
+                    <span><i class="fas fa-question-circle"></i> ${m._count.questions}</span>
+                </div>
+                <div class="module-actions">
+                    <button onclick="openModuleEditor(${m.id})" class="btn btn-secondary btn-sm">Editar</button>
+                    ${m.status === 'DRAFT' ? `<button onclick="updateModuleStatus(${m.id}, 'PUBLISHED')" class="btn btn-primary btn-sm" style="background: var(--success);">Publicar</button>` : ''}
+                    ${m.status === 'PUBLISHED' ? `<button onclick="updateModuleStatus(${m.id}, 'ARCHIVED')" class="btn btn-secondary btn-sm">Arquivar</button>` : ''}
+                    ${m.status === 'ARCHIVED' ? `<button onclick="updateModuleStatus(${m.id}, 'PUBLISHED')" class="btn btn-secondary btn-sm">Reativar</button>` : ''}
+                    <button onclick="deleteModule(${m.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">X</button>
+                </div>
+            `;
+            modulesList.appendChild(card);
+        });
+    } catch (error) {
+        modulesList.innerHTML = `<div style="grid-column: 1/-1; color: var(--error); text-align: center;">Erro ao carregar módulos: ${error.message}</div>`;
+    }
+}
+
+// Editor Modal Management
+async function openModuleEditor(id = null) {
+    const modal = document.getElementById('module-editor-modal');
+    const title = document.getElementById('editor-title');
+    currentModuleId = id;
+
+    if (!id) {
+        // Create Mode
+        title.textContent = 'Criar Novo Módulo';
+        document.getElementById('module-basics-form').reset();
+        document.getElementById('editor-tabs').classList.add('hidden'); // Hide content tabs during creation
+        modal.classList.remove('hidden');
+        return;
+    }
+
+    // Edit Mode
+    title.textContent = 'Configurar Conteúdo do Módulo';
+    document.getElementById('editor-tabs').classList.remove('hidden');
+    modal.classList.remove('hidden');
+
+    await loadModuleData(id);
+    switchEditorTab('basics');
+}
+
+function closeModuleEditor() {
+    document.getElementById('module-editor-modal').classList.add('hidden');
+    currentModuleId = null;
+    currentModuleData = null;
+}
+
+async function loadModuleData(id) {
+    try {
+        currentModuleData = await apiCall(`/modules/${id}/edit-format`);
+        
+        // Fill base info
+        document.getElementById('m-title').value = currentModuleData.title;
+        document.getElementById('m-description').value = currentModuleData.description || '';
+        document.getElementById('m-cover').value = currentModuleData.coverImage || '';
+
+        renderVideoList();
+        renderDocList();
+        renderQuizList();
+        loadModuleReports(id);
+    } catch (error) {
+        alert('Erro ao carregar dados do módulo: ' + error.message);
+    }
+}
+
+// Module Basics Form
+document.getElementById('module-basics-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = {
+        title: document.getElementById('m-title').value,
+        description: document.getElementById('m-description').value,
+        coverImage: document.getElementById('m-cover').value
+    };
+
+    try {
+        if (currentModuleId) {
+            await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
+            alert('Módulo atualizado!');
+        } else {
+            const res = await apiCall('/modules', 'POST', data);
+            currentModuleId = res.id;
+            alert('Módulo criado! Agora você pode adicionar conteúdo.');
+            await loadModulesPanel();
+            openModuleEditor(res.id); // Reload in edit mode
+        }
+    } catch (error) {
+        alert('Erro: ' + error.message);
+    }
+});
+
+async function updateModuleStatus(id, status) {
+    const endpoint = `/modules/${id}/${status === 'PUBLISHED' ? 'publish' : 'archive'}`;
+    try {
+        await apiCall(endpoint, 'PATCH');
+        loadModulesPanel();
+    } catch (error) {
+        alert('Erro ao atualizar status: ' + error.message);
+    }
+}
+
+async function deleteModule(id) {
+    if (!confirm('Tem certeza que deseja excluir permanentemente este módulo e todo seu conteúdo?')) return;
+    try {
+        await apiCall(`/modules/${id}`, 'DELETE');
+        loadModulesPanel();
+    } catch (error) {
+        alert('Erro ao excluir: ' + error.message);
+    }
+}
+
+// Editor Tab Switcher
+function switchEditorTab(tab) {
+    document.querySelectorAll('.inner-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === `pane-${tab}`));
+}
+
+document.querySelectorAll('.inner-tab-btn').forEach(btn => {
+    btn.onclick = () => switchEditorTab(btn.dataset.tab);
+});
+
+// --- Content Handlers (Videos, Docs, Quiz) ---
+
+function renderVideoList() {
+    const list = document.getElementById('v-list');
+    list.innerHTML = '';
+    currentModuleData.videos.forEach(v => {
+        const li = document.createElement('li');
+        li.className = 'content-item';
+        li.innerHTML = `
+            <div class="content-info">
+                <i class="fas fa-play-circle" style="color: var(--primary);"></i>
+                <span>${v.title}</span>
+            </div>
+            <div class="actions">
+                <button onclick="deleteVideo(${v.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Excluir</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+async function showAddVideoForm() {
+    showSubModal('Adicionar Vídeo', `
+        <div class="input-group">
+            <label>Título do Vídeo</label>
+            <input type="text" id="v-title-in" placeholder="Ex: Aula 01 - Fundamentos">
+        </div>
+        <div class="input-group">
+            <label>URL do Vídeo (YouTube/Vimeo/etc)</label>
+            <input type="text" id="v-url-in" placeholder="https://...">
+        </div>
+    `, async () => {
+        const title = document.getElementById('v-title-in').value;
+        const url = document.getElementById('v-url-in').value;
+        await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url, order: currentModuleData.videos.length });
+        await loadModuleData(currentModuleId);
+        closeSubModal();
+    });
+}
+
+async function deleteVideo(videoId) {
+    if (!confirm('Excluir vídeo?')) return;
+    await apiCall(`/modules/${currentModuleId}/videos/${videoId}`, 'DELETE');
+    await loadModuleData(currentModuleId);
+}
+
+function renderDocList() {
+    const list = document.getElementById('d-list');
+    list.innerHTML = '';
+    currentModuleData.documents.forEach(d => {
+        const li = document.createElement('li');
+        li.className = 'content-item';
+        li.innerHTML = `
+            <div class="content-info">
+                <i class="fas fa-file-pdf" style="color: var(--secondary);"></i>
+                <span>${d.title}</span>
+            </div>
+            <div class="actions">
+                <button onclick="deleteModuleDoc(${d.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Remover</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+async function showAddDocForm() {
+    // We need to list original system documents to link them
+    const res = await apiCall('/api/documents');
+    const docs = res.documents || [];
+    
+    let options = docs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    
+    showSubModal('Vincular Documento', `
+        <div class="input-group">
+            <label>Título de Exibição</label>
+            <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
+        </div>
+        <div class="input-group">
+            <label>Escolher Arquivo</label>
+            <select id="d-id-in" class="glassmorphism" style="width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); border-radius: 8px; color: white;">
+                ${options}
+            </select>
+        </div>
+    `, async () => {
+        const title = document.getElementById('d-title-in').value;
+        const documentId = document.getElementById('d-id-in').value;
+        await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { title, documentId, order: currentModuleData.documents.length });
+        await loadModuleData(currentModuleId);
+        closeSubModal();
+    });
+}
+
+async function deleteModuleDoc(id) {
+    if (!confirm('Remover vínculo deste documento? O arquivo original não será apagado.')) return;
+    await apiCall(`/modules/${currentModuleId}/documents/${id}`, 'DELETE');
+    await loadModuleData(currentModuleId);
+}
+
+// Quiz Management Logic
+function renderQuizList() {
+    const list = document.getElementById('q-list');
+    list.innerHTML = '';
+    currentModuleData.questions.forEach((q, qIndex) => {
+        const card = document.createElement('div');
+        card.className = 'question-card';
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <strong>Pergunta ${qIndex + 1}</strong>
+                <button onclick="deleteQuestion(${q.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Exclusão</button>
+            </div>
+            <p style="margin-bottom: 1rem; color: #fff;">${q.text}</p>
+            <div class="options-list">
+                ${q.options.map(o => `
+                    <div class="option-item">
+                        <i class="fas ${o.isCorrect ? 'fa-check-circle' : 'fa-circle'}" style="color: ${o.isCorrect ? 'var(--success)' : 'rgba(255,255,255,0.2)'};"></i>
+                        <span>${o.text}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+async function addQuizQuestion() {
+    showSubModal('Nova Pergunta', `
+        <div class="input-group">
+            <label>Texto da Pergunta</label>
+            <textarea id="q-text-in" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 0.8rem; color: white; background: rgba(0,0,0,0.2);"></textarea>
+        </div>
+        <div id="options-in-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+            <label>Opções (Marque a correta):</label>
+            ${[0,1,2,3].map(i => `
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="radio" name="correct-opt" value="${i}" ${i === 0 ? 'checked' : ''}>
+                    <input type="text" class="opt-text-in-field" style="flex: 1; padding: 0.5rem;" placeholder="Opção ${i + 1}">
+                </div>
+            `).join('')}
+        </div>
+    `, async () => {
+        const text = document.getElementById('q-text-in').value;
+        const optElements = document.querySelectorAll('.opt-text-in-field');
+        const correctIndex = parseInt(document.querySelector('input[name="correct-opt"]:checked').value);
+        
+        const options = Array.from(optElements).map((el, index) => ({
+            text: el.value,
+            isCorrect: index === correctIndex
+        })).filter(o => o.text.trim() !== '');
+
+        await apiCall(`/modules/${currentModuleId}/quiz/questions`, 'POST', { 
+            text, 
+            options,
+            order: currentModuleData.questions.length 
+        });
+        await loadModuleData(currentModuleId);
+        closeSubModal();
+    });
+}
+
+async function deleteQuestion(id) {
+    if (!confirm('Excluir pergunta?')) return;
+    await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
+    await loadModuleData(currentModuleId);
+}
+
+// Analytics and Reports
+async function loadModuleReports(id) {
+    try {
+        const overview = await apiCall(`/modules/${id}/reports/overview`);
+        const users = await apiCall(`/modules/${id}/reports/users`);
+
+        // Render Stats
+        const statsEl = document.getElementById('r-stats');
+        statsEl.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value">${overview.uniqueUsers}</div>
+                <div class="stat-label">Alunos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${overview.totalAccesses}</div>
+                <div class="stat-label">Acessos Totais</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${overview.averageScore.toFixed(1)}%</div>
+                <div class="stat-label">Média Quiz</div>
+            </div>
+        `;
+
+        // Render User Table
+        const tbody = document.getElementById('r-users-body');
+        tbody.innerHTML = '';
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${u.username}</td>
+                <td>${u.videoProgress} aulas</td>
+                <td>${u.lastScore !== null ? u.lastScore + '%' : '-'}</td>
+                <td><button onclick="viewUserDetail(${u.id})" class="btn btn-secondary btn-sm">Detalhes</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function viewUserDetail(userId) {
+    const report = await apiCall(`/modules/${currentModuleId}/reports/users/${userId}`);
+    
+    // Show detailed logs in sub-modal
+    const content = `
+        <div style="font-size: 0.9rem;">
+            <h5>Acessos</h5>
+            <div style="max-height: 150px; overflow-y: auto; margin-bottom: 1rem;">
+                ${report.accessLogs.map(l => `<div>[${new Date(l.timestamp).toLocaleString()}] ${l.source}</div>`).join('')}
+            </div>
+            <h5>Quizzes</h5>
+            <div>
+                ${report.quizSubmissions.map(s => `<div>Pontuação: ${s.score}% (Tentativa ${s.attemptNumber}) em ${new Date(s.createdAt).toLocaleDateString()}</div>`).join('')}
+            </div>
+        </div>
+    `;
+    showSubModal('Relatório Detalhado', content, () => closeSubModal());
+}
+
+// Sub Modal Helpers
+function showSubModal(title, bodyHtml, onOk) {
+    const modal = document.getElementById('sub-modal');
+    document.getElementById('sub-modal-title').textContent = title;
+    document.getElementById('sub-modal-body').innerHTML = bodyHtml;
+    document.getElementById('sub-modal-ok').onclick = onOk;
+    modal.classList.remove('hidden');
+}
+
+function closeSubModal() {
+    document.getElementById('sub-modal').classList.add('hidden');
+}

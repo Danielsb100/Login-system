@@ -7,6 +7,8 @@
     <title>User Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/modules.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="background-mesh">
@@ -107,7 +109,7 @@
     </div>
         </section>
 
-        <!-- USERS LIST SESSION (Master Only) -->
+        <!-- USERS LIST SESSION (Admin/Master) -->
         <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
             <div class="section-header">
                 <div>
@@ -137,6 +139,129 @@
             </div>
         </section>
 
+        <!-- TEACHING MODULES SESSION (Master Only) -->
+        <section class="card glassmorphism section-admin slide-up hidden" id="modules-panel">
+            <div class="section-header">
+                <div>
+                    <h2>Meus Módulos de Ensino</h2>
+                    <p id="module-counter">Limite: 0/5 módulos criados</p>
+                </div>
+                <button onclick="openModuleEditor()" id="btn-create-module" class="btn btn-primary btn-sm">
+                   + Criar Módulo
+                </button>
+            </div>
+            
+            <div id="modules-list" class="modules-grid">
+                <!-- Populated via JS -->
+                 <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+                    Carregando módulos...
+                 </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Module Editor Modal -->
+    <div id="module-editor-modal" class="modal hidden">
+        <div class="modal-content glassmorphism" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 id="editor-title">Editar Módulo</h2>
+                <span class="close" onclick="closeModuleEditor()">&times;</span>
+            </div>
+            
+            <div class="editor-container">
+                <div class="inner-tabs" id="editor-tabs">
+                    <button class="inner-tab-btn active" data-tab="basics">Geral</button>
+                    <button class="inner-tab-btn" data-tab="videos">Vídeos</button>
+                    <button class="inner-tab-btn" data-tab="docs">Documentos</button>
+                    <button class="inner-tab-btn" data-tab="quiz">Quiz</button>
+                    <button class="inner-tab-btn" data-tab="forum">Fórum</button>
+                    <button class="inner-tab-btn" data-tab="reports">Relatórios</button>
+                </div>
+
+                <div class="editor-panes">
+                    <!-- Basics Pane -->
+                    <div class="tab-pane active" id="pane-basics">
+                        <form id="module-basics-form" class="editor-form">
+                            <div class="input-group">
+                                <label>Título do Módulo</label>
+                                <input type="text" id="m-title" required placeholder="Ex: Introdução ao Three.js">
+                            </div>
+                            <div class="input-group">
+                                <label>Descrição</label>
+                                <textarea id="m-description" rows="4" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 1rem; color: white; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); font-family: inherit;"></textarea>
+                            </div>
+                            <div class="input-group">
+                                <label>URL da Capa (Opcional)</label>
+                                <input type="text" id="m-cover" placeholder="https://...">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                        </form>
+                    </div>
+
+                    <!-- Videos Pane -->
+                    <div class="tab-pane" id="pane-videos">
+                        <div class="header-actions" style="margin-bottom: 1.5rem;">
+                            <button onclick="showAddVideoForm()" class="btn btn-secondary btn-sm">+ Adicionar Vídeo</button>
+                        </div>
+                        <ul id="v-list" class="content-list"></ul>
+                    </div>
+
+                    <!-- Docs Pane -->
+                    <div class="tab-pane" id="pane-docs">
+                        <div class="header-actions" style="margin-bottom: 1.5rem;">
+                            <button onclick="showAddDocForm()" class="btn btn-secondary btn-sm">+ Vincular Documento</button>
+                        </div>
+                        <ul id="d-list" class="content-list"></ul>
+                    </div>
+
+                    <!-- Quiz Pane -->
+                    <div class="tab-pane" id="pane-quiz">
+                        <div class="header-actions" style="margin-bottom: 1.5rem;">
+                            <button onclick="addQuizQuestion()" class="btn btn-secondary btn-sm">+ Nova Pergunta</button>
+                        </div>
+                        <div id="q-list" class="quiz-editor"></div>
+                    </div>
+
+                    <!-- Forum Pane -->
+                    <div class="tab-pane" id="pane-forum">
+                        <div id="f-list" class="content-list">
+                            <p style="text-align: center; color: var(--text-muted); padding: 2rem;">As discussões do fórum aparecerão aqui quando os usuários interagirem.</p>
+                        </div>
+                    </div>
+
+                    <!-- Reports Pane -->
+                    <div class="tab-pane" id="pane-reports">
+                        <div id="r-stats" class="stats-grid"></div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Usuário</th>
+                                        <th>Progresso</th>
+                                        <th>Nota Quiz</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="r-users-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sub-modais para adicionar conteúdo -->
+    <div id="sub-modal" class="modal hidden" style="z-index: 200;">
+        <div class="modal-content glassmorphism" style="max-width: 500px;">
+            <h3 id="sub-modal-title" style="margin-bottom: 1.5rem;">Sub Modal</h3>
+            <div id="sub-modal-body"></div>
+            <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                <button id="sub-modal-ok" class="btn btn-primary">Confirmar</button>
+                <button onclick="closeSubModal()" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     </div>
