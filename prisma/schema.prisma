@@ -233,6 +233,9 @@ model WorldModulePlacement {
   scaleY        Float
   scaleZ        Float
   status        PlacementStatus @default(ACTIVE)
+  modelData      Bytes?          // Binary GLB file
+  idleAnim       String?         // Idle animation name
+  interactedAnim String?         // Interaction animation name
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 }

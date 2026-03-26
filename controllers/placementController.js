@@ -149,11 +149,65 @@ const assignModule = async (req, res) => {
     }
 };
 
+const uploadModel = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { idleAnim, interactedAnim } = req.body;
+        const file = req.file;
+
+        if (!file) return res.status(400).json({ error: 'No GLB file provided' });
+
+        const placement = await prisma.worldModulePlacement.findUnique({ where: { id: parseInt(id) } });
+        if (!placement) return res.status(404).json({ error: 'Placement not found' });
+        if (placement.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const updated = await prisma.worldModulePlacement.update({
+            where: { id: parseInt(id) },
+            data: { 
+                modelData: file.buffer,
+                idleAnim: idleAnim || null,
+                interactedAnim: interactedAnim || null
+            }
+        });
+
+        // Don't send back the buffer in JSON (it's big)
+        const { modelData, ...rest } = updated;
+        res.json({ ...rest, hasModel: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Failed to upload model' });
+    }
+};
+
+const serveModel = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const placement = await prisma.worldModulePlacement.findUnique({
+            where: { id: parseInt(id) },
+            select: { modelData: true }
+        });
+
+        if (!placement || !placement.modelData) {
+            return res.status(404).json({ error: 'Model not found' });
+        }
+
+        res.setHeader('Content-Type', 'model/gltf-binary');
+        res.setHeader('Content-Disposition', `attachment; filename="placement_${id}.glb"`);
+        res.send(placement.modelData);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to serve model' });
+    }
+};
+
 module.exports = {
     createPlacement,
     getPlacementsByScene,
     getPlacementById,
     updatePlacement,
     deletePlacement,
-    assignModule
+    assignModule,
+    uploadModel,
+    serveModel
 };

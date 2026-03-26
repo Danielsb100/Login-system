@@ -102,6 +102,8 @@ app.patch('/world/placements/:id/unassign-module', authenticateToken, roleMiddle
     req.body.moduleId = null;
     placementController.assignModule(req, res);
 });
+app.patch('/world/placements/:id/model', authenticateToken, roleMiddleware(['MASTER']), upload.single('model'), placementController.uploadModel);
+app.get('/world/placements/:id/model', placementController.serveModel);
 
 // Reporting
 app.get('/modules/:id/reports/overview', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), reportController.getModuleOverview);
