@@ -199,6 +199,8 @@ model ModuleVideoProgress {
   progress  Float        // 0 to 100
   completed Boolean      @default(false)
   updatedAt DateTime     @updatedAt
+
+  @@unique([videoId, userId])
 }
 
 model ModuleDocumentDownload {

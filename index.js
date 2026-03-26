@@ -15,6 +15,14 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// New Controllers
+const moduleController = require('./controllers/moduleController');
+const contentController = require('./controllers/contentController');
+const forumController = require('./controllers/forumController');
+const analyticsController = require('./controllers/analyticsController');
+const placementController = require('./controllers/placementController');
+const reportController = require('./controllers/reportController');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -38,7 +46,69 @@ app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), us
 // Rota exclusiva para o MASTER resetar a database
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
 
-// Document routes
+// --- Teaching Modules Routes ---
+
+// Module CRUD
+app.post('/modules', authenticateToken, roleMiddleware(['MASTER']), moduleController.createModule);
+app.get('/modules/my', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyModules);
+app.get('/modules/my/assignable', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyAssignableModules);
+app.get('/modules', authenticateToken, moduleController.getAllPublishedModules);
+app.get('/modules/:id', authenticateToken, moduleController.getModuleById);
+app.put('/modules/:id', authenticateToken, roleMiddleware(['MASTER']), moduleController.updateModule);
+app.patch('/modules/:id/publish', authenticateToken, roleMiddleware(['MASTER']), (req, res) => moduleController.patchStatus(req, res, 'PUBLISHED'));
+app.patch('/modules/:id/archive', authenticateToken, roleMiddleware(['MASTER']), (req, res) => moduleController.patchStatus(req, res, 'ARCHIVED'));
+app.delete('/modules/:id', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), moduleController.deleteModule);
+
+// Modules Formats
+app.get('/modules/:id/edit-format', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), moduleController.getEditFormat);
+app.get('/runtime/modules/:id', authenticateToken, moduleController.getRuntimeFormat);
+
+// Video Management
+app.post('/modules/:id/videos', authenticateToken, roleMiddleware(['MASTER']), contentController.addVideo);
+app.put('/modules/:id/videos/:videoId', authenticateToken, roleMiddleware(['MASTER']), contentController.updateVideo);
+app.delete('/modules/:id/videos/:videoId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteVideo);
+
+// Document Management
+app.post('/modules/:id/documents', authenticateToken, roleMiddleware(['MASTER']), contentController.addDocument);
+app.put('/modules/:id/documents/:documentId', authenticateToken, roleMiddleware(['MASTER']), contentController.updateDocument);
+app.delete('/modules/:id/documents/:documentId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteDocument);
+
+// Quiz Management
+app.post('/modules/:id/quiz/questions', authenticateToken, roleMiddleware(['MASTER']), contentController.addQuizQuestion);
+app.put('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(['MASTER']), contentController.updateQuizQuestion);
+app.delete('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteQuizQuestion);
+app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
+app.get('/modules/:id/quiz/submissions', authenticateToken, moduleController.getQuizzesSubmissions); // Moved to moduleController or contentController? Check export.
+
+// Forum Management
+app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
+app.get('/modules/:id/forum/threads', authenticateToken, forumController.getThreadsByModule);
+app.post('/forum/threads/:threadId/replies', authenticateToken, forumController.createReply);
+app.get('/forum/threads/:threadId', authenticateToken, forumController.getThreadById);
+
+// Analytics Logging
+app.post('/modules/:id/access', authenticateToken, analyticsController.logAccess);
+app.post('/modules/:id/videos/:videoId/progress', authenticateToken, analyticsController.logVideoProgress);
+app.post('/modules/:id/documents/:documentId/download', authenticateToken, analyticsController.logDocumentDownload);
+
+// World Placements
+app.post('/world/placements', authenticateToken, roleMiddleware(['MASTER']), placementController.createPlacement);
+app.get('/world/placements', authenticateToken, placementController.getPlacementsByScene);
+app.get('/world/placements/:id', authenticateToken, placementController.getPlacementById);
+app.put('/world/placements/:id', authenticateToken, roleMiddleware(['MASTER']), placementController.updatePlacement);
+app.delete('/world/placements/:id', authenticateToken, roleMiddleware(['MASTER']), placementController.deletePlacement);
+app.patch('/world/placements/:id/assign-module', authenticateToken, roleMiddleware(['MASTER']), placementController.assignModule);
+app.patch('/world/placements/:id/unassign-module', authenticateToken, roleMiddleware(['MASTER']), (req, res) => {
+    req.body.moduleId = null;
+    placementController.assignModule(req, res);
+});
+
+// Reporting
+app.get('/modules/:id/reports/overview', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), reportController.getModuleOverview);
+app.get('/modules/:id/reports/users', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), reportController.getModuleUsers);
+app.get('/modules/:id/reports/users/:userId', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), reportController.getUserDetailedReport);
+
+// Document routes (Existing)
 app.post('/api/documents/upload', authenticateToken, upload.single('document'), documentController.uploadDocument);
 app.get('/api/documents', authenticateToken, (req, res) => {
     // Wrap to pass username
