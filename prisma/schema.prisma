@@ -181,13 +181,15 @@ model ForumReply {
 }
 
 model ModuleAccessLog {
-  id        Int          @id @default(autoincrement())
-  moduleId  Int
-  module    TrainingModule @relation(fields: [moduleId], references: [id])
-  userId    Int
-  user      User         @relation(fields: [userId], references: [id])
-  source    LogSource
-  timestamp DateTime     @default(now())
+  id          Int            @id @default(autoincrement())
+  moduleId    Int
+  module      TrainingModule @relation(fields: [moduleId], references: [id])
+  userId      Int
+  user        User           @relation(fields: [userId], references: [id])
+  placementId Int?           // Optional: link to a specific placement
+  sceneId     String?        // Optional: link to a specific scene/world
+  source      LogSource
+  timestamp   DateTime       @default(now())
 }
 
 model ModuleVideoProgress {
@@ -217,7 +219,7 @@ model WorldModulePlacement {
   ownerMasterId Int
   master        User            @relation("MasterPlacements", fields: [ownerMasterId], references: [id])
   moduleId      Int?
-  module        TrainingModule? @relation(fields: [moduleId], references: [id])
+  module        TrainingModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   sceneId       String
   objectType    String
   label         String?

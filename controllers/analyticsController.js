@@ -2,8 +2,7 @@ const prisma = require('../config/db');
 
 const logAccess = async (req, res) => {
     try {
-        const { id } = req.params; // moduleId
-        const { source } = req.body; // 'dashboard' or 'multiplayer_world'
+        const { source, sceneId, placementId } = req.body; // 'dashboard' or 'multiplayer_world'
         const userId = req.user.id;
 
         if (!['dashboard', 'multiplayer_world'].includes(source)) {
@@ -14,7 +13,9 @@ const logAccess = async (req, res) => {
             data: {
                 moduleId: parseInt(id),
                 userId,
-                source
+                source,
+                sceneId: sceneId || null,
+                placementId: placementId ? parseInt(placementId) : null
             }
         });
         res.status(201).json(log);

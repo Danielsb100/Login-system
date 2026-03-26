@@ -131,14 +131,29 @@ const getModuleById = async (req, res) => {
         });
 
         if (!module) return res.status(404).json({ error: 'Module not found' });
+        
+        const isOwner = module.ownerMasterId === req.user.id || req.user.role === 'ADMIN';
 
-        // Logic check: only owner/admin can see non-published modules
-        if (module.status !== 'PUBLISHED' && module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Access denied: This module is not published.' });
+        // Logic check: Status rules
+        if (module.status === 'ARCHIVED') {
+            if (!isOwner) {
+                return res.status(403).json({ error: 'Este módulo foi arquivado e não está mais disponível.' });
+            }
+        } else if (module.status === 'DRAFT') {
+            if (!isOwner) {
+                return res.status(403).json({ error: 'Este módulo ainda está em rascunho e não foi publicado.' });
+            }
         }
 
         const format = req.query.format || 'runtime';
-        res.json(formatModuleData(module, format, req.user.role, req.user.id));
+        const formatted = formatModuleData(module, format, req.user.role, req.user.id);
+        
+        // Add preview flag if it's draft and viewed by owner
+        if (module.status === 'DRAFT') {
+            formatted.isPreview = true;
+        }
+
+        res.json(formatted);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch module' });
     }
