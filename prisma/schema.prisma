@@ -107,7 +107,7 @@ model ModuleDocument {
   moduleId   Int
   module     TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   documentId Int
-  document   Document     @relation(fields: [documentId], references: [id])
+  document   Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
   title      String
   order      Int
   downloads  ModuleDocumentDownload[]

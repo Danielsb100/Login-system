@@ -11,7 +11,7 @@ const logAccess = async (req, res) => {
 
         const log = await prisma.moduleAccessLog.create({
             data: {
-                moduleId: parseInt(id),
+                moduleId: parseInt(req.params.id),
                 userId,
                 source,
                 sceneId: sceneId || null,

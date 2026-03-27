@@ -1165,6 +1165,10 @@ async function showAddDocForm() {
             };
         }
     }, 100);
+
+    // Initial fetch and render
+    await fetchDocs();
+    renderGridMini('all');
 }
 
 // Global helper for selector
