@@ -836,15 +836,15 @@ if (mbForm) {
     try {
         if (currentModuleId) {
             await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
-            alert('Módulo atualizado!');
+            await loadModulesPanel();
             closeModuleEditor();
-            loadModulesPanel();
+            alert('Módulo atualizado!');
         } else {
             const res = await apiCall('/modules', 'POST', data);
             currentModuleId = res.id;
-            alert('Módulo criado! Agora você pode adicionar conteúdo.');
             await loadModulesPanel();
-            openModuleEditor(res.id); // Reload in edit mode
+            closeModuleEditor(); // Fixed: Close after create
+            alert('Módulo criado!');
         }
     } catch (error) {
         alert('Erro: ' + error.message);
@@ -1185,6 +1185,26 @@ window.toggleDocSelectorMode = (mode) => {
     });
 };
 
+window.deleteQuiz = async (quizId) => {
+    if (!confirm('Tem certeza que deseja excluir este quiz?')) return;
+    try {
+        await apiCall(`/modules/${currentModuleId}/quizzes/${quizId}`, 'DELETE');
+        await loadModuleData(currentModuleId);
+    } catch (err) {
+        alert('Erro ao excluir quiz: ' + err.message);
+    }
+};
+
+window.deleteQuestion = async (questionId) => {
+    if (!confirm('Tem certeza que deseja excluir esta pergunta?')) return;
+    try {
+        await apiCall(`/modules/${currentModuleId}/quiz/questions/${questionId}`, 'DELETE');
+        await loadModuleData(currentModuleId);
+    } catch (err) {
+        alert('Erro ao excluir pergunta: ' + err.message);
+    }
+};
+
 
 // Quiz Management Logic
 function renderQuizList() {
@@ -1201,7 +1221,10 @@ function renderQuizList() {
             div.innerHTML = `
                 <div class="quiz-group-header">
                     <h4><i class="fas fa-tasks"></i> ${quiz.title}</h4>
-                    <button onclick="addQuizQuestionToQuiz(${quiz.id})" class="btn btn-primary btn-sm">+ Pergunta</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button onclick="addQuizQuestionToQuiz(${quiz.id})" class="btn btn-primary btn-sm">+ Pergunta</button>
+                        <button onclick="deleteQuiz(${quiz.id})" class="btn btn-icon-del"><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>
                 <div class="questions-mini-list">
                     ${quiz.questions.length ? quiz.questions.map((q, idx) => `
@@ -1242,6 +1265,9 @@ async function showCreateQuizForm() {
             <input type="text" id="qz-title-in" placeholder="Ex: Avaliação Final">
         </div>
     `, async () => {
+        const title = document.getElementById('qz-title-in').value;
+        if (!title) return alert('Título obrigatório');
+
         const okBtn = document.getElementById('sub-modal-ok');
         okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
         okBtn.disabled = true;

@@ -75,6 +75,7 @@ app.delete('/modules/:id/documents/:documentId', authenticateToken, roleMiddlewa
 
 // Quiz Management
 app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(['MASTER']), contentController.createQuiz);
+app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteQuiz);
 app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(['MASTER']), contentController.addQuizQuestion);
 app.delete('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteQuizQuestion);
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);

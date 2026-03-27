@@ -176,6 +176,26 @@ const createQuiz = async (req, res) => {
     }
 };
 
+const deleteQuiz = async (req, res) => {
+    try {
+        const { id, quizId } = req.params;
+        const userId = req.user.id;
+
+        const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
+        if (!module || (module.ownerMasterId !== userId && req.user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        await prisma.quiz.delete({
+            where: { id: parseInt(quizId) }
+        });
+
+        res.json({ message: 'Quiz deleted' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete quiz' });
+    }
+};
+
 const addQuizQuestion = async (req, res) => {
     try {
         const { quizId } = req.params;
