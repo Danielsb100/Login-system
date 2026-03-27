@@ -1320,6 +1320,19 @@ async function viewUserDetail(userId) {
     showSubModal('Relatório Detalhado', content, () => closeSubModal());
 }
 
+// Sub Modal Helpers
+function showSubModal(title, bodyHtml, onOk) {
+    const modal = document.getElementById('sub-modal');
+    document.getElementById('sub-modal-title').textContent = title;
+    document.getElementById('sub-modal-body').innerHTML = bodyHtml;
+    document.getElementById('sub-modal-ok').onclick = onOk;
+    modal.classList.remove('hidden');
+}
+
+function closeSubModal() {
+    document.getElementById('sub-modal').classList.add('hidden');
+}
+
 // Export functions to window
 window.openModuleEditor = openModuleEditor;
 window.closeModuleEditor = closeModuleEditor;
@@ -1338,3 +1351,4 @@ window.showCreateQuizForm = showCreateQuizForm;
 window.switchPreviewTab = switchPreviewTab;
 window.closeSubModal = closeSubModal;
 window.selectModuleForPreview = selectModuleForPreview;
+window.showSubModal = showSubModal;
