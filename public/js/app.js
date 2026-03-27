@@ -1,7 +1,57 @@
 const API_URL = ''; // Same origin
+console.log("App loaded v1.3 - 27/03 11:20");
+
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error("Global Error:", message, "at", source, ":", lineno);
+    // alert("Erro de Sistema: " + message + " (Linha " + lineno + ")");
+    return false;
+};
+
 // SYNC_CHECK: 24/03/2026 16:40
 
 // --- UI Helpers ---
+async function openModuleEditor(id = null) {
+    console.log('Opening module editor for ID:', id);
+    const modal = document.getElementById('module-editor-modal');
+    const title = document.getElementById('editor-title');
+    if (!modal || !title) {
+        console.error('Module editor elements not found!');
+        return;
+    }
+
+    currentModuleId = id;
+
+    const btnDel = document.getElementById('btn-delete-module-editor');
+    if (btnDel) {
+        if (id) {
+            btnDel.classList.remove('hidden');
+            btnDel.onclick = () => deleteModule(id);
+        } else {
+            btnDel.classList.add('hidden');
+        }
+    }
+
+    if (!id) {
+        title.textContent = 'Criar Novo Módulo';
+        const form = document.getElementById('module-basics-form');
+        if (form) form.reset();
+        const tabs = document.getElementById('editor-tabs');
+        if (tabs) tabs.classList.add('hidden');
+        modal.classList.remove('hidden');
+        return;
+    }
+
+    title.textContent = 'Configurar Conteúdo do Módulo';
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'block'; // Force show
+        modal.style.opacity = '1';
+    }
+    await loadModuleData(id);
+    switchEditorTab('basics');
+}
+window.openModuleEditor = openModuleEditor;
+
 function showMessage(elementId, message, isError = false) {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -50,18 +100,10 @@ let personalAssets = [];
 let currentFilteredAssets = [];
 let currentIndex = -1;
 
-// --- API Calls ---
-
 async function apiCall(endpoint, method = 'GET', body = null) {
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-    
+    const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const options = { method, headers };
     if (body) options.body = JSON.stringify(body);
 
@@ -74,6 +116,19 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     
     return data;
 }
+
+// Global Robust Listener for Module Creation
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'btn-create-module' || e.target.closest('#btn-create-module')) {
+        console.log("Módulo creation button clicked (robust listener)");
+        alert("Debug: Botão clicado!"); // Temp debug for user
+        if (typeof openModuleEditor === 'function') {
+            openModuleEditor();
+        } else {
+            console.error("openModuleEditor is not defined!");
+        }
+    }
+});
 
 // --- Event Listeners ---
 
@@ -495,8 +550,11 @@ function prevPreview() {
 }
 
 // Event bindings for dashboard arrows
-document.getElementById('next-preview').onclick = (e) => { e.stopPropagation(); nextPreview(); };
-document.getElementById('prev-preview').onclick = (e) => { e.stopPropagation(); prevPreview(); };
+const nextBtn = document.getElementById('next-preview');
+if (nextBtn) nextBtn.onclick = (e) => { e.stopPropagation(); nextPreview(); };
+
+const prevBtn = document.getElementById('prev-preview');
+if (prevBtn) prevBtn.onclick = (e) => { e.stopPropagation(); prevPreview(); };
 
 // Keyboard support
 document.addEventListener('keydown', (e) => {
@@ -712,53 +770,7 @@ async function selectModuleForPreview(moduleId) {
 }
 
 // Editor Modal Management
-async function openModuleEditor(id = null) {
-    console.log('Opening module editor for ID:', id);
-    const modal = document.getElementById('module-editor-modal');
-    const title = document.getElementById('editor-title');
-    if (!modal || !title) {
-        console.error('Module editor elements not found!');
-        return;
-    }
-
-    currentModuleId = id;
-
-    // Delete button handling in editor
-    const btnDel = document.getElementById('btn-delete-module-editor');
-    if (btnDel) {
-        if (id) {
-            btnDel.classList.remove('hidden');
-            btnDel.onclick = () => deleteModule(id);
-        } else {
-            btnDel.classList.add('hidden');
-        }
-    }
-
-    if (!id) {
-        // Create Mode
-        title.textContent = 'Criar Novo Módulo';
-        const form = document.getElementById('module-basics-form');
-        if (form) form.reset();
-        
-        const tabs = document.getElementById('editor-tabs');
-        if (tabs) tabs.classList.add('hidden');
-        
-        modal.classList.remove('hidden');
-        return;
-    }
-
-    // Edit Mode
-    title.textContent = 'Configurar Conteúdo do Módulo';
-    const tabs = document.getElementById('editor-tabs');
-    if (tabs) tabs.classList.remove('hidden');
-    modal.classList.remove('hidden');
-
-    await loadModuleData(id);
-    switchEditorTab('basics');
-}
-
-// Ensure it's global
-window.openModuleEditor = openModuleEditor;
+// Function handled at top or elsewhere
 
 function closeModuleEditor() {
     document.getElementById('module-editor-modal').classList.add('hidden');
