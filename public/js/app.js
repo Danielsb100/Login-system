@@ -659,6 +659,7 @@ async function loadModulesPanel() {
                 </div>
             `;
             card.onclick = () => selectModuleForPreview(m.id);
+            // Also make it open editor on double click maybe? No, let's keep click for preview
             modulesList.appendChild(card);
         });
     } catch (error) {
@@ -755,18 +756,23 @@ async function selectModuleForPreview(moduleId) {
 
         // Action Buttons
         const btnEdit = document.getElementById('btn-edit-preview');
-        btnEdit.onclick = () => openModuleEditor(moduleId);
+        if (btnEdit) btnEdit.onclick = () => openModuleEditor(moduleId);
 
         // Direct Addition Buttons
-        document.getElementById('btn-add-video-direct').onclick = () => {
+        const btnAddVideo = document.getElementById('btn-add-video-direct');
+        if (btnAddVideo) btnAddVideo.onclick = () => {
             currentModuleId = moduleId;
             showAddVideoForm();
         };
-        document.getElementById('btn-add-doc-direct').onclick = () => {
+
+        const btnAddDoc = document.getElementById('btn-add-doc-direct');
+        if (btnAddDoc) btnAddDoc.onclick = () => {
             currentModuleId = moduleId;
             showAddDocForm();
         };
-        document.getElementById('btn-add-quiz-direct').onclick = () => {
+
+        const btnAddQuiz = document.getElementById('btn-add-quiz-direct');
+        if (btnAddQuiz) btnAddQuiz.onclick = () => {
             currentModuleId = moduleId;
             showCreateQuizForm();
         };
