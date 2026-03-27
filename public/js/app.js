@@ -799,8 +799,8 @@ async function selectModuleForPreview(moduleId) {
 
 function closeModuleEditor() {
     document.getElementById('module-editor-modal').classList.add('hidden');
-    currentModuleId = null;
-    currentModuleData = null;
+    // currentModuleId = null; // Don't nullify, might be using in preview
+    // currentModuleData = null; 
 }
 
 async function loadModuleData(id) {
@@ -959,7 +959,8 @@ async function showAddVideoForm() {
         }
 
         try {
-            await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order: currentModuleData.videos.length });
+            const order = (currentModuleData && currentModuleData.videos) ? currentModuleData.videos.length : 0;
+            await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order });
             await loadModuleData(currentModuleId);
             closeSubModal();
         } catch (err) {
@@ -1100,11 +1101,12 @@ async function showAddDocForm() {
         okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
         okBtn.disabled = true;
 
+        const order = (currentModuleData && currentModuleData.documents) ? currentModuleData.documents.length : 0;
         try {
             await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
                 title, 
                 documentId: selectedDocId, 
-                order: currentModuleData.documents.length 
+                order
             });
             await loadModuleData(currentModuleId);
             closeSubModal();
@@ -1230,9 +1232,10 @@ async function showCreateQuizForm() {
         const title = document.getElementById('qz-title-in').value;
         if (!title) return alert('Título obrigatório');
 
+        const order = (currentModuleData && currentModuleData.quizzes) ? currentModuleData.quizzes.length : 0;
         await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
             title, 
-            order: currentModuleData.quizzes.length 
+            order
         });
         await loadModuleData(currentModuleId);
         closeSubModal();
