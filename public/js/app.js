@@ -817,6 +817,19 @@ async function loadModuleData(id) {
         renderDocList();
         renderQuizList();
         loadModuleReports(id);
+
+        // Update Publish button in editor
+        const btnPublish = document.getElementById('btn-publish-module');
+        if (btnPublish) {
+            const isPublished = currentModuleData.status === 'PUBLISHED';
+            btnPublish.innerText = isPublished ? 'Desarquivar' : 'Publicar';
+            btnPublish.className = isPublished ? 'btn btn-secondary' : 'btn btn-primary';
+            btnPublish.onclick = async () => {
+                await updateModuleStatus(id, isPublished ? 'DRAFT' : 'PUBLISHED');
+                await loadModuleData(id); // Refresh editor
+                alert(isPublished ? 'Módulo ocultado!' : 'Módulo publicado!');
+            };
+        }
     } catch (error) {
         alert('Erro ao carregar dados do módulo: ' + error.message);
     }
