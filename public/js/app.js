@@ -611,6 +611,11 @@ async function loadModulesPanel() {
     }
 }
 
+function switchPreviewTab(pane) {
+    document.querySelectorAll('.prev-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.pane === pane));
+    document.querySelectorAll('.prev-pane').forEach(p => p.classList.toggle('active', p.id === `prev-pane-${pane}`));
+}
+
 async function selectModuleForPreview(moduleId) {
     const section = document.getElementById('module-preview-section');
     section.classList.remove('hidden');
@@ -623,21 +628,86 @@ async function selectModuleForPreview(moduleId) {
         const m = await apiCall(`/modules/${moduleId}/edit-format`);
         document.getElementById('preview-title').textContent = m.title;
         
+        // Video Preview
         document.getElementById('preview-videos-summary').innerHTML = m.videos.length ? 
-            m.videos.map(v => `<div style="padding: 4px 0;">• ${v.title}</div>`).join('') : 'Nenhum vídeo.';
+            m.videos.map(v => `
+                <div class="doc-col-item">
+                    <i class="fas fa-play-circle" style="color: var(--primary);"></i>
+                    <span>${v.title}</span>
+                </div>
+            `).join('') : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum vídeo.</div>';
             
-        document.getElementById('preview-docs-summary').innerHTML = m.documents.length ? 
-            m.documents.map(d => `<div style="padding: 4px 0;">• ${d.title}</div>`).join('') : 'Nenhum documento.';
-            
-        document.getElementById('preview-quiz-summary').innerHTML = m.questions.length ? 
-            `<strong style="color: var(--primary);">${m.questions.length}</strong> perguntas cadastradas.` : 'Nenhuma pergunta.';
+        // Document Preview (3 Columns)
+        const pdfList = document.getElementById('prev-pdf-list');
+        const wordList = document.getElementById('prev-word-list');
+        const imgList = document.getElementById('prev-img-list');
 
-        document.getElementById('btn-edit-preview').onclick = () => openModuleEditor(moduleId);
-        document.getElementById('btn-delete-preview').onclick = () => deleteModule(moduleId);
+        pdfList.innerHTML = '';
+        wordList.innerHTML = '';
+        imgList.innerHTML = '';
+
+        m.documents.forEach(d => {
+            const type = d.document.type.toLowerCase();
+            const item = document.createElement('div');
+            item.className = 'doc-col-item';
+            
+            let icon = 'fa-file-alt';
+            let color = 'var(--text-muted)';
+            let targetList = null;
+
+            if (type === 'application/pdf') {
+                icon = 'fa-file-pdf';
+                color = '#ff4444';
+                targetList = pdfList;
+            } else if (type.includes('word') || type.includes('officedocument.wordprocessingml')) {
+                icon = 'fa-file-word';
+                color = '#4488ff';
+                targetList = wordList;
+            } else if (type.startsWith('image/')) {
+                icon = 'fa-file-image';
+                color = '#44ff88';
+                targetList = imgList;
+            }
+
+            if (targetList) {
+                item.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i> <span>${d.title}</span>`;
+                targetList.appendChild(item);
+            }
+        });
+
+        [pdfList, wordList, imgList].forEach(list => {
+            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">Vazio</div>';
+        });
+            
+        // Quiz Preview
+        document.getElementById('preview-quiz-summary').innerHTML = m.questions.length ? 
+            `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                <strong style="color: var(--primary); font-size: 1.2rem;">${m.questions.length}</strong> perguntas cadastradas.
+            </div>` : '<div style="color: var(--text-muted); padding: 1rem;">Nenhuma pergunta.</div>';
+
+        // Reports Preview Summary
+        const overview = await apiCall(`/modules/${moduleId}/reports/overview`);
+        document.getElementById('preview-reports-summary').innerHTML = `
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                <div class="stat-card">
+                    <div class="stat-value">${overview.uniqueUsers}</div>
+                    <div class="stat-label">Alunos</div>
+                </div>
+                <div class="stat-value" style="font-size: 1.5rem;">${overview.averageScore.toFixed(1)}%</div>
+                <div class="stat-label">Média</div>
+            </div>
+        `;
+
+        // Action Buttons - Ensure we use a direct reference to avoid closure issues
+        const btnEdit = document.getElementById('btn-edit-preview');
+        btnEdit.onclick = () => openModuleEditor(moduleId);
+        
+        // Start on Videos tab by default
+        switchPreviewTab('videos');
         
         section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
-        console.error(err);
+        console.error('Preview error:', err);
     }
 }
 
@@ -647,11 +717,20 @@ async function openModuleEditor(id = null) {
     const title = document.getElementById('editor-title');
     currentModuleId = id;
 
+    // Delete button handling in editor
+    const btnDel = document.getElementById('btn-delete-module-editor');
+    if (id) {
+        btnDel.classList.remove('hidden');
+        btnDel.onclick = () => deleteModule(id);
+    } else {
+        btnDel.classList.add('hidden');
+    }
+
     if (!id) {
         // Create Mode
         title.textContent = 'Criar Novo Módulo';
         document.getElementById('module-basics-form').reset();
-        document.getElementById('editor-tabs').classList.add('hidden'); // Hide content tabs during creation
+        document.getElementById('editor-tabs').classList.add('hidden');
         modal.classList.remove('hidden');
         return;
     }
@@ -729,6 +808,10 @@ async function deleteModule(id) {
     try {
         await apiCall(`/modules/${id}`, 'DELETE');
         loadModulesPanel();
+        
+        // Close UI components
+        closeModuleEditor();
+        document.getElementById('module-preview-section').classList.add('hidden');
     } catch (error) {
         alert('Erro ao excluir: ' + error.message);
     }

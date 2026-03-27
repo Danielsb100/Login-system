@@ -153,21 +153,49 @@
                     <h2 id="preview-title">Título do Módulo</h2>
                     <div class="actions">
                         <button id="btn-edit-preview" class="btn btn-primary btn-sm">Editar Conteúdo</button>
-                        <button id="btn-delete-preview" class="btn btn-secondary btn-sm" style="color: var(--error);">Excluir</button>
                     </div>
                 </div>
-                <div class="preview-grid">
-                    <div class="preview-item">
-                        <h5>Vídeos</h5>
-                        <div id="preview-videos-summary">Nenhum vídeo.</div>
+                
+                <!-- Horizontal Preview Tabs -->
+                <div class="preview-tabs">
+                    <button class="prev-tab active" data-pane="videos" onclick="switchPreviewTab('videos')">Vídeos</button>
+                    <button class="prev-tab" data-pane="docs" onclick="switchPreviewTab('docs')">Documentos</button>
+                    <button class="prev-tab" data-pane="quiz" onclick="switchPreviewTab('quiz')">Quiz</button>
+                    <button class="prev-tab" data-pane="reports" onclick="switchPreviewTab('reports')">Relatórios</button>
+                </div>
+
+                <div class="preview-content">
+                    <!-- Videos Pane -->
+                    <div id="prev-pane-videos" class="prev-pane active">
+                        <div id="preview-videos-summary" class="doc-col-list">Nenhum vídeo.</div>
                     </div>
-                    <div class="preview-item">
-                        <h5>Documentos</h5>
-                        <div id="preview-docs-summary">Nenhum documento.</div>
+
+                    <!-- Documents Pane (3 Columns) -->
+                    <div id="prev-pane-docs" class="prev-pane">
+                        <div class="doc-columns">
+                            <div class="doc-col">
+                                <h5>PDF</h5>
+                                <div id="prev-pdf-list" class="doc-col-list"></div>
+                            </div>
+                            <div class="doc-col">
+                                <h5>Word</h5>
+                                <div id="prev-word-list" class="doc-col-list"></div>
+                            </div>
+                            <div class="doc-col">
+                                <h5>Imagens</h5>
+                                <div id="prev-img-list" class="doc-col-list"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="preview-item">
-                        <h5>Quiz</h5>
+
+                    <!-- Quiz Pane -->
+                    <div id="prev-pane-quiz" class="prev-pane">
                         <div id="preview-quiz-summary">Nenhuma pergunta.</div>
+                    </div>
+
+                    <!-- Reports Pane -->
+                    <div id="prev-pane-reports" class="prev-pane">
+                        <div id="preview-reports-summary">Selecione um módulo para ver as estatísticas.</div>
                     </div>
                 </div>
             </div>
@@ -209,7 +237,10 @@
                                 <label>URL da Capa (Opcional)</label>
                                 <input type="text" id="m-cover" placeholder="https://...">
                             </div>
-                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                            <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
+                                <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                                <button type="button" id="btn-delete-module-editor" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">Excluir Módulo</button>
+                            </div>
                         </form>
                     </div>
 
