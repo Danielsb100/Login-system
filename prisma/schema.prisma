@@ -93,7 +93,7 @@ model TrainingModule {
 model ModuleVideo {
   id         Int          @id @default(autoincrement())
   moduleId   Int
-  module     TrainingModule @relation(fields: [moduleId], references: [id])
+  module     TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   title      String
   url        String
   order      Int
@@ -105,7 +105,7 @@ model ModuleVideo {
 model ModuleDocument {
   id         Int          @id @default(autoincrement())
   moduleId   Int
-  module     TrainingModule @relation(fields: [moduleId], references: [id])
+  module     TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   documentId Int
   document   Document     @relation(fields: [documentId], references: [id])
   title      String
@@ -118,7 +118,7 @@ model ModuleDocument {
 model QuizQuestion {
   id         Int          @id @default(autoincrement())
   moduleId   Int
-  module     TrainingModule @relation(fields: [moduleId], references: [id])
+  module     TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   text       String
   order      Int
   options    QuizOption[]
@@ -130,7 +130,7 @@ model QuizQuestion {
 model QuizOption {
   id         Int          @id @default(autoincrement())
   questionId Int
-  question   QuizQuestion @relation(fields: [questionId], references: [id])
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
   text       String
   isCorrect  Boolean
   answers    QuizAnswer[]
@@ -139,7 +139,7 @@ model QuizOption {
 model QuizSubmission {
   id            Int          @id @default(autoincrement())
   moduleId      Int
-  module        TrainingModule @relation(fields: [moduleId], references: [id])
+  module        TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
   score         Float
@@ -151,17 +151,17 @@ model QuizSubmission {
 model QuizAnswer {
   id           Int          @id @default(autoincrement())
   submissionId Int
-  submission   QuizSubmission @relation(fields: [submissionId], references: [id])
+  submission   QuizSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   questionId   Int
-  question     QuizQuestion   @relation(fields: [questionId], references: [id])
+  question     QuizQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
   optionId     Int
-  option       QuizOption     @relation(fields: [optionId], references: [id])
+  option       QuizOption     @relation(fields: [optionId], references: [id], onDelete: Cascade)
 }
 
 model ForumThread {
   id        Int          @id @default(autoincrement())
   moduleId  Int
-  module    TrainingModule @relation(fields: [moduleId], references: [id])
+  module    TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   userId    Int
   user      User         @relation(fields: [userId], references: [id])
   title     String
@@ -173,7 +173,7 @@ model ForumThread {
 model ForumReply {
   id        Int          @id @default(autoincrement())
   threadId  Int
-  thread    ForumThread  @relation(fields: [threadId], references: [id])
+  thread    ForumThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
   userId    Int
   user      User         @relation(fields: [userId], references: [id])
   content   String
@@ -183,7 +183,7 @@ model ForumReply {
 model ModuleAccessLog {
   id          Int            @id @default(autoincrement())
   moduleId    Int
-  module      TrainingModule @relation(fields: [moduleId], references: [id])
+  module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   userId      Int
   user        User           @relation(fields: [userId], references: [id])
   placementId Int?           // Optional: link to a specific placement
@@ -195,7 +195,7 @@ model ModuleAccessLog {
 model ModuleVideoProgress {
   id        Int          @id @default(autoincrement())
   videoId   Int
-  video     ModuleVideo  @relation(fields: [videoId], references: [id])
+  video     ModuleVideo  @relation(fields: [videoId], references: [id], onDelete: Cascade)
   userId    Int
   user      User         @relation(fields: [userId], references: [id])
   progress  Float        // 0 to 100
@@ -208,7 +208,7 @@ model ModuleVideoProgress {
 model ModuleDocumentDownload {
   id          Int            @id @default(autoincrement())
   moduleDocId Int
-  moduleDoc   ModuleDocument @relation(fields: [moduleDocId], references: [id])
+  moduleDoc   ModuleDocument @relation(fields: [moduleDocId], references: [id], onDelete: Cascade)
   userId      Int
   user        User           @relation(fields: [userId], references: [id])
   timestamp   DateTime       @default(now())

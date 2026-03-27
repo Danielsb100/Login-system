@@ -731,10 +731,47 @@ async function showAddVideoForm() {
             <label>URL do Vídeo (YouTube/Vimeo/etc)</label>
             <input type="text" id="v-url-in" placeholder="https://...">
         </div>
+        <div style="text-align: center; margin: 0.5rem 0; color: var(--text-muted); font-size: 0.8rem;">--- OU ---</div>
+        <div class="input-group">
+            <label>Upload de Arquivo de Vídeo</label>
+            <input type="file" id="v-file-in" accept="video/*" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
+        </div>
     `, async () => {
         const title = document.getElementById('v-title-in').value;
-        const url = document.getElementById('v-url-in').value;
-        await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url, order: currentModuleData.videos.length });
+        const urlInput = document.getElementById('v-url-in').value;
+        const fileInput = document.getElementById('v-file-in').files[0];
+        const okBtn = document.getElementById('sub-modal-ok');
+        
+        let finalUrl = urlInput;
+
+        if (fileInput) {
+            okBtn.textContent = 'Enviando...';
+            okBtn.disabled = true;
+            try {
+                const formData = new FormData();
+                formData.append('document', fileInput);
+                const res = await fetch(`${API_URL}/api/documents/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getToken()}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Upload failed');
+                finalUrl = `/api/documents/download/${data.id}`;
+            } catch (err) {
+                alert('Erro no upload: ' + err.message);
+                okBtn.textContent = 'Confirmar';
+                okBtn.disabled = false;
+                return;
+            }
+        }
+
+        if (!finalUrl || !title) {
+            alert('Por favor, insira um título e uma URL ou selecione um arquivo.');
+            return;
+        }
+
+        await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order: currentModuleData.videos.length });
         await loadModuleData(currentModuleId);
         closeSubModal();
     });
@@ -778,14 +815,50 @@ async function showAddDocForm() {
             <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
         </div>
         <div class="input-group">
-            <label>Escolher Arquivo</label>
+            <label>Escolher Arquivo Existente</label>
             <select id="d-id-in" class="glassmorphism" style="width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); border-radius: 8px; color: white;">
+                <option value="">-- Selecione ou faça upload abaixo --</option>
                 ${options}
             </select>
         </div>
+        <div style="text-align: center; margin: 0.5rem 0; color: var(--text-muted); font-size: 0.8rem;">--- OU ---</div>
+        <div class="input-group">
+            <label>Upload Novo Arquivo (PDF/DOC/Etc)</label>
+            <input type="file" id="d-file-in" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
+        </div>
     `, async () => {
         const title = document.getElementById('d-title-in').value;
-        const documentId = document.getElementById('d-id-in').value;
+        let documentId = document.getElementById('d-id-in').value;
+        const fileInput = document.getElementById('d-file-in').files[0];
+        const okBtn = document.getElementById('sub-modal-ok');
+
+        if (fileInput) {
+            okBtn.textContent = 'Enviando...';
+            okBtn.disabled = true;
+            try {
+                const formData = new FormData();
+                formData.append('document', fileInput);
+                const res = await fetch(`${API_URL}/api/documents/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getToken()}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Upload failed');
+                documentId = data.id;
+            } catch (err) {
+                alert('Erro no upload: ' + err.message);
+                okBtn.textContent = 'Confirmar';
+                okBtn.disabled = false;
+                return;
+            }
+        }
+
+        if (!title || !documentId) {
+            alert('Por favor, preencha o título e escolha ou faça upload de um arquivo.');
+            return;
+        }
+
         await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { title, documentId, order: currentModuleData.documents.length });
         await loadModuleData(currentModuleId);
         closeSubModal();
