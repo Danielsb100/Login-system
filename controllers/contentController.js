@@ -259,17 +259,20 @@ const submitQuiz = async (req, res) => {
 
         const module = await prisma.trainingModule.findUnique({ 
             where: { id: parseInt(id) },
-            include: { questions: { include: { options: true } } }
+            include: { quizzes: { include: { questions: { include: { options: true } } } } }
         });
 
         if (!module) return res.status(404).json({ error: 'Module not found' });
+
+        // Flat list of all questions in the module for easy lookup
+        const allQuestions = module.quizzes.flatMap(qz => qz.questions);
 
         // Calculate score
         let correctCount = 0;
         const resultAnswers = [];
 
         for (const answer of answers) {
-            const question = module.questions.find(q => q.id === answer.questionId);
+            const question = allQuestions.find(q => q.id === answer.questionId);
             if (!question) continue;
 
             const selectedOption = question.options.find(o => o.id === answer.optionId);
@@ -282,7 +285,8 @@ const submitQuiz = async (req, res) => {
             });
         }
 
-        const score = (correctCount / module.questions.length) * 100;
+        const totalQuestions = allQuestions.length || 1;
+        const score = (correctCount / totalQuestions) * 100;
 
         // Get attempt number
         const lastSubmission = await prisma.quizSubmission.findFirst({

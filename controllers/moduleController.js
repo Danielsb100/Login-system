@@ -89,7 +89,7 @@ const getMyModules = async (req, res) => {
             where: { ownerMasterId: req.user.id },
             include: {
                 _count: {
-                    select: { videos: true, documents: true, questions: true, placements: true }
+                    select: { videos: true, documents: true, quizzes: true, placements: true }
                 }
             }
         });
