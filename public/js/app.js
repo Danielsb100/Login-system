@@ -930,11 +930,12 @@ async function showAddVideoForm() {
         let finalUrl = urlInput;
 
         if (fileInput) {
-            okBtn.textContent = 'Enviando...';
+            okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
             okBtn.disabled = true;
             try {
                 const formData = new FormData();
                 formData.append('document', fileInput);
+                console.log('Finalizing video upload...');
                 const res = await fetch(`${API_URL}/api/documents/upload`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getToken()}` },
@@ -944,7 +945,8 @@ async function showAddVideoForm() {
                 if (!res.ok) throw new Error(data.error || 'Upload failed');
                 finalUrl = `/api/documents/download/${data.id}`;
             } catch (err) {
-                alert('Erro no upload: ' + err.message);
+                console.error('Upload Error:', err);
+                alert('Erro no upload do vídeo: ' + err.message);
                 okBtn.textContent = 'Confirmar';
                 okBtn.disabled = false;
                 return;
@@ -956,9 +958,13 @@ async function showAddVideoForm() {
             return;
         }
 
-        await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order: currentModuleData.videos.length });
-        await loadModuleData(currentModuleId);
-        closeSubModal();
+        try {
+            await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order: currentModuleData.videos.length });
+            await loadModuleData(currentModuleId);
+            closeSubModal();
+        } catch (err) {
+            alert('Erro ao salvar vídeo: ' + err.message);
+        }
     });
 }
 
@@ -1083,17 +1089,31 @@ async function showAddDocForm() {
         </div>
     `, async () => {
         const title = document.getElementById('d-title-in').value;
+        const okBtn = document.getElementById('sub-modal-ok');
+        console.log('Confirming document add:', { title, selectedDocId });
+        
         if (!title || !selectedDocId) {
             alert('Por favor, preencha o título e selecione ou suba um arquivo.');
             return;
         }
-        await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
-            title, 
-            documentId: selectedDocId, 
-            order: currentModuleData.documents.length 
-        });
-        await loadModuleData(currentModuleId);
-        closeSubModal();
+        
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
+                title, 
+                documentId: selectedDocId, 
+                order: currentModuleData.documents.length 
+            });
+            await loadModuleData(currentModuleId);
+            closeSubModal();
+        } catch (err) {
+            console.error('Save Doc Error:', err);
+            alert('Erro ao vincular documento: ' + err.message);
+            okBtn.textContent = 'Confirmar';
+            okBtn.disabled = false;
+        }
     });
 
     // Handle File Input and Tabs inside setTimeout to ensure modal is rendered
@@ -1322,10 +1342,31 @@ async function viewUserDetail(userId) {
 
 // Sub Modal Helpers
 function showSubModal(title, bodyHtml, onOk) {
+    console.log('Showing sub-modal:', title);
     const modal = document.getElementById('sub-modal');
+    const okBtn = document.getElementById('sub-modal-ok');
+    
     document.getElementById('sub-modal-title').textContent = title;
     document.getElementById('sub-modal-body').innerHTML = bodyHtml;
-    document.getElementById('sub-modal-ok').onclick = onOk;
+    
+    // Reset button state
+    okBtn.textContent = 'Confirmar';
+    okBtn.disabled = false;
+    
+    // Clear previous listeners by replacing the element
+    const newOkBtn = okBtn.cloneNode(true);
+    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+    
+    newOkBtn.onclick = async () => {
+        console.log('Sub-modal Confirm clicked');
+        try {
+            await onOk();
+        } catch (err) {
+            console.error('Sub-modal Action Error:', err);
+            alert('Erro na ação: ' + err.message);
+        }
+    };
+    
     modal.classList.remove('hidden');
 }
 

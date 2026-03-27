@@ -299,9 +299,47 @@ p {
     text-align: center;
 }
 
-/* Centered Editor Modal Adjustments */
-#module-editor-modal .modal-content {
-    margin: auto; /* Ensure centering */
+/* Modal Base */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none !important;
+}
+
+.modal-content {
+    background: var(--surface);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    padding: 2.5rem;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+#sub-modal .modal-content {
+    max-width: 500px;
 }
 
 /* Forms */
