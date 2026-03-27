@@ -802,42 +802,157 @@ function renderDocList() {
     });
 }
 
+async function deleteModuleDoc(docId) {
+    if (!confirm('Excluir documento?')) return;
+    await apiCall(`/modules/${currentModuleId}/documents/${docId}`, 'DELETE');
+    await loadModuleData(currentModuleId);
+}
+
 async function showAddDocForm() {
-    // We need to list original system documents to link them
-    const res = await apiCall('/api/documents');
-    const docs = res.documents || [];
-    
-    let options = docs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-    
+    let allDocs = [];
+    let selectedDocId = null;
+    let currentFilter = 'all';
+
+    const fetchDocs = async () => {
+        const res = await apiCall('/api/documents');
+        allDocs = res.documents || [];
+    };
+
+    await fetchDocs();
+
+    const renderGrid = (filter) => {
+        const grid = document.getElementById('doc-grid-mini');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        const filtered = allDocs.filter(d => {
+            if (filter === 'all') return true;
+            const type = d.type.toLowerCase();
+            if (filter === 'image') return type.startsWith('image/');
+            if (filter === 'video') return type.startsWith('video/');
+            if (filter === 'pdf') return type === 'application/pdf';
+            if (filter === 'word') return type.includes('msword') || type.includes('officedocument.wordprocessingml');
+            return false;
+        });
+
+        if (filtered.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum arquivo encontrado.</div>';
+            return;
+        }
+
+        filtered.forEach(doc => {
+            const item = document.createElement('div');
+            item.className = `doc-item-mini ${selectedDocId == doc.id ? 'selected' : ''}`;
+            
+            let icon = '📄';
+            if (doc.type.startsWith('image/')) icon = '🖼️';
+            else if (doc.type.startsWith('video/')) icon = '🎬';
+            else if (doc.type === 'application/pdf') icon = '📕';
+            else if (doc.type.includes('word')) icon = '📘';
+
+            item.innerHTML = `
+                <div class="thumb">${icon}</div>
+                <div class="title" title="${doc.name}">${doc.name}</div>
+            `;
+            item.onclick = () => {
+                selectedDocId = doc.id;
+                document.querySelectorAll('.doc-item-mini').forEach(el => el.classList.remove('selected'));
+                item.classList.add('selected');
+                
+                // Auto-fill title if empty
+                const titleIn = document.getElementById('d-title-in');
+                if (!titleIn.value) titleIn.value = doc.name;
+            };
+            grid.appendChild(item);
+        });
+    };
+
     showSubModal('Vincular Documento', `
-        <div class="input-group">
-            <label>Título de Exibição</label>
-            <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
-        </div>
-        <div class="input-group">
-            <label>Escolher Arquivo Existente</label>
-            <select id="d-id-in" class="glassmorphism" style="width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); border-radius: 8px; color: white;">
-                <option value="">-- Selecione ou faça upload abaixo --</option>
-                ${options}
-            </select>
-        </div>
-        <div style="text-align: center; margin: 0.5rem 0; color: var(--text-muted); font-size: 0.8rem;">--- OU ---</div>
-        <div class="input-group">
-            <label>Upload Novo Arquivo (PDF/DOC/Etc)</label>
-            <input type="file" id="d-file-in" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
+        <div class="doc-selector-container">
+            <div class="input-group">
+                <label>Título de Exibição</label>
+                <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
+            </div>
+
+            <div class="doc-selector-header">
+                <button id="btn-upload-file-doc" class="btn btn-primary btn-sm" style="width: auto;">
+                    <i class="fas fa-upload" style="margin-right: 8px;"></i> Upload File
+                </button>
+                <button id="btn-refresh-docs" class="btn btn-secondary btn-sm" style="width: auto;">
+                    <i class="fas fa-sync-alt" id="refresh-icon"></i> Refresh List
+                </button>
+                <input type="file" id="d-file-hidden" class="hidden">
+            </div>
+
+            <div class="doc-tabs">
+                <button class="doc-tab active" data-filter="all">Tudo</button>
+                <button class="doc-tab" data-filter="image">Imagens</button>
+                <button class="doc-tab" data-filter="video">Vídeos</button>
+                <button class="doc-tab" data-filter="pdf">PDF</button>
+                <button class="doc-tab" data-filter="word">Word</button>
+            </div>
+
+            <div id="doc-grid-mini" class="doc-grid-mini">
+                <!-- Grid items populated via JS -->
+            </div>
         </div>
     `, async () => {
         const title = document.getElementById('d-title-in').value;
-        let documentId = document.getElementById('d-id-in').value;
-        const fileInput = document.getElementById('d-file-in').files[0];
-        const okBtn = document.getElementById('sub-modal-ok');
+        
+        if (!title || !selectedDocId) {
+            alert('Por favor, preencha o título e selecione um arquivo.');
+            return;
+        }
 
-        if (fileInput) {
-            okBtn.textContent = 'Enviando...';
-            okBtn.disabled = true;
+        await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
+            title, 
+            documentId: selectedDocId, 
+            order: currentModuleData.documents.length 
+        });
+        await loadModuleData(currentModuleId);
+        closeSubModal();
+    });
+
+    // Add event listeners within the modal
+    setTimeout(() => {
+        renderGrid('all');
+
+        // Tabs
+        const tabs = document.querySelectorAll('.doc-tab');
+        tabs.forEach(tab => {
+            tab.onclick = () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                renderGrid(currentFilter);
+            };
+        });
+
+        // Refresh
+        const refreshBtn = document.getElementById('btn-refresh-docs');
+        refreshBtn.onclick = async () => {
+            const icon = document.getElementById('refresh-icon');
+            icon.classList.add('fa-spin');
+            await fetchDocs();
+            renderGrid(currentFilter);
+            setTimeout(() => icon.classList.remove('fa-spin'), 500);
+        };
+
+        // Upload
+        const fileHidden = document.getElementById('d-file-hidden');
+        const uploadBtn = document.getElementById('btn-upload-file-doc');
+        uploadBtn.onclick = () => fileHidden.click();
+
+        fileHidden.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = 'Enviando...';
+
             try {
                 const formData = new FormData();
-                formData.append('document', fileInput);
+                formData.append('document', file);
                 const res = await fetch(`${API_URL}/api/documents/upload`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getToken()}` },
@@ -845,31 +960,26 @@ async function showAddDocForm() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Upload failed');
-                documentId = data.id;
+                
+                await fetchDocs();
+                selectedDocId = data.id;
+                renderGrid(currentFilter);
+                
+                // Auto-fill title
+                const titleIn = document.getElementById('d-title-in');
+                if (!titleIn.value) titleIn.value = file.name;
+
             } catch (err) {
                 alert('Erro no upload: ' + err.message);
-                okBtn.textContent = 'Confirmar';
-                okBtn.disabled = false;
-                return;
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload" style="margin-right: 8px;"></i> Upload File';
+                fileHidden.value = '';
             }
-        }
-
-        if (!title || !documentId) {
-            alert('Por favor, preencha o título e escolha ou faça upload de um arquivo.');
-            return;
-        }
-
-        await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { title, documentId, order: currentModuleData.documents.length });
-        await loadModuleData(currentModuleId);
-        closeSubModal();
-    });
+        };
+    }, 100);
 }
 
-async function deleteModuleDoc(id) {
-    if (!confirm('Remover vínculo deste documento? O arquivo original não será apagado.')) return;
-    await apiCall(`/modules/${currentModuleId}/documents/${id}`, 'DELETE');
-    await loadModuleData(currentModuleId);
-}
 
 // Quiz Management Logic
 function renderQuizList() {
