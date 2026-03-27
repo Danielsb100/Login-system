@@ -15,27 +15,27 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
         status: module.status,
         createdAt: module.createdAt,
         updatedAt: module.updatedAt,
-        videos: module.videos.map(v => ({
+        videos: (module.videos || []).map(v => ({
             id: v.id,
             title: v.title,
             url: v.url,
             order: v.order
         })).sort((a, b) => a.order - b.order),
-        documents: module.documents.map(d => ({
+        documents: (module.documents || []).map(d => ({
             id: d.id,
             title: d.title,
             order: d.order,
             documentId: d.documentId
         })).sort((a, b) => a.order - b.order),
-        quizzes: module.quizzes.map(qz => ({
+        quizzes: (module.quizzes || []).map(qz => ({
             id: qz.id,
             title: qz.title,
             order: qz.order,
-            questions: qz.questions.map(q => ({
+            questions: (qz.questions || []).map(q => ({
                 id: q.id,
                 text: q.text,
                 order: q.order,
-                options: q.options.map(o => ({
+                options: (q.options || []).map(o => ({
                     id: o.id,
                     text: o.text,
                     ...(format === 'edit' && (userRole === 'MASTER' || userRole === 'ADMIN') ? { isCorrect: o.isCorrect } : {})
@@ -43,6 +43,7 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
             })).sort((a, b) => a.order - b.order)
         })).sort((a, b) => a.order - b.order)
     };
+    console.log(`[DEBUG] Formatted module ${module.id}: v=${formatted.videos.length}, d=${formatted.documents.length}, q=${formatted.quizzes.length}`);
 
     if (format === 'edit') {
         formatted.ownerMasterId = module.ownerMasterId;

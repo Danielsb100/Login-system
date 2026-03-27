@@ -13,6 +13,7 @@ const addVideo = async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
+        console.log(`[DEBUG] Adding video to module ${id}:`, { title, url, order });
         const video = await prisma.moduleVideo.create({
             data: {
                 moduleId: parseInt(id),
@@ -21,6 +22,7 @@ const addVideo = async (req, res) => {
                 order: parseInt(order) || 0
             }
         });
+        console.log(`[DEBUG] Video created:`, video.id);
         res.status(201).json(video);
     } catch (error) {
         res.status(500).json({ error: 'Failed to add video' });
@@ -85,6 +87,7 @@ const addDocument = async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
+        console.log(`[DEBUG] Linking document ${documentId} to module ${id} as "${title}"`);
         const doc = await prisma.moduleDocument.create({
             data: {
                 moduleId: parseInt(id),
@@ -93,6 +96,7 @@ const addDocument = async (req, res) => {
                 order: parseInt(order) || 0
             }
         });
+        console.log(`[DEBUG] ModuleDocument created:`, doc.id);
         res.status(201).json(doc);
     } catch (error) {
         res.status(500).json({ error: 'Failed to add document' });
@@ -157,6 +161,7 @@ const createQuiz = async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
+        console.log(`[DEBUG] Creating quiz for module ${id}: "${title}"`);
         const quiz = await prisma.quiz.create({
             data: {
                 moduleId: parseInt(id),
@@ -164,6 +169,7 @@ const createQuiz = async (req, res) => {
                 order: parseInt(order) || 0
             }
         });
+        console.log(`[DEBUG] Quiz created:`, quiz.id);
         res.status(201).json(quiz);
     } catch (error) {
         res.status(500).json({ error: 'Failed to create quiz' });
@@ -181,6 +187,7 @@ const addQuizQuestion = async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
+        console.log(`[DEBUG] Adding question to quiz ${quizId}: "${text}" - options count: ${options?.length}`);
         const question = await prisma.quizQuestion.create({
             data: {
                 quizId: parseInt(quizId),
@@ -192,6 +199,7 @@ const addQuizQuestion = async (req, res) => {
             },
             include: { options: true }
         });
+        console.log(`[DEBUG] Question created:`, question.id);
         res.status(201).json(question);
     } catch (error) {
         res.status(500).json({ error: 'Failed to add quiz question' });

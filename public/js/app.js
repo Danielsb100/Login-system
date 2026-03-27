@@ -1135,7 +1135,10 @@ async function showAddDocForm() {
             fileHidden.onchange = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                statusText.textContent = 'Enviando...';
+                
+                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subindo ${file.name}...`;
+                if (okBtn) okBtn.disabled = true;
+
                 try {
                     const formData = new FormData();
                     formData.append('document', file);
@@ -1146,13 +1149,17 @@ async function showAddDocForm() {
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Upload failed');
+                    
                     selectedDocId = data.id;
-                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--success);"></i> ${file.name} (Pronto)`;
+                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} (Pronto)`;
+                    if (okBtn) okBtn.disabled = false;
+                    
                     const titleIn = document.getElementById('d-title-in');
                     if (titleIn && !titleIn.value) titleIn.value = file.name;
                 } catch (err) {
                     alert('Erro no upload: ' + err.message);
                     statusText.textContent = 'Clique para selecionar um arquivo';
+                    if (okBtn) okBtn.disabled = false;
                 }
             };
         }
@@ -1229,16 +1236,24 @@ async function showCreateQuizForm() {
             <input type="text" id="qz-title-in" placeholder="Ex: Avaliação Final">
         </div>
     `, async () => {
-        const title = document.getElementById('qz-title-in').value;
-        if (!title) return alert('Título obrigatório');
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+        okBtn.disabled = true;
 
-        const order = (currentModuleData && currentModuleData.quizzes) ? currentModuleData.quizzes.length : 0;
-        await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
-            title, 
-            order
-        });
-        await loadModuleData(currentModuleId);
-        closeSubModal();
+        try {
+            const order = (currentModuleData && currentModuleData.quizzes) ? currentModuleData.quizzes.length : 0;
+            await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
+                title, 
+                order
+            });
+            await loadModuleData(currentModuleId);
+            closeSubModal();
+        } catch (err) {
+            console.error('Quiz Create Error:', err);
+            alert('Erro ao criar quiz: ' + err.message);
+            okBtn.textContent = 'Confirmar';
+            okBtn.disabled = false;
+        }
     });
 }
 
@@ -1269,13 +1284,24 @@ async function addQuizQuestionToQuiz(quizId) {
 
         if (!text || options.length < 2) return alert('Preencha a pergunta e pelo menos 2 opções.');
 
-        await apiCall(`/quizzes/${quizId}/questions`, 'POST', { 
-            text, 
-            options,
-            order: 0 // Will handle order later if needed
-        });
-        await loadModuleData(currentModuleId);
-        closeSubModal();
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/quizzes/${quizId}/questions`, 'POST', { 
+                text, 
+                options,
+                order: 0 // Will handle order later if needed
+            });
+            await loadModuleData(currentModuleId);
+            closeSubModal();
+        } catch (err) {
+            console.error('Question Add Error:', err);
+            alert('Erro ao salvar pergunta: ' + err.message);
+            okBtn.textContent = 'Confirmar';
+            okBtn.disabled = false;
+        }
     });
 }
 
