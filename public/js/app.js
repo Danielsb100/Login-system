@@ -736,23 +736,31 @@ async function selectModuleForPreview(moduleId) {
         });
             
         // Quiz Preview
-        document.getElementById('preview-quiz-summary').innerHTML = m.questions.length ? 
+        const quizCount = m.quizzes ? m.quizzes.length : 0;
+        document.getElementById('preview-quiz-summary').innerHTML = quizCount > 0 ? 
             `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                <strong style="color: var(--primary); font-size: 1.2rem;">${m.questions.length}</strong> perguntas cadastradas.
-            </div>` : '<div style="color: var(--text-muted); padding: 1rem;">Nenhuma pergunta.</div>';
+                <strong style="color: var(--primary); font-size: 1.2rem;">${quizCount}</strong> quiz(zes) cadastrado(s).
+            </div>` : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz.</div>';
 
         // Reports Preview Summary
-        const overview = await apiCall(`/modules/${moduleId}/reports/overview`);
-        document.getElementById('preview-reports-summary').innerHTML = `
-            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
-                <div class="stat-card">
-                    <div class="stat-value">${overview.uniqueUsers}</div>
-                    <div class="stat-label">Alunos</div>
+        try {
+            const overview = await apiCall(`/modules/${moduleId}/reports/overview`);
+            document.getElementById('preview-reports-summary').innerHTML = `
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                    <div class="stat-card">
+                        <div class="stat-value">${overview.uniqueUsers}</div>
+                        <div class="stat-label">Alunos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="font-size: 1.5rem;">${overview.averageScore ? overview.averageScore.toFixed(1) : 0}%</div>
+                        <div class="stat-label">Média</div>
+                    </div>
                 </div>
-                <div class="stat-value" style="font-size: 1.5rem;">${overview.averageScore.toFixed(1)}%</div>
-                <div class="stat-label">Média</div>
-            </div>
-        `;
+            `;
+        } catch (e) {
+            console.error('Report summary error:', e);
+            document.getElementById('preview-reports-summary').innerHTML = 'Erro ao carregar relatórios.';
+        }
 
         // Action Buttons
         const btnEdit = document.getElementById('btn-edit-preview');
@@ -1312,15 +1320,21 @@ async function viewUserDetail(userId) {
     showSubModal('Relatório Detalhado', content, () => closeSubModal());
 }
 
-// Sub Modal Helpers
-function showSubModal(title, bodyHtml, onOk) {
-    const modal = document.getElementById('sub-modal');
-    document.getElementById('sub-modal-title').textContent = title;
-    document.getElementById('sub-modal-body').innerHTML = bodyHtml;
-    document.getElementById('sub-modal-ok').onclick = onOk;
-    modal.classList.remove('hidden');
-}
-
-function closeSubModal() {
-    document.getElementById('sub-modal').classList.add('hidden');
-}
+// Export functions to window
+window.openModuleEditor = openModuleEditor;
+window.closeModuleEditor = closeModuleEditor;
+window.switchSection = switchSection;
+window.logout = logout;
+window.deleteModule = deleteModule;
+window.switchEditorTab = switchEditorTab;
+window.showAddVideoForm = showAddVideoForm;
+window.deleteVideo = deleteVideo;
+window.deleteModuleDoc = deleteModuleDoc;
+window.showAddDocForm = showAddDocForm;
+window.addQuizQuestionToQuiz = addQuizQuestionToQuiz;
+window.deleteQuestion = deleteQuestion;
+window.viewUserDetail = viewUserDetail;
+window.showCreateQuizForm = showCreateQuizForm;
+window.switchPreviewTab = switchPreviewTab;
+window.closeSubModal = closeSubModal;
+window.selectModuleForPreview = selectModuleForPreview;
