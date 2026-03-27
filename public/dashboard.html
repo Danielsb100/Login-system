@@ -27,137 +27,151 @@
     </nav>
 
     <div class="container dashboard-container">
+        <!-- New Navigation Tabs -->
+        <div class="dashboard-nav-tabs" id="main-nav-tabs">
+            <button class="dash-tab active" onclick="switchSection('profile')">Geral</button>
+            <button class="dash-tab hidden" id="tab-modules" onclick="switchSection('modules')">Módulos</button>
+        </div>
         
-        <!-- PERSONAL SESSION -->
-        <section class="card glassmorphism section-profile fade-in">
-            <div class="section-header">
-                <h2>Your Profile</h2>
-                <div class="role-badge" id="profile-role">USER</div>
-            </div>
-            
-            <div class="profile-details">
-                <div class="detail-item">
-                    <span class="detail-label">Username</span>
-                    <span class="detail-value" id="profile-username">-</span>
+        <!-- PROFILE GROUP -->
+        <div id="group-profile" class="section-group">
+            <section class="card glassmorphism section-profile fade-in">
+                <div class="section-header">
+                    <h2>Your Profile</h2>
+                    <div class="role-badge" id="profile-role">USER</div>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">Email</span>
-                    <span class="detail-value" id="profile-email">-</span>
+                
+                <div class="profile-details">
+                    <div class="detail-item">
+                        <span class="detail-label">Username</span>
+                        <span class="detail-value" id="profile-username">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Email</span>
+                        <span class="detail-value" id="profile-email">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">User ID</span>
+                        <span class="detail-value" id="profile-id">-</span>
+                    </div>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">User ID</span>
-                    <span class="detail-value" id="profile-id">-</span>
-                </div>
-            </div>
 
-            <!-- Expandable Assets Accordion -->
-            <div class="accordion slide-up" style="margin-top: 2rem;" id="personal-assets-accordion">
-                <div class="accordion-header glassmorphism" style="padding: 1rem; border-radius: 8px;" onclick="toggleAccordion('personal-assets-accordion')">
-                    <strong>Manage Shared Assets</strong>
+                <!-- Expandable Assets Accordion -->
+                <div class="accordion slide-up" style="margin-top: 2rem;" id="personal-assets-accordion">
+                    <div class="accordion-header glassmorphism" style="padding: 1rem; border-radius: 8px;" onclick="toggleAccordion('personal-assets-accordion')">
+                        <strong>Manage Shared Assets</strong>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="header-actions" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
+                            <input type="file" id="doc-upload-input" accept=".pdf,.doc,.docx,image/*,video/*" style="display: none;">
+                            <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload File</button>
+                            <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">Refresh List</button>
+                        </div>
+                        <div id="doc-message" class="form-message"></div>
+                        <div class="asset-tabs">
+                            <button class="tab-btn active" data-tab="image">Imagens</button>
+                            <button class="tab-btn" data-tab="video">Vídeos</button>
+                            <button class="tab-btn" data-tab="pdf">PDF</button>
+                            <button class="tab-btn" data-tab="word">Word</button>
+                        </div>
+                        <div id="personal-table-container">
+                            <table class="data-table" style="margin-top: 1rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Shared At</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="docs-table-body">
+                                    <tr>
+                                        <td colspan="3" style="text-align: center; color: var(--text-muted);">No documents shared yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="personal-grid-container" class="assets-grid hidden" style="margin-top: 1rem;"></div>
+                    </div>
                 </div>
-                <div class="accordion-content">
-                    <div class="header-actions" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
-                        <input type="file" id="doc-upload-input" accept=".pdf,.doc,.docx,image/*,video/*" style="display: none;">
-                        <button onclick="document.getElementById('doc-upload-input').click()" class="btn btn-primary btn-sm">Upload File</button>
-                        <button onclick="loadUserDocuments()" class="btn btn-secondary btn-sm">Refresh List</button>
+            </section>
+
+            <!-- USERS LIST SESSION (Admin/Master) -->
+            <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>User Management</h2>
+                        <p>Visualização de todos os usuários registrados no sistema.</p>
                     </div>
-                    <div id="doc-message" class="form-message"></div>
-                    <div class="asset-tabs">
-                        <button class="tab-btn active" data-tab="image">Imagens</button>
-                        <button class="tab-btn" data-tab="video">Vídeos</button>
-                        <button class="tab-btn" data-tab="pdf">PDF</button>
-                        <button class="tab-btn" data-tab="word">Word</button>
+                    <button onclick="resetDatabase()" id="btn-reset-db" class="btn btn-secondary btn-sm hidden" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">
+                    Limpar Banco
+                    </button>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- MODULES GROUP -->
+        <div id="group-modules" class="section-group hidden">
+            <section class="card glassmorphism section-admin slide-up" id="modules-panel" style="display: block !important;">
+                <div class="section-header">
+                    <div>
+                        <h2>Meus Módulos de Ensino</h2>
+                        <p id="module-counter">Limite: 0/5 módulos criados</p>
                     </div>
-                    <div id="personal-table-container">
-                        <table class="data-table" style="margin-top: 1rem;">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Shared At</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="docs-table-body">
-                                <tr>
-                                    <td colspan="3" style="text-align: center; color: var(--text-muted);">No documents shared yet.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <button onclick="openModuleEditor()" id="btn-create-module" class="btn btn-primary btn-sm">
+                    + Criar Módulo
+                    </button>
+                </div>
+                
+                <div id="modules-list" class="modules-grid">
+                    <!-- Populated via JS as Cards -->
+                    <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+                        Carregando módulos...
                     </div>
-                    <div id="personal-grid-container" class="assets-grid hidden" style="margin-top: 1rem;"></div>
+                </div>
+            </section>
+
+            <!-- New Preview Section -->
+            <div id="module-preview-section" class="module-preview-pane hidden">
+                <div class="preview-header">
+                    <h2 id="preview-title">Título do Módulo</h2>
+                    <div class="actions">
+                        <button id="btn-edit-preview" class="btn btn-primary btn-sm">Editar Conteúdo</button>
+                        <button id="btn-delete-preview" class="btn btn-secondary btn-sm" style="color: var(--error);">Excluir</button>
+                    </div>
+                </div>
+                <div class="preview-grid">
+                    <div class="preview-item">
+                        <h5>Vídeos</h5>
+                        <div id="preview-videos-summary">Nenhum vídeo.</div>
+                    </div>
+                    <div class="preview-item">
+                        <h5>Documentos</h5>
+                        <div id="preview-docs-summary">Nenhum documento.</div>
+                    </div>
+                    <div class="preview-item">
+                        <h5>Quiz</h5>
+                        <div id="preview-quiz-summary">Nenhuma pergunta.</div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Media Preview Modal -->
-    <div id="media-preview-modal" class="modal hidden">
-        <div class="modal-content glassmorphism" style="width: 100vw; height: 100vh; max-width: none; border-radius: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); border: none;">
-            <div class="modal-header" style="position: absolute; top: 2rem; right: 2rem; border: none; width: auto;">
-                <span class="close" onclick="closeMediaPreview()" style="font-size: 3rem; color: white; opacity: 0.8;">&times;</span>
-            </div>
-            <div id="preview-content" style="display: flex; justify-content: center; align-items: center; width: 90vw; height: 80vh; overflow: hidden; background: transparent; position: relative;">
-                <!-- Media here -->
-            </div>
-            <button id="prev-preview" class="nav-arrow prev">&lsaquo;</button>
-            <button id="next-preview" class="nav-arrow next">&rsaquo;</button>
-            <div style="margin-top: 1.5rem; display: flex; justify-content: center;">
-                <button id="btn-download-preview" class="btn btn-primary">
-                    <i class="fas fa-download"></i> Download
-                </button>
-            </div>
-        </div>
-    </div>
-        </section>
-
-        <!-- USERS LIST SESSION (Admin/Master) -->
-        <section class="card glassmorphism section-admin slide-up hidden" id="admin-panel">
-            <div class="section-header">
-                <div>
-                    <h2>User Management</h2>
-                    <p>Visualização de todos os usuários registrados no sistema.</p>
-                </div>
-                <button onclick="resetDatabase()" id="btn-reset-db" class="btn btn-secondary btn-sm hidden" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">
-                   Limpar Banco
-                </button>
-            </div>
-            
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Created</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <!-- Populated via JS -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- TEACHING MODULES SESSION (Master Only) -->
-        <section class="card glassmorphism section-admin slide-up hidden" id="modules-panel">
-            <div class="section-header">
-                <div>
-                    <h2>Meus Módulos de Ensino</h2>
-                    <p id="module-counter">Limite: 0/5 módulos criados</p>
-                </div>
-                <button onclick="openModuleEditor()" id="btn-create-module" class="btn btn-primary btn-sm">
-                   + Criar Módulo
-                </button>
-            </div>
-            
-            <div id="modules-list" class="modules-grid">
-                <!-- Populated via JS -->
-                 <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
-                    Carregando módulos...
-                 </div>
-            </div>
-        </section>
 
     </div>
 

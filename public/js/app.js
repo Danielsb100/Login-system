@@ -22,6 +22,19 @@ function getToken() {
     return localStorage.getItem('auth_token');
 }
 
+function switchSection(section) {
+    document.querySelectorAll('.section-group').forEach(group => group.classList.add('hidden'));
+    document.getElementById(`group-${section}`).classList.remove('hidden');
+    
+    document.querySelectorAll('.dash-tab').forEach(btn => btn.classList.remove('active'));
+    // If called from onclick, event should be available
+    if (window.event && window.event.target.classList.contains('dash-tab')) {
+        window.event.target.classList.add('active');
+    } else {
+         document.getElementById(`tab-${section}`)?.classList.add('active');
+    }
+}
+
 function setToken(token) {
     localStorage.setItem('auth_token', token);
 }
@@ -150,6 +163,9 @@ async function loadDashboard() {
             if (user.role === 'MASTER') {
                 const btnReset = document.getElementById('btn-reset-db');
                 if (btnReset) btnReset.classList.remove('hidden');
+                
+                // Show Modules Tab
+                document.getElementById('tab-modules').classList.remove('hidden');
                 
                 // NEW: Load Teaching Modules for Master
                 await loadModulesPanel();
@@ -560,7 +576,6 @@ async function loadModulesPanel() {
         const modules = await apiCall('/modules/my');
         counter.textContent = `Limite: ${modules.length}/5 módulos criados`;
         
-        // Block creation if limit reached
         const btnCreate = document.getElementById('btn-create-module');
         if (btnCreate) btnCreate.disabled = modules.length >= 5;
 
@@ -573,27 +588,56 @@ async function loadModulesPanel() {
         modules.forEach(m => {
             const card = document.createElement('div');
             card.className = 'module-card glassmorphism';
+            card.dataset.id = m.id;
             card.innerHTML = `
-                <span class="status-indicator status-${m.status.toLowerCase()}">${m.status}</span>
-                <h3>${m.title}</h3>
-                <p>${m.description || 'Sem descrição.'}</p>
-                <div class="module-stats-mini">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                   <h3>${m.title}</h3>
+                   <span class="role-badge" style="font-size: 0.7rem;">${m.status}</span>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                    ${m.description || 'Sem descrição.'}
+                </p>
+                <div class="module-meta">
                     <span><i class="fas fa-video"></i> ${m._count.videos}</span>
                     <span><i class="fas fa-file-alt"></i> ${m._count.documents}</span>
                     <span><i class="fas fa-question-circle"></i> ${m._count.questions}</span>
                 </div>
-                <div class="module-actions">
-                    <button onclick="openModuleEditor(${m.id})" class="btn btn-secondary btn-sm">Editar</button>
-                    ${m.status === 'DRAFT' ? `<button onclick="updateModuleStatus(${m.id}, 'PUBLISHED')" class="btn btn-primary btn-sm" style="background: var(--success);">Publicar</button>` : ''}
-                    ${m.status === 'PUBLISHED' ? `<button onclick="updateModuleStatus(${m.id}, 'ARCHIVED')" class="btn btn-secondary btn-sm">Arquivar</button>` : ''}
-                    ${m.status === 'ARCHIVED' ? `<button onclick="updateModuleStatus(${m.id}, 'PUBLISHED')" class="btn btn-secondary btn-sm">Reativar</button>` : ''}
-                    <button onclick="deleteModule(${m.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">X</button>
-                </div>
             `;
+            card.onclick = () => selectModuleForPreview(m.id);
             modulesList.appendChild(card);
         });
     } catch (error) {
         modulesList.innerHTML = `<div style="grid-column: 1/-1; color: var(--error); text-align: center;">Erro ao carregar módulos: ${error.message}</div>`;
+    }
+}
+
+async function selectModuleForPreview(moduleId) {
+    const section = document.getElementById('module-preview-section');
+    section.classList.remove('hidden');
+    
+    document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
+    const activeCard = document.querySelector(`.module-card[data-id="${moduleId}"]`);
+    if (activeCard) activeCard.classList.add('active');
+
+    try {
+        const m = await apiCall(`/modules/${moduleId}/edit-format`);
+        document.getElementById('preview-title').textContent = m.title;
+        
+        document.getElementById('preview-videos-summary').innerHTML = m.videos.length ? 
+            m.videos.map(v => `<div style="padding: 4px 0;">• ${v.title}</div>`).join('') : 'Nenhum vídeo.';
+            
+        document.getElementById('preview-docs-summary').innerHTML = m.documents.length ? 
+            m.documents.map(d => `<div style="padding: 4px 0;">• ${d.title}</div>`).join('') : 'Nenhum documento.';
+            
+        document.getElementById('preview-quiz-summary').innerHTML = m.questions.length ? 
+            `<strong style="color: var(--primary);">${m.questions.length}</strong> perguntas cadastradas.` : 'Nenhuma pergunta.';
+
+        document.getElementById('btn-edit-preview').onclick = () => openModuleEditor(moduleId);
+        document.getElementById('btn-delete-preview').onclick = () => deleteModule(moduleId);
+        
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+        console.error(err);
     }
 }
 
@@ -818,9 +862,7 @@ async function showAddDocForm() {
         allDocs = res.documents || [];
     };
 
-    await fetchDocs();
-
-    const renderGrid = (filter) => {
+    const renderGridMini = (filter) => {
         const grid = document.getElementById('doc-grid-mini');
         if (!grid) return;
         
@@ -858,8 +900,6 @@ async function showAddDocForm() {
                 selectedDocId = doc.id;
                 document.querySelectorAll('.doc-item-mini').forEach(el => el.classList.remove('selected'));
                 item.classList.add('selected');
-                
-                // Auto-fill title if empty
                 const titleIn = document.getElementById('d-title-in');
                 if (!titleIn.value) titleIn.value = doc.name;
             };
@@ -874,36 +914,38 @@ async function showAddDocForm() {
                 <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
             </div>
 
-            <div class="doc-selector-header">
-                <button id="btn-upload-file-doc" class="btn btn-primary btn-sm" style="width: auto;">
-                    <i class="fas fa-upload" style="margin-right: 8px;"></i> Upload File
-                </button>
-                <button id="btn-refresh-docs" class="btn btn-secondary btn-sm" style="width: auto;">
-                    <i class="fas fa-sync-alt" id="refresh-icon"></i> Refresh List
-                </button>
-                <input type="file" id="d-file-hidden" class="hidden">
+            <div class="modal-tabs" style="margin-bottom: 1rem;">
+                <button class="inner-tab-btn active" id="tab-doc-upload" onclick="toggleDocSelectorMode('upload')">Novo Upload</button>
+                <button class="inner-tab-btn" id="tab-doc-library" onclick="toggleDocSelectorMode('library')">Minha Biblioteca</button>
             </div>
 
-            <div class="doc-tabs">
-                <button class="doc-tab active" data-filter="all">Tudo</button>
-                <button class="doc-tab" data-filter="image">Imagens</button>
-                <button class="doc-tab" data-filter="video">Vídeos</button>
-                <button class="doc-tab" data-filter="pdf">PDF</button>
-                <button class="doc-tab" data-filter="word">Word</button>
+            <div id="mode-doc-upload" class="selector-mode-pane">
+                <div class="upload-dropzone" onclick="document.getElementById('d-file-hidden').click()">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p id="upload-status-text">Clique para selecionar um arquivo</p>
+                    <input type="file" id="d-file-hidden" class="hidden">
+                </div>
             </div>
 
-            <div id="doc-grid-mini" class="doc-grid-mini">
-                <!-- Grid items populated via JS -->
+            <div id="mode-doc-library" class="selector-mode-pane hidden">
+                <div class="doc-tabs">
+                    <button class="doc-tab active" data-filter="all">Tudo</button>
+                    <button class="doc-tab" data-filter="image">Imagens</button>
+                    <button class="doc-tab" data-filter="video">Vídeos</button>
+                    <button class="doc-tab" data-filter="pdf">PDF</button>
+                    <button class="doc-tab" data-filter="word">Word</button>
+                </div>
+                <div id="doc-grid-mini" class="doc-grid-mini" style="max-height: 250px; overflow-y: auto;">
+                    <!-- Grid items -->
+                </div>
             </div>
         </div>
     `, async () => {
         const title = document.getElementById('d-title-in').value;
-        
         if (!title || !selectedDocId) {
-            alert('Por favor, preencha o título e selecione um arquivo.');
+            alert('Por favor, preencha o título e selecione ou suba um arquivo.');
             return;
         }
-
         await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
             title, 
             documentId: selectedDocId, 
@@ -913,43 +955,36 @@ async function showAddDocForm() {
         closeSubModal();
     });
 
-    // Add event listeners within the modal
-    setTimeout(() => {
-        renderGrid('all');
+    // Modal interaction logic
+    window.toggleDocSelectorMode = (mode) => {
+        document.getElementById('mode-doc-upload').classList.toggle('hidden', mode !== 'upload');
+        document.getElementById('mode-doc-library').classList.toggle('hidden', mode !== 'library');
+        document.getElementById('tab-doc-upload').classList.toggle('active', mode === 'upload');
+        document.getElementById('tab-doc-library').classList.toggle('active', mode === 'library');
+        if (mode === 'library') {
+            fetchDocs().then(() => renderGridMini(currentFilter));
+        }
+    };
 
-        // Tabs
-        const tabs = document.querySelectorAll('.doc-tab');
-        tabs.forEach(tab => {
+    setTimeout(() => {
+        const fileHidden = document.getElementById('d-file-hidden');
+        const statusText = document.getElementById('upload-status-text');
+
+        // Document Tabs click
+        document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
-                tabs.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.doc-tab').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
                 currentFilter = tab.dataset.filter;
-                renderGrid(currentFilter);
+                renderGridMini(currentFilter);
             };
         });
-
-        // Refresh
-        const refreshBtn = document.getElementById('btn-refresh-docs');
-        refreshBtn.onclick = async () => {
-            const icon = document.getElementById('refresh-icon');
-            icon.classList.add('fa-spin');
-            await fetchDocs();
-            renderGrid(currentFilter);
-            setTimeout(() => icon.classList.remove('fa-spin'), 500);
-        };
-
-        // Upload
-        const fileHidden = document.getElementById('d-file-hidden');
-        const uploadBtn = document.getElementById('btn-upload-file-doc');
-        uploadBtn.onclick = () => fileHidden.click();
 
         fileHidden.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            uploadBtn.disabled = true;
-            uploadBtn.innerHTML = 'Enviando...';
-
+            statusText.textContent = 'Enviando...';
             try {
                 const formData = new FormData();
                 formData.append('document', file);
@@ -961,20 +996,13 @@ async function showAddDocForm() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Upload failed');
                 
-                await fetchDocs();
                 selectedDocId = data.id;
-                renderGrid(currentFilter);
-                
-                // Auto-fill title
+                statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--success);"></i> ${file.name} (Pronto)`;
                 const titleIn = document.getElementById('d-title-in');
                 if (!titleIn.value) titleIn.value = file.name;
-
             } catch (err) {
                 alert('Erro no upload: ' + err.message);
-            } finally {
-                uploadBtn.disabled = false;
-                uploadBtn.innerHTML = '<i class="fas fa-upload" style="margin-right: 8px;"></i> Upload File';
-                fileHidden.value = '';
+                statusText.textContent = 'Clique para selecionar um arquivo';
             }
         };
     }, 100);
