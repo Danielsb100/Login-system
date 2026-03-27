@@ -364,6 +364,6 @@ const getQuizzesSubmissions = async (req, res) => {
 module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
-    createQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
+    createQuiz, deleteQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
     submitQuiz, getQuizzesSubmissions
 };
