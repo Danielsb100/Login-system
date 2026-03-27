@@ -25,7 +25,8 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
             id: d.id,
             title: d.title,
             order: d.order,
-            documentId: d.documentId
+            documentId: d.documentId,
+            type: d.document ? d.document.type : 'application/octet-stream'
         })).sort((a, b) => a.order - b.order),
         quizzes: (module.quizzes || []).map(qz => ({
             id: qz.id,
@@ -125,7 +126,9 @@ const getModuleById = async (req, res) => {
             where: { id: parseInt(id) },
             include: {
                 videos: true,
-                documents: true,
+                documents: {
+                    include: { document: true }
+                },
                 quizzes: {
                     include: { questions: { include: { options: true } } }
                 }

@@ -703,7 +703,8 @@ async function selectModuleForPreview(moduleId) {
         imgList.innerHTML = '';
 
         m.documents.forEach(d => {
-            const type = d.document.type.toLowerCase();
+            if (!d.type) return; // Skip if no type info
+            const type = d.type.toLowerCase();
             const item = document.createElement('div');
             item.className = 'doc-col-item';
             
