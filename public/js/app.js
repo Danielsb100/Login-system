@@ -713,36 +713,52 @@ async function selectModuleForPreview(moduleId) {
 
 // Editor Modal Management
 async function openModuleEditor(id = null) {
+    console.log('Opening module editor for ID:', id);
     const modal = document.getElementById('module-editor-modal');
     const title = document.getElementById('editor-title');
+    if (!modal || !title) {
+        console.error('Module editor elements not found!');
+        return;
+    }
+
     currentModuleId = id;
 
     // Delete button handling in editor
     const btnDel = document.getElementById('btn-delete-module-editor');
-    if (id) {
-        btnDel.classList.remove('hidden');
-        btnDel.onclick = () => deleteModule(id);
-    } else {
-        btnDel.classList.add('hidden');
+    if (btnDel) {
+        if (id) {
+            btnDel.classList.remove('hidden');
+            btnDel.onclick = () => deleteModule(id);
+        } else {
+            btnDel.classList.add('hidden');
+        }
     }
 
     if (!id) {
         // Create Mode
         title.textContent = 'Criar Novo Módulo';
-        document.getElementById('module-basics-form').reset();
-        document.getElementById('editor-tabs').classList.add('hidden');
+        const form = document.getElementById('module-basics-form');
+        if (form) form.reset();
+        
+        const tabs = document.getElementById('editor-tabs');
+        if (tabs) tabs.classList.add('hidden');
+        
         modal.classList.remove('hidden');
         return;
     }
 
     // Edit Mode
     title.textContent = 'Configurar Conteúdo do Módulo';
-    document.getElementById('editor-tabs').classList.remove('hidden');
+    const tabs = document.getElementById('editor-tabs');
+    if (tabs) tabs.classList.remove('hidden');
     modal.classList.remove('hidden');
 
     await loadModuleData(id);
     switchEditorTab('basics');
 }
+
+// Ensure it's global
+window.openModuleEditor = openModuleEditor;
 
 function closeModuleEditor() {
     document.getElementById('module-editor-modal').classList.add('hidden');
@@ -769,7 +785,9 @@ async function loadModuleData(id) {
 }
 
 // Module Basics Form
-document.getElementById('module-basics-form').addEventListener('submit', async (e) => {
+const mbForm = document.getElementById('module-basics-form');
+if (mbForm) {
+    mbForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = {
         title: document.getElementById('m-title').value,
@@ -791,7 +809,8 @@ document.getElementById('module-basics-form').addEventListener('submit', async (
     } catch (error) {
         alert('Erro: ' + error.message);
     }
-});
+    });
+}
 
 async function updateModuleStatus(id, status) {
     const endpoint = `/modules/${id}/${status === 'PUBLISHED' ? 'publish' : 'archive'}`;
