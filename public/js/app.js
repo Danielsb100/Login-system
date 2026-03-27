@@ -120,12 +120,9 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 // Global Robust Listener for Module Creation
 document.addEventListener('click', (e) => {
     if (e.target.id === 'btn-create-module' || e.target.closest('#btn-create-module')) {
-        console.log("Módulo creation button clicked (robust listener)");
-        alert("Debug: Botão clicado!"); // Temp debug for user
+        console.log("Módulo creation button clicked");
         if (typeof openModuleEditor === 'function') {
             openModuleEditor();
-        } else {
-            console.error("openModuleEditor is not defined!");
         }
     }
 });
@@ -756,9 +753,23 @@ async function selectModuleForPreview(moduleId) {
             </div>
         `;
 
-        // Action Buttons - Ensure we use a direct reference to avoid closure issues
+        // Action Buttons
         const btnEdit = document.getElementById('btn-edit-preview');
         btnEdit.onclick = () => openModuleEditor(moduleId);
+
+        // Direct Addition Buttons
+        document.getElementById('btn-add-video-direct').onclick = () => {
+            currentModuleId = moduleId;
+            showAddVideoForm();
+        };
+        document.getElementById('btn-add-doc-direct').onclick = () => {
+            currentModuleId = moduleId;
+            showAddDocForm();
+        };
+        document.getElementById('btn-add-quiz-direct').onclick = () => {
+            currentModuleId = moduleId;
+            showCreateQuizForm();
+        };
         
         // Start on Videos tab by default
         switchPreviewTab('videos');
@@ -811,6 +822,8 @@ if (mbForm) {
         if (currentModuleId) {
             await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
             alert('Módulo atualizado!');
+            closeModuleEditor();
+            loadModulesPanel();
         } else {
             const res = await apiCall('/modules', 'POST', data);
             currentModuleId = res.id;
@@ -1069,87 +1082,130 @@ async function showAddDocForm() {
         closeSubModal();
     });
 
-    // Modal interaction logic
-    window.toggleDocSelectorMode = (mode) => {
-        document.getElementById('mode-doc-upload').classList.toggle('hidden', mode !== 'upload');
-        document.getElementById('mode-doc-library').classList.toggle('hidden', mode !== 'library');
-        document.getElementById('tab-doc-upload').classList.toggle('active', mode === 'upload');
-        document.getElementById('tab-doc-library').classList.toggle('active', mode === 'library');
-        if (mode === 'library') {
-            fetchDocs().then(() => renderGridMini(currentFilter));
-        }
-    };
-
+    // Handle File Input and Tabs inside setTimeout to ensure modal is rendered
     setTimeout(() => {
         const fileHidden = document.getElementById('d-file-hidden');
         const statusText = document.getElementById('upload-status-text');
 
-        // Document Tabs click
         document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
                 document.querySelectorAll('.doc-tab').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                currentFilter = tab.dataset.filter;
-                renderGridMini(currentFilter);
+                renderGridMini(tab.dataset.filter);
             };
         });
 
-        fileHidden.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            statusText.textContent = 'Enviando...';
-            try {
-                const formData = new FormData();
-                formData.append('document', file);
-                const res = await fetch(`${API_URL}/api/documents/upload`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${getToken()}` },
-                    body: formData
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Upload failed');
-                
-                selectedDocId = data.id;
-                statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--success);"></i> ${file.name} (Pronto)`;
-                const titleIn = document.getElementById('d-title-in');
-                if (!titleIn.value) titleIn.value = file.name;
-            } catch (err) {
-                alert('Erro no upload: ' + err.message);
-                statusText.textContent = 'Clique para selecionar um arquivo';
-            }
-        };
+        if (fileHidden) {
+            fileHidden.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                statusText.textContent = 'Enviando...';
+                try {
+                    const formData = new FormData();
+                    formData.append('document', file);
+                    const res = await fetch(`${API_URL}/api/documents/upload`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${getToken()}` },
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Upload failed');
+                    selectedDocId = data.id;
+                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--success);"></i> ${file.name} (Pronto)`;
+                    const titleIn = document.getElementById('d-title-in');
+                    if (titleIn && !titleIn.value) titleIn.value = file.name;
+                } catch (err) {
+                    alert('Erro no upload: ' + err.message);
+                    statusText.textContent = 'Clique para selecionar um arquivo';
+                }
+            };
+        }
     }, 100);
 }
+
+// Global helper for selector
+window.toggleDocSelectorMode = (mode) => {
+    const panes = { upload: 'mode-doc-upload', library: 'mode-doc-library' };
+    const tabs = { upload: 'tab-doc-upload', library: 'tab-doc-library' };
+    
+    Object.keys(panes).forEach(k => {
+        const p = document.getElementById(panes[k]);
+        const t = document.getElementById(tabs[k]);
+        if (p) p.classList.toggle('hidden', k !== mode);
+        if (t) t.classList.toggle('active', k === mode);
+    });
+};
 
 
 // Quiz Management Logic
 function renderQuizList() {
-    const list = document.getElementById('q-list');
-    list.innerHTML = '';
-    currentModuleData.questions.forEach((q, qIndex) => {
-        const card = document.createElement('div');
-        card.className = 'question-card';
-        card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                <strong>Pergunta ${qIndex + 1}</strong>
-                <button onclick="deleteQuestion(${q.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Exclusão</button>
-            </div>
-            <p style="margin-bottom: 1rem; color: #fff;">${q.text}</p>
-            <div class="options-list">
-                ${q.options.map(o => `
-                    <div class="option-item">
-                        <i class="fas ${o.isCorrect ? 'fa-check-circle' : 'fa-circle'}" style="color: ${o.isCorrect ? 'var(--success)' : 'rgba(255,255,255,0.2)'};"></i>
-                        <span>${o.text}</span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        list.appendChild(card);
+    const editorList = document.getElementById('q-list');
+    const previewList = document.getElementById('preview-quiz-summary');
+    
+    const quizzes = currentModuleData.quizzes || [];
+
+    if (editorList) {
+        editorList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado.</div>';
+        quizzes.forEach(quiz => {
+            const div = document.createElement('div');
+            div.className = 'quiz-group-card glassmorphism';
+            div.innerHTML = `
+                <div class="quiz-group-header">
+                    <h4><i class="fas fa-tasks"></i> ${quiz.title}</h4>
+                    <button onclick="addQuizQuestionToQuiz(${quiz.id})" class="btn btn-primary btn-sm">+ Pergunta</button>
+                </div>
+                <div class="questions-mini-list">
+                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
+                        <div class="question-mini-item">
+                            <span>${idx + 1}. ${q.text}</span>
+                            <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
+                        </div>
+                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas.</small>'}
+                </div>
+            `;
+            editorList.appendChild(div);
+        });
+    }
+
+    if (previewList) {
+        previewList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz.</div>';
+        quizzes.forEach(quiz => {
+            const card = document.createElement('div');
+            card.className = 'quiz-preview-item glassmorphism';
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong>${quiz.title}</strong>
+                    <span class="badge-sm">${quiz.questions.length} questões</span>
+                </div>
+                <div class="preview-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Add Pergunta</button>
+                </div>
+            `;
+            previewList.appendChild(card);
+        });
+    }
+}
+
+async function showCreateQuizForm() {
+    showSubModal('Novo Quiz', `
+        <div class="input-group">
+            <label>Título do Quiz</label>
+            <input type="text" id="qz-title-in" placeholder="Ex: Avaliação Final">
+        </div>
+    `, async () => {
+        const title = document.getElementById('qz-title-in').value;
+        if (!title) return alert('Título obrigatório');
+
+        await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
+            title, 
+            order: currentModuleData.quizzes.length 
+        });
+        await loadModuleData(currentModuleId);
+        closeSubModal();
     });
 }
 
-async function addQuizQuestion() {
+async function addQuizQuestionToQuiz(quizId) {
     showSubModal('Nova Pergunta', `
         <div class="input-group">
             <label>Texto da Pergunta</label>
@@ -1174,10 +1230,12 @@ async function addQuizQuestion() {
             isCorrect: index === correctIndex
         })).filter(o => o.text.trim() !== '');
 
-        await apiCall(`/modules/${currentModuleId}/quiz/questions`, 'POST', { 
+        if (!text || options.length < 2) return alert('Preencha a pergunta e pelo menos 2 opções.');
+
+        await apiCall(`/quizzes/${quizId}/questions`, 'POST', { 
             text, 
             options,
-            order: currentModuleData.questions.length 
+            order: 0 // Will handle order later if needed
         });
         await loadModuleData(currentModuleId);
         closeSubModal();

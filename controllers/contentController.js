@@ -146,10 +146,10 @@ const deleteDocument = async (req, res) => {
 
 // --- Quiz Management ---
 
-const addQuizQuestion = async (req, res) => {
+const createQuiz = async (req, res) => {
     try {
         const { id } = req.params; // moduleId
-        const { text, order, options } = req.body; // options is array of { text, isCorrect }
+        const { title, order } = req.body;
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
@@ -157,13 +157,37 @@ const addQuizQuestion = async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
-        const question = await prisma.quizQuestion.create({
+        const quiz = await prisma.quiz.create({
             data: {
                 moduleId: parseInt(id),
+                title,
+                order: parseInt(order) || 0
+            }
+        });
+        res.status(201).json(quiz);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create quiz' });
+    }
+};
+
+const addQuizQuestion = async (req, res) => {
+    try {
+        const { quizId } = req.params;
+        const { text, order, options } = req.body;
+
+        const quiz = await prisma.quiz.findUnique({ where: { id: parseInt(quizId) }, include: { module: true } });
+        if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+        if (quiz.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const question = await prisma.quizQuestion.create({
+            data: {
+                quizId: parseInt(quizId),
                 text,
                 order: parseInt(order) || 0,
                 options: {
-                    create: options // Assume validator checked this format
+                    create: options
                 }
             },
             include: { options: true }
@@ -308,6 +332,6 @@ const getQuizzesSubmissions = async (req, res) => {
 module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
-    addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
+    createQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
     submitQuiz, getQuizzesSubmissions
 };

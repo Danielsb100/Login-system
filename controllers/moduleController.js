@@ -27,20 +27,21 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
             order: d.order,
             documentId: d.documentId
         })).sort((a, b) => a.order - b.order),
-        questions: module.questions.map(q => {
-            const questionData = {
+        quizzes: module.quizzes.map(qz => ({
+            id: qz.id,
+            title: qz.title,
+            order: qz.order,
+            questions: qz.questions.map(q => ({
                 id: q.id,
                 text: q.text,
                 order: q.order,
                 options: q.options.map(o => ({
                     id: o.id,
                     text: o.text,
-                    // Hide isCorrect in runtime unless it's the owner/admin in edit mode
                     ...(format === 'edit' && (userRole === 'MASTER' || userRole === 'ADMIN') ? { isCorrect: o.isCorrect } : {})
                 }))
-            };
-            return questionData;
-        }).sort((a, b) => a.order - b.order)
+            })).sort((a, b) => a.order - b.order)
+        })).sort((a, b) => a.order - b.order)
     };
 
     if (format === 'edit') {
@@ -124,8 +125,8 @@ const getModuleById = async (req, res) => {
             include: {
                 videos: true,
                 documents: true,
-                questions: {
-                    include: { options: true }
+                quizzes: {
+                    include: { questions: { include: { options: true } } }
                 }
             }
         });

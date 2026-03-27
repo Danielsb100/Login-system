@@ -80,7 +80,7 @@ model TrainingModule {
   
   videos         ModuleVideo[]
   documents      ModuleDocument[]
-  questions      QuizQuestion[]
+  quizzes        Quiz[]
   submissions    QuizSubmission[]
   threads        ForumThread[]
   accessLogs     ModuleAccessLog[]
@@ -115,10 +115,22 @@ model ModuleDocument {
   updatedAt  DateTime     @updatedAt
 }
 
-model QuizQuestion {
+model Quiz {
   id         Int          @id @default(autoincrement())
   moduleId   Int
   module     TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title      String
+  order      Int
+  questions  QuizQuestion[]
+  submissions QuizSubmission[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model QuizQuestion {
+  id         Int          @id @default(autoincrement())
+  quizId     Int
+  quiz       Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
   text       String
   order      Int
   options    QuizOption[]
@@ -140,6 +152,8 @@ model QuizSubmission {
   id            Int          @id @default(autoincrement())
   moduleId      Int
   module        TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  quizId        Int?
+  quiz          Quiz?        @relation(fields: [quizId], references: [id], onDelete: Cascade)
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
   score         Float

@@ -955,3 +955,125 @@ p {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* --- Quiz Restructure (Multiple Quizzes) --- */
+.quiz-group-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.quiz-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 0.5rem;
+}
+
+.quiz-group-header h4 {
+    margin: 0;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.questions-mini-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.question-mini-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.8rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.btn-icon-del {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: 0.2s;
+    padding: 5px;
+}
+
+.btn-icon-del:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.quiz-preview-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.badge-sm {
+    background: var(--primary);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+
+/* --- Selector Panes --- */
+.selector-mode-pane {
+    padding: 1rem 0;
+    min-height: 200px;
+}
+
+.selector-mode-pane.hidden {
+    display: none !important;
+}
+
+.pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.pane-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-muted);
+}
+
+/* --- Quiz Preview Icons --- */
+.preview-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+}
+
+.badge-sm {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--primary);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+}
+
