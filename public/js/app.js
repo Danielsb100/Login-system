@@ -1122,6 +1122,7 @@ async function showAddDocForm() {
     setTimeout(() => {
         const fileHidden = document.getElementById('d-file-hidden');
         const statusText = document.getElementById('upload-status-text');
+        const okBtn = document.getElementById('sub-modal-ok');
 
         document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
