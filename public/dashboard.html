@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/css/style.css?v=1.4">
     <link rel="stylesheet" href="/css/modules.css?v=1.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
 </head>
 <body>
     <div class="background-mesh">
@@ -125,6 +126,7 @@
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Created</th>
+                                <th>Ação</th>
                             </tr>
                         </thead>
                         <tbody id="users-table-body">
@@ -324,9 +326,24 @@
         </div>
     </div>
 
+    <!-- Cropper Modal -->
+    <div id="crop-modal" class="modal hidden" style="z-index: 300;">
+        <div class="modal-content glassmorphism" style="max-width: 500px;">
+            <h3 style="margin-bottom: 1rem;">Ajustar Foto de Perfil</h3>
+            <div style="width: 100%; max-height: 400px; display: flex; justify-content: center; background-color: #000; overflow: hidden;">
+                <img id="image-to-crop" src="" style="max-width: 100%;">
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                <button id="btn-crop-save" class="btn btn-primary">Salvar Perfil</button>
+                <button onclick="closeCropModal()" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
     </div>
 
-    <script src="/js/app.js?v=1.5"></script>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="/js/app.js?v=1.6"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             loadDashboard();

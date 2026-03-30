@@ -36,6 +36,24 @@ const resetDatabase = async (req, res) => {
   }
 };
 
+const deleteUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
+    }
+    
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+    
+    res.status(200).json({ message: 'Usuário deletado com sucesso!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Falha ao tentar deletar o usuário.' });
+  }
+};
+
 const fs = require('fs');
 const path = require('path');
 
@@ -72,5 +90,6 @@ const uploadProfilePicture = async (req, res) => {
 module.exports = {
   getAllUsers,
   resetDatabase,
+  deleteUser,
   uploadProfilePicture
 };

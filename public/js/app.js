@@ -271,12 +271,28 @@ async function loadAdminPanel() {
                 <td>${u.email}</td>
                 <td><span class="role-badge" data-role="${u.role}">${u.role}</span></td>
                 <td>${date}</td>
+                <td style="text-align: right;">
+                    <button onclick="deleteUser(${u.id})" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3); padding: 4px 8px;" title="Excluir Usuário">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
         
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="color: var(--error); text-align: center;">Failed to load users: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--error); text-align: center;">Failed to load users: ${error.message}</td></tr>`;
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm('Você tem certeza que deseja EXCLUIR DEFINITIVAMENTE este usuário e TODOS os seus dados associados? Essa ação não tem volta.')) return;
+    try {
+        const res = await apiCall('/api/users/' + id, 'DELETE');
+        alert(res.message);
+        await loadAdminPanel();
+    } catch (err) {
+        alert('Erro: ' + err.message);
     }
 }
 
@@ -1622,3 +1638,82 @@ window.switchPreviewTab = switchPreviewTab;
 window.closeSubModal = closeSubModal;
 window.selectModuleForPreview = selectModuleForPreview;
 window.showSubModal = showSubModal;
+
+// --- Profile Picture Cropping Logic ---
+let profileCropper = null;
+const cropModal = document.getElementById('crop-modal');
+const imageToCrop = document.getElementById('image-to-crop');
+const btnCropSave = document.getElementById('btn-crop-save');
+
+window.uploadProfilePicture = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecione uma imagem válida.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        imageToCrop.src = e.target.result;
+        cropModal.classList.remove('hidden');
+        
+        if (profileCropper) profileCropper.destroy();
+        
+        profileCropper = new Cropper(imageToCrop, {
+            aspectRatio: 1, // Perfeito 1:1 para avatar
+            viewMode: 1,
+            background: false,
+            zoomable: true
+        });
+    };
+    reader.readAsDataURL(file);
+    event.target.value = ''; // Reset input após ler
+};
+
+window.closeCropModal = function() {
+    cropModal.classList.add('hidden');
+    if (profileCropper) {
+        profileCropper.destroy();
+        profileCropper = null;
+    }
+};
+
+if (btnCropSave) {
+    btnCropSave.addEventListener('click', async () => {
+        if (!profileCropper) return;
+        
+        btnCropSave.disabled = true;
+        btnCropSave.innerText = 'Salvando...';
+
+        profileCropper.getCroppedCanvas({
+            width: 300,
+            height: 300,
+        }).toBlob(async (blob) => {
+            const formData = new FormData();
+            formData.append('profilePicture', blob, 'profile.png');
+
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/users/profile-picture', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+                
+                alert('Foto de perfil atualizada com sucesso!');
+                document.getElementById('profile-picture-display').src = data.url;
+                closeCropModal();
+            } catch (err) {
+                alert('Erro ao salvar foto de perfil: ' + err.message);
+            } finally {
+                btnCropSave.disabled = false;
+                btnCropSave.innerText = 'Salvar Perfil';
+            }
+        }, 'image/png');
+    });
+}

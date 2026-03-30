@@ -39,7 +39,7 @@ model User {
 model Document {
   id        Int      @id @default(autoincrement())
   userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   type      String   // e.g., 'application/pdf'
   data      Bytes    // Binary storage
@@ -73,7 +73,7 @@ enum LogSource {
 model TrainingModule {
   id             Int          @id @default(autoincrement())
   ownerMasterId  Int
-  master         User         @relation("MasterModules", fields: [ownerMasterId], references: [id])
+  master         User         @relation("MasterModules", fields: [ownerMasterId], references: [id], onDelete: Cascade)
   title          String
   description    String?
   coverImage     String?
@@ -156,7 +156,7 @@ model QuizSubmission {
   quizId        Int?
   quiz          Quiz?        @relation(fields: [quizId], references: [id], onDelete: Cascade)
   userId        Int
-  user          User         @relation(fields: [userId], references: [id])
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   score         Float
   attemptNumber Int
   answers       QuizAnswer[]
@@ -178,7 +178,7 @@ model ForumThread {
   moduleId  Int
   module    TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   userId    Int
-  user      User         @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   content   String
   replies   ForumReply[]
@@ -190,7 +190,7 @@ model ForumReply {
   threadId  Int
   thread    ForumThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
   userId    Int
-  user      User         @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   content   String
   createdAt DateTime     @default(now())
 }
@@ -200,7 +200,7 @@ model ModuleAccessLog {
   moduleId    Int
   module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   userId      Int
-  user        User           @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   placementId Int?           // Optional: link to a specific placement
   sceneId     String?        // Optional: link to a specific scene/world
   source      LogSource
@@ -212,7 +212,7 @@ model ModuleVideoProgress {
   videoId   Int
   video     ModuleVideo  @relation(fields: [videoId], references: [id], onDelete: Cascade)
   userId    Int
-  user      User         @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   progress  Float        // 0 to 100
   completed Boolean      @default(false)
   updatedAt DateTime     @updatedAt
@@ -225,14 +225,14 @@ model ModuleDocumentDownload {
   moduleDocId Int
   moduleDoc   ModuleDocument @relation(fields: [moduleDocId], references: [id], onDelete: Cascade)
   userId      Int
-  user        User           @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   timestamp   DateTime       @default(now())
 }
 
 model WorldModulePlacement {
   id            Int             @id @default(autoincrement())
   ownerMasterId Int
-  master        User            @relation("MasterPlacements", fields: [ownerMasterId], references: [id])
+  master        User            @relation("MasterPlacements", fields: [ownerMasterId], references: [id], onDelete: Cascade)
   moduleId      Int?
   module        TrainingModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   sceneId       String
@@ -258,7 +258,7 @@ model WorldModulePlacement {
 model AuditLog {
   id         Int      @id @default(autoincrement())
   userId     Int
-  user       User     @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action     String
   entityType String
   entityId   Int?
