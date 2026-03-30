@@ -676,11 +676,21 @@ function switchPreviewTab(pane) {
 
 function switchModuleDocTab(type) {
     document.querySelectorAll('.doc-sub-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.type === type);
+        if (btn.dataset.type === type) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
+    
     document.querySelectorAll('.doc-sub-pane').forEach(p => {
-        p.classList.toggle('hidden', p.id !== `module-doc-pane-${type}`);
-        p.classList.toggle('active', p.id === `module-doc-pane-${type}`);
+        if (p.id === `module-doc-pane-${type}`) {
+            p.classList.remove('hidden');
+            p.classList.add('active');
+        } else {
+            p.classList.add('hidden');
+            p.classList.remove('active');
+        }
     });
 }
 window.switchModuleDocTab = switchModuleDocTab;
