@@ -36,7 +36,41 @@ const resetDatabase = async (req, res) => {
   }
 };
 
+const fs = require('fs');
+const path = require('path');
+
+const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada.' });
+
+    const user = req.user;
+    const fileExt = path.extname(req.file.originalname) || '.png';
+    const filename = `profile_${user.id}_${Date.now()}${fileExt}`;
+    const uploadDir = path.join(__dirname, '../public/uploads/profiles');
+
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadDir, filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+
+    const fileUrl = `/uploads/profiles/${filename}`;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { profilePicture: fileUrl }
+    });
+
+    res.status(200).json({ message: 'Foto de perfil atualizada!', url: fileUrl });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Falha ao salvar a foto de perfil.' });
+  }
+};
+
 module.exports = {
   getAllUsers,
-  resetDatabase
+  resetDatabase,
+  uploadProfilePicture
 };

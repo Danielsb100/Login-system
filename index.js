@@ -54,6 +54,9 @@ app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), us
 // Rota exclusiva para o MASTER resetar a database
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
 
+// Profile Picture Upload
+app.post('/api/users/profile-picture', authenticateToken, upload.single('profilePicture'), userController.uploadProfilePicture);
+
 // --- Teaching Modules Routes ---
 
 // Module CRUD

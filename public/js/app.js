@@ -205,8 +205,14 @@ async function loadDashboard() {
         document.getElementById('profile-id').textContent = `#${user.id}`;
         
         const roleBadge = document.getElementById('profile-role');
-        roleBadge.textContent = user.role;
-        roleBadge.dataset.role = user.role;
+        roleBadge.innerText = user.role;
+        roleBadge.className = `role-badge role-${user.role.toLowerCase()}`;
+        
+        // Handle Profile Picture UI
+        const profileDisplay = document.getElementById('profile-picture-display');
+        if (profileDisplay) {
+            profileDisplay.src = user.profilePicture || '/profile picture.png';
+        }
 
         // If user is ADMIN or MASTER, load admin panel
         if (user.role === 'ADMIN' || user.role === 'MASTER') {

@@ -16,9 +16,10 @@ model User {
   id            Int            @id @default(autoincrement())
   username      String         @unique
   email         String         @unique
-  password_hash String
-  role          Role           @default(USER)
-  documents     Document[]
+  password_hash  String
+  role           Role           @default(USER)
+  profilePicture String?
+  documents      Document[]
   
   // New relations
   modules       TrainingModule[] @relation("MasterModules")
