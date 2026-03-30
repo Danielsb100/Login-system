@@ -672,6 +672,17 @@ function switchPreviewTab(pane) {
     document.querySelectorAll('.prev-pane').forEach(p => p.classList.toggle('active', p.id === `prev-pane-${pane}`));
 }
 
+function switchModuleDocTab(type) {
+    document.querySelectorAll('.doc-sub-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(`'${type}'`));
+    });
+    document.querySelectorAll('.doc-sub-pane').forEach(p => {
+        p.classList.toggle('hidden', p.id !== `module-doc-pane-${type}`);
+        p.classList.toggle('active', p.id === `module-doc-pane-${type}`);
+    });
+}
+window.switchModuleDocTab = switchModuleDocTab;
+
 async function selectModuleForPreview(moduleId) {
     const section = document.getElementById('module-preview-section');
     section.classList.remove('hidden');
@@ -693,48 +704,67 @@ async function selectModuleForPreview(moduleId) {
                 </div>
             `).join('') : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum vídeo.</div>';
             
-        // Document Preview (3 Columns)
+        // Document Preview (Refactored for Sub-Tabs and Grid)
         const pdfList = document.getElementById('prev-pdf-list');
         const wordList = document.getElementById('prev-word-list');
-        const imgList = document.getElementById('prev-img-list');
+        const imgGrid = document.getElementById('prev-img-grid');
 
         pdfList.innerHTML = '';
         wordList.innerHTML = '';
-        imgList.innerHTML = '';
+        imgGrid.innerHTML = '';
 
         m.documents.forEach(d => {
-            if (!d.type) return; // Skip if no type info
+            if (!d.type) return;
             const type = d.type.toLowerCase();
-            const item = document.createElement('div');
-            item.className = 'doc-col-item';
             
-            let icon = 'fa-file-alt';
-            let color = 'var(--text-muted)';
-            let targetList = null;
-
             if (type === 'application/pdf') {
-                icon = 'fa-file-pdf';
-                color = '#ff4444';
-                targetList = pdfList;
+                const item = document.createElement('div');
+                item.className = 'doc-col-item';
+                item.innerHTML = `<i class="fas fa-file-pdf" style="color: #ff4444;"></i> <span>${d.title}</span>`;
+                item.onclick = () => downloadDocument(d.documentId, d.title);
+                pdfList.appendChild(item);
             } else if (type.includes('word') || type.includes('officedocument.wordprocessingml')) {
-                icon = 'fa-file-word';
-                color = '#4488ff';
-                targetList = wordList;
+                const item = document.createElement('div');
+                item.className = 'doc-col-item';
+                item.innerHTML = `<i class="fas fa-file-word" style="color: #4488ff;"></i> <span>${d.title}</span>`;
+                item.onclick = () => downloadDocument(d.documentId, d.title);
+                wordList.appendChild(item);
             } else if (type.startsWith('image/')) {
-                icon = 'fa-file-image';
-                color = '#44ff88';
-                targetList = imgList;
-            }
+                const card = document.createElement('div');
+                card.className = 'asset-card glassmorphism';
+                card.style.cursor = 'pointer';
+                const thumb = document.createElement('div');
+                thumb.className = 'thumb-wrapper';
+                const img = document.createElement('img');
+                img.src = `${API_URL}/api/documents/download/${d.documentId}`;
+                img.loading = 'lazy';
+                thumb.appendChild(img);
+                
+                const name = document.createElement('span');
+                name.className = 'filename';
+                name.innerText = d.title;
 
-            if (targetList) {
-                item.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i> <span>${d.title}</span>`;
-                targetList.appendChild(item);
+                card.appendChild(thumb);
+                card.appendChild(name);
+                card.onclick = () => {
+                    // Open preview context
+                    currentFilteredAssets = m.documents
+                        .filter(doc => doc.type && doc.type.startsWith('image/'))
+                        .map(doc => ({ id: doc.documentId, name: doc.title, type: doc.type }));
+                    const idx = currentFilteredAssets.findIndex(doc => doc.id === d.documentId);
+                    openMediaPreview(idx);
+                };
+                imgGrid.appendChild(card);
             }
         });
 
-        [pdfList, wordList, imgList].forEach(list => {
-            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">Vazio</div>';
+        [pdfList, wordList].forEach(list => {
+            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Nenhum arquivo nesta categoria.</div>';
         });
+        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhuma imagem.</div>';
+        
+        // Default to PDF sub-tab
+        switchModuleDocTab('pdf');
             
         // Quiz Preview
         const quizCount = m.quizzes ? m.quizzes.length : 0;
@@ -1253,23 +1283,54 @@ function renderQuizList() {
     }
 
     if (previewList) {
-        previewList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz.</div>';
+        previewList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado para este módulo.</div>';
         quizzes.forEach(quiz => {
             const card = document.createElement('div');
             card.className = 'quiz-preview-item glassmorphism';
+            card.style.marginBottom = '1rem';
+            card.id = `quiz-prev-${quiz.id}`;
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <strong>${quiz.title}</strong>
                     <span class="badge-sm">${quiz.questions.length} questões</span>
                 </div>
-                <div class="preview-actions">
+                <div class="preview-actions" style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleQuizPreviewStructure(${quiz.id})">Ver Estrutura</button>
                     <button class="btn btn-secondary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Add Pergunta</button>
+                </div>
+                <div id="quiz-structure-${quiz.id}" class="quiz-structure-pane hidden" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
+                        <div class="question-mini-item" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 0.8rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <span><strong>${idx + 1}.</strong> ${q.text}</span>
+                                <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <div style="margin-top: 0.5rem; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                                ${q.options.map(opt => `
+                                    <div style="${opt.isCorrect ? 'color: var(--secondary); font-weight: bold;' : ''}">
+                                        ${opt.isCorrect ? '<i class="fas fa-check"></i> ' : '<i class="far fa-circle"></i> '} ${opt.text}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas cadastradas.</small>'}
                 </div>
             `;
             previewList.appendChild(card);
         });
     }
 }
+
+window.toggleQuizPreviewStructure = (quizId) => {
+    const pane = document.getElementById(`quiz-structure-${quizId}`);
+    if (pane) pane.classList.toggle('hidden');
+    
+    // Toggle button text if needed
+    const btn = document.querySelector(`#quiz-prev-${quizId} button[onclick*="toggleQuizPreviewStructure"]`);
+    if (btn) {
+        btn.textContent = pane.classList.contains('hidden') ? 'Ver Estrutura' : 'Ocultar Estrutura';
+    }
+};
 
 async function showCreateQuizForm() {
     showSubModal('Novo Quiz', `

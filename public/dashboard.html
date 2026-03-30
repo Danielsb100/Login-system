@@ -173,21 +173,22 @@
                         <div id="preview-videos-summary" class="doc-col-list">Nenhum vídeo.</div>
                     </div>
 
-                    <!-- Documents Pane (3 Columns) -->
+                    <!-- Documents Pane (Sub-Tabs and Grid) -->
                     <div id="prev-pane-docs" class="prev-pane">
-                        <div class="doc-columns">
-                            <div class="doc-col">
-                                <h5>PDF</h5>
-                                <div id="prev-pdf-list" class="doc-col-list"></div>
-                            </div>
-                            <div class="doc-col">
-                                <h5>Word</h5>
-                                <div id="prev-word-list" class="doc-col-list"></div>
-                            </div>
-                            <div class="doc-col">
-                                <h5>Imagens</h5>
-                                <div id="prev-img-list" class="doc-col-list"></div>
-                            </div>
+                        <div class="inner-tabs" style="margin-bottom: 1.5rem;">
+                            <button class="inner-tab-btn doc-sub-tab active" onclick="switchModuleDocTab('pdf')">PDF</button>
+                            <button class="inner-tab-btn doc-sub-tab" onclick="switchModuleDocTab('word')">Word</button>
+                            <button class="inner-tab-btn doc-sub-tab" onclick="switchModuleDocTab('img')">Imagens</button>
+                        </div>
+                        
+                        <div id="module-doc-pane-pdf" class="doc-sub-pane active">
+                            <div id="prev-pdf-list" class="doc-col-list"></div>
+                        </div>
+                        <div id="module-doc-pane-word" class="doc-sub-pane hidden">
+                            <div id="prev-word-list" class="doc-col-list"></div>
+                        </div>
+                        <div id="module-doc-pane-img" class="doc-sub-pane hidden">
+                            <div id="prev-img-grid" class="assets-grid"></div>
                         </div>
                     </div>
 

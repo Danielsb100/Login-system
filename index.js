@@ -12,7 +12,7 @@ const multer = require('multer');
 const documentController = require('./controllers/documentController');
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
 });
 
 // New Controllers
@@ -125,6 +125,17 @@ app.delete('/api/documents/:id', authenticateToken, documentController.deleteDoc
 // Root endpoint test
 app.get('/', (req, res) => {
   res.send('Authentication API is running.');
+});
+ 
+// Global Error Handler for Multer
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'Arquivo muito grande. Limite de 500MB.' });
+    }
+    return res.status(400).json({ error: `Erro no upload: ${err.message}` });
+  }
+  next(err);
 });
 
 // Start server

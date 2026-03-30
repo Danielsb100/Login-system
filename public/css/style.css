@@ -1117,3 +1117,30 @@ p {
     font-size: 0.7rem;
 }
 
+/* --- Additional Polishing for Module Preview --- */
+.doc-sub-pane {
+    display: none;
+}
+.doc-sub-pane.active {
+    display: block;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.quiz-structure-pane {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.doc-col-item {
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.doc-col-item:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    transform: translateX(5px);
+}
