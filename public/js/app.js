@@ -779,13 +779,31 @@ async function selectModuleForPreview(moduleId) {
                 const item = document.createElement('div');
                 item.className = 'doc-col-item';
                 item.innerHTML = `<i class="fas fa-file-pdf" style="color: #ff4444;"></i> <span>${d.title}</span>`;
-                item.onclick = () => downloadDocument(d.documentId, d.title);
+                item.onclick = () => {
+                    currentFilteredAssets = m.documents.filter(doc => {
+                        const dExt = doc.title ? doc.title.split('.').pop().toLowerCase() : '';
+                        const dType = (doc.type || '').toLowerCase();
+                        return (dType === 'application/pdf' || dExt === 'pdf');
+                    }).map(doc => ({ id: doc.documentId, name: doc.title, type: doc.type }));
+                    
+                    const idx = currentFilteredAssets.findIndex(doc => doc.id === d.documentId);
+                    openMediaPreview(idx);
+                };
                 pdfList.appendChild(item);
             } else if (isWord) {
                 const item = document.createElement('div');
                 item.className = 'doc-col-item';
                 item.innerHTML = `<i class="fas fa-file-word" style="color: #4488ff;"></i> <span>${d.title}</span>`;
-                item.onclick = () => downloadDocument(d.documentId, d.title);
+                item.onclick = () => {
+                    currentFilteredAssets = m.documents.filter(doc => {
+                        const dExt = doc.title ? doc.title.split('.').pop().toLowerCase() : '';
+                        const dType = (doc.type || '').toLowerCase();
+                        return (dType.includes('word') || dType.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(dExt));
+                    }).map(doc => ({ id: doc.documentId, name: doc.title, type: doc.type }));
+                    
+                    const idx = currentFilteredAssets.findIndex(doc => doc.id === d.documentId);
+                    openMediaPreview(idx);
+                };
                 wordList.appendChild(item);
             } else if (isImg) {
                 const card = document.createElement('div');
@@ -1080,11 +1098,24 @@ function renderDocList() {
     const list = document.getElementById('d-list');
     list.innerHTML = '';
     currentModuleData.documents.forEach(d => {
+        const ext = d.title ? d.title.split('.').pop().toLowerCase() : '';
+        const tType = (d.type || '').toLowerCase();
+        
+        const isPdf = tType === 'application/pdf' || ext === 'pdf';
+        const isWord = tType.includes('word') || tType.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(ext);
+        const isImg = tType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+        
+        let iconHtml = '<i class="fas fa-file" style="color: var(--text-muted);"></i>';
+        if (isPdf) iconHtml = '<i class="fas fa-file-pdf" style="color: #ff4444;"></i>';
+        else if (isWord) iconHtml = '<i class="fas fa-file-word" style="color: #4488ff;"></i>';
+        else if (isImg) iconHtml = '<i class="fas fa-file-image" style="color: #4CAF50;"></i>';
+        else if (tType.startsWith('video/')) iconHtml = '<i class="fas fa-file-video" style="color: #ff9800;"></i>';
+
         const li = document.createElement('li');
         li.className = 'content-item';
         li.innerHTML = `
             <div class="content-info">
-                <i class="fas fa-file-pdf" style="color: var(--secondary);"></i>
+                ${iconHtml}
                 <span>${d.title}</span>
             </div>
             <div class="actions">
