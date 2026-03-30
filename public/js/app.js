@@ -1000,7 +1000,7 @@ function switchEditorTab(tab) {
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === `pane-${tab}`));
 }
 
-document.querySelectorAll('.inner-tab-btn').forEach(btn => {
+document.querySelectorAll('#editor-tabs .inner-tab-btn').forEach(btn => {
     btn.onclick = () => switchEditorTab(btn.dataset.tab);
 });
 
