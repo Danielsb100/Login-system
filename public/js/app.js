@@ -676,7 +676,7 @@ function switchPreviewTab(pane) {
 
 function switchModuleDocTab(type) {
     document.querySelectorAll('.doc-sub-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('onclick').includes(`'${type}'`));
+        btn.classList.toggle('active', btn.dataset.type === type);
     });
     document.querySelectorAll('.doc-sub-pane').forEach(p => {
         p.classList.toggle('hidden', p.id !== `module-doc-pane-${type}`);
