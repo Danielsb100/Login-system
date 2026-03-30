@@ -1695,7 +1695,7 @@ if (btnCropSave) {
             formData.append('profilePicture', blob, 'profile.png');
 
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('auth_token');
                 const res = await fetch('/api/users/profile-picture', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
