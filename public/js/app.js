@@ -675,23 +675,38 @@ function switchPreviewTab(pane) {
 }
 
 function switchModuleDocTab(type) {
+    // Reset all tabs
     document.querySelectorAll('.doc-sub-tab').forEach(btn => {
-        if (btn.dataset.type === type) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.remove('active');
+        btn.style.color = 'var(--text-muted)';
+        btn.style.borderBottomColor = 'transparent';
     });
     
+    // Activate target tab (safe against missing data-type)
+    const activeBtn = document.querySelector(`.doc-sub-tab[data-type="${type}"]`) || 
+                      Array.from(document.querySelectorAll('.doc-sub-tab')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(type));
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.color = 'var(--primary)';
+        activeBtn.style.borderBottomColor = 'var(--primary)';
+    }
+
+    // Reset all panes
     document.querySelectorAll('.doc-sub-pane').forEach(p => {
-        if (p.id === `module-doc-pane-${type}`) {
-            p.classList.remove('hidden');
-            p.classList.add('active');
-        } else {
-            p.classList.add('hidden');
-            p.classList.remove('active');
-        }
+        p.classList.remove('active');
+        p.classList.add('hidden');
+        p.style.display = 'none';
+        p.style.opacity = '0';
     });
+    
+    // Activate target pane
+    const activePane = document.getElementById(`module-doc-pane-${type}`);
+    if (activePane) {
+        activePane.classList.remove('hidden');
+        activePane.classList.add('active');
+        activePane.style.display = 'block';
+        setTimeout(() => activePane.style.opacity = '1', 10); // Trigger transition
+    }
 }
 window.switchModuleDocTab = switchModuleDocTab;
 
@@ -753,22 +768,26 @@ async function selectModuleForPreview(moduleId) {
         imgGrid.innerHTML = '';
 
         m.documents.forEach(d => {
-            if (!d.type) return;
-            const type = d.type.toLowerCase();
+            const ext = d.title ? d.title.split('.').pop().toLowerCase() : '';
+            const tType = (d.type || '').toLowerCase();
             
-            if (type === 'application/pdf') {
+            const isPdf = tType === 'application/pdf' || ext === 'pdf';
+            const isWord = tType.includes('word') || tType.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(ext);
+            const isImg = tType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+            
+            if (isPdf) {
                 const item = document.createElement('div');
                 item.className = 'doc-col-item';
                 item.innerHTML = `<i class="fas fa-file-pdf" style="color: #ff4444;"></i> <span>${d.title}</span>`;
                 item.onclick = () => downloadDocument(d.documentId, d.title);
                 pdfList.appendChild(item);
-            } else if (type.includes('word') || type.includes('officedocument.wordprocessingml')) {
+            } else if (isWord) {
                 const item = document.createElement('div');
                 item.className = 'doc-col-item';
                 item.innerHTML = `<i class="fas fa-file-word" style="color: #4488ff;"></i> <span>${d.title}</span>`;
                 item.onclick = () => downloadDocument(d.documentId, d.title);
                 wordList.appendChild(item);
-            } else if (type.startsWith('image/')) {
+            } else if (isImg) {
                 const card = document.createElement('div');
                 card.className = 'asset-card glassmorphism';
                 card.style.cursor = 'pointer';
@@ -787,9 +806,12 @@ async function selectModuleForPreview(moduleId) {
                 card.appendChild(name);
                 card.onclick = () => {
                     // Open preview context
-                    currentFilteredAssets = m.documents
-                        .filter(doc => doc.type && doc.type.startsWith('image/'))
-                        .map(doc => ({ id: doc.documentId, name: doc.title, type: doc.type }));
+                    currentFilteredAssets = m.documents.filter(doc => {
+                        const dExt = doc.title ? doc.title.split('.').pop().toLowerCase() : '';
+                        const dType = (doc.type || '').toLowerCase();
+                        return dType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(dExt);
+                    }).map(doc => ({ id: doc.documentId, name: doc.title, type: doc.type }));
+                    
                     const idx = currentFilteredAssets.findIndex(doc => doc.id === d.documentId);
                     openMediaPreview(idx);
                 };
