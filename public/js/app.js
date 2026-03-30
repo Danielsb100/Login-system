@@ -432,15 +432,17 @@ function createVideoThumbnail(url) {
         video.currentTime = 0.5;
 
         video.onloadeddata = () => {
+            video.currentTime = 0.5;
+        };
+
+        video.onseeked = () => {
             const canvas = document.createElement('canvas');
             canvas.width = 160;
             canvas.height = 160;
             const ctx = canvas.getContext('2d');
-            setTimeout(() => {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                resolve(canvas);
-                video.src = ''; 
-            }, 300);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            resolve(canvas);
+            video.src = ''; 
         };
         video.onerror = () => {
              const div = document.createElement('div');
@@ -693,16 +695,43 @@ async function selectModuleForPreview(moduleId) {
 
     try {
         const m = await apiCall(`/modules/${moduleId}/edit-format`);
+        currentModuleId = moduleId;
+        currentModuleData = m;
+        
         document.getElementById('preview-title').textContent = m.title;
         
-        // Video Preview
-        document.getElementById('preview-videos-summary').innerHTML = m.videos.length ? 
-            m.videos.map(v => `
-                <div class="doc-col-item">
-                    <i class="fas fa-play-circle" style="color: var(--primary);"></i>
-                    <span>${v.title}</span>
-                </div>
-            `).join('') : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum vídeo.</div>';
+        // Video Preview (Grid with Thumbnails)
+        const videoGrid = document.getElementById('preview-videos-summary');
+        videoGrid.className = 'assets-grid'; // Ensure grid class
+        videoGrid.innerHTML = '';
+        
+        if (m.videos.length === 0) {
+            videoGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhum vídeo cadastrado.</div>';
+        } else {
+            for (const v of m.videos) {
+                const card = document.createElement('div');
+                card.className = 'asset-card glassmorphism';
+                const thumb = document.createElement('div');
+                thumb.className = 'thumb-wrapper';
+                
+                // Use the same thumbnail logic as personal assets
+                const videoThumb = await createVideoThumbnail(v.url);
+                thumb.appendChild(videoThumb);
+                
+                const playIcon = document.createElement('div');
+                playIcon.innerHTML = '<i class="fas fa-play"></i>';
+                playIcon.style.cssText = 'position: absolute; color: white; font-size: 1.2rem; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));';
+                thumb.appendChild(playIcon);
+
+                const name = document.createElement('span');
+                name.className = 'filename';
+                name.innerText = v.title;
+
+                card.appendChild(thumb);
+                card.appendChild(name);
+                videoGrid.appendChild(card);
+            }
+        }
             
         // Document Preview (Refactored for Sub-Tabs and Grid)
         const pdfList = document.getElementById('prev-pdf-list');
@@ -767,11 +796,7 @@ async function selectModuleForPreview(moduleId) {
         switchModuleDocTab('pdf');
             
         // Quiz Preview
-        const quizCount = m.quizzes ? m.quizzes.length : 0;
-        document.getElementById('preview-quiz-summary').innerHTML = quizCount > 0 ? 
-            `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                <strong style="color: var(--primary); font-size: 1.2rem;">${quizCount}</strong> quiz(zes) cadastrado(s).
-            </div>` : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz.</div>';
+        renderQuizList();
 
         // Reports Preview Summary
         try {
