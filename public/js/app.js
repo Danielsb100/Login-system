@@ -108,7 +108,7 @@ function goToMultiplayer() {
     // Se estiver rodando localmente e o multiplayer estiver na porta 3001:
     const multiplayerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? `http://${window.location.hostname}:3001`
-        : 'https://multiplayer-project-production.up.railway.app'; // Exemplo de URL de produção
+        : 'https://multiplayer-game-production-4b42.up.railway.app';
 
     // Abre em uma nova aba com o token na URL
     window.open(`${multiplayerUrl}?token=${token}`, '_blank');
@@ -232,6 +232,7 @@ async function loadDashboard() {
         // Handle Profile Picture UI
         const profileDisplay = document.getElementById('profile-picture-display');
         if (profileDisplay) {
+            console.log("Loading profile picture:", user.profilePicture);
             profileDisplay.src = user.profilePicture || '/profile picture.png';
         }
 
