@@ -60,6 +60,26 @@
                 <div class="form-message" id="register-message"></div>
             </form>
 
+            <!-- Verification Section (Initially Hidden) -->
+            <div id="verify-section" class="form">
+                <div class="form-header">
+                    <h2>Verify Your Email</h2>
+                    <p>We've sent a 6-digit code to <span id="display-verify-email" style="font-weight: 600; color: var(--primary);"></span></p>
+                </div>
+                <div class="input-group">
+                    <label for="verify-code">Verification Code</label>
+                    <input type="text" id="verify-code" placeholder="123456" maxlength="6" style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; font-weight: bold;">
+                </div>
+                <button type="button" id="btn-verify-code" class="btn btn-primary">Verify Account</button>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button type="button" id="btn-resend-code" style="background: none; border: none; color: var(--text-muted); cursor: pointer; text-decoration: underline; font-size: 0.85rem;">Resend Code</button>
+                </div>
+                <div class="form-message" id="verify-message"></div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <a href="#" onclick="switchTab('login')" style="font-size: 0.85rem; color: var(--primary); text-decoration: none;">Back to Login</a>
+                </div>
+            </div>
+
         </div>
     </div>
 

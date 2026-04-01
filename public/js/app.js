@@ -64,8 +64,13 @@ function switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.form').forEach(form => form.classList.remove('active'));
     
-    document.getElementById(`tab-${tab}`).classList.add('active');
-    document.getElementById(`${tab}-form`).classList.add('active');
+    const targetBtn = document.getElementById(`tab-${tab}`);
+    const targetForm = document.getElementById(`${tab}-form`);
+    const verifySection = document.getElementById('verify-section');
+
+    if (targetBtn) targetBtn.classList.add('active');
+    if (targetForm) targetForm.classList.add('active');
+    if (verifySection) verifySection.classList.remove('active');
 }
 
 function getToken() {
@@ -114,6 +119,60 @@ function goToMultiplayer() {
     window.open(`${multiplayerUrl}?token=${token}`, '_blank');
 }
 window.goToMultiplayer = goToMultiplayer;
+
+let currentVerifyEmail = '';
+
+function showVerificationSection(email) {
+    currentVerifyEmail = email;
+    document.querySelectorAll('.form').forEach(f => f.classList.remove('active'));
+    document.getElementById('verify-section').classList.add('active');
+    document.getElementById('display-verify-email').textContent = email;
+    document.getElementById('verify-message').textContent = '';
+    document.getElementById('verify-code').value = '';
+}
+
+// Verification Logic
+const btnVerify = document.getElementById('btn-verify-code');
+if (btnVerify) {
+    btnVerify.addEventListener('click', async () => {
+        const code = document.getElementById('verify-code').value.trim();
+        if (!code) return;
+
+        try {
+            btnVerify.disabled = true;
+            btnVerify.textContent = 'Verifying...';
+            
+            await apiCall('/auth/verify-email', 'POST', { email: currentVerifyEmail, code });
+            
+            showMessage('verify-message', 'Account verified! Redirecting to login...', false);
+            setTimeout(() => {
+                switchTab('login');
+            }, 2000);
+        } catch (error) {
+            showMessage('verify-message', error.message, true);
+        } finally {
+            btnVerify.disabled = false;
+            btnVerify.textContent = 'Verify Account';
+        }
+    });
+}
+
+const btnResend = document.getElementById('btn-resend-code');
+if (btnResend) {
+    btnResend.addEventListener('click', async () => {
+        try {
+            btnResend.disabled = true;
+            btnResend.textContent = 'Sending...';
+            await apiCall('/auth/resend-code', 'POST', { email: currentVerifyEmail });
+            showMessage('verify-message', 'Code resent! Please check your email.', false);
+        } catch (error) {
+            showMessage('verify-message', error.message, true);
+        } finally {
+            btnResend.disabled = false;
+            btnResend.textContent = 'Resend Code';
+        }
+    });
+}
 
 // --- Advanced Asset State ---
 let currentAssetTab = 'image';
@@ -166,7 +225,11 @@ if (loginForm) {
             setToken(res.token);
             window.location.href = '/dashboard.html';
         } catch (error) {
-            showMessage('login-message', error.message, true);
+            if (error.needsVerification) {
+                showVerificationSection(error.email);
+            } else {
+                showMessage('login-message', error.message, true);
+            }
         } finally {
             btn.textContent = 'Sign In';
             btn.disabled = false;
@@ -188,11 +251,14 @@ if (registerForm) {
             btn.textContent = 'Creating account...';
             btn.disabled = true;
             
-            await apiCall('/auth/register', 'POST', { username, email, password });
+            const res = await apiCall('/auth/register', 'POST', { username, email, password });
             
-            showMessage('register-message', 'Account created! Please log in.', false);
-            // Auto switch back to login tab
-            setTimeout(() => switchTab('login'), 2000);
+            if (res.needsVerification) {
+                showVerificationSection(email);
+            } else {
+                showMessage('register-message', 'Account created! Please log in.', false);
+                setTimeout(() => switchTab('login'), 2000);
+            }
             
             registerForm.reset();
         } catch (error) {

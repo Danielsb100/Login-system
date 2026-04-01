@@ -44,6 +44,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Routes
 app.post('/auth/register', authController.register);
 app.post('/auth/login', authController.login);
+app.post('/auth/verify-email', authController.verifyEmail);
+app.post('/auth/resend-code', authController.resendCode);
 
 // Protected route example / token verification
 app.get('/auth/verify', authenticateToken, authController.verify);

@@ -19,6 +19,8 @@ model User {
   password_hash  String
   role           Role           @default(USER)
   profilePicture String?
+  isVerified     Boolean        @default(false)
+  verificationCode String?
   documents      Document[]
   
   // New relations
