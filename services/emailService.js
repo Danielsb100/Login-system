@@ -1,9 +1,21 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_USER.includes('hotmail') || process.env.EMAIL_USER.includes('outlook') 
-        ? 'hotmail' 
-        : 'gmail',
+const isHotmail = process.env.EMAIL_USER.includes('hotmail') || process.env.EMAIL_USER.includes('outlook');
+
+const transporter = nodemailer.createTransport(isHotmail ? {
+    host: "smtp-mail.outlook.com", // Servidor oficial do Outlook/Hotmail
+    port: 587,
+    secure: false, // STARTTLS
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    },
+    tls: {
+        ciphers:'SSLv3',
+        rejectUnauthorized: false // Ajuda em alguns ambientes de rede
+    }
+} : {
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -41,7 +53,11 @@ const sendVerificationEmail = async (to, username, code) => {
         console.log('Email sent: ' + info.response);
         return true;
     } catch (error) {
-        console.error('Error sending email:', error);
+        console.error('--- ERROR SENDING EMAIL ---');
+        console.error('Code:', error.code);
+        console.error('Command:', error.command);
+        console.error('Response:', error.response);
+        console.error('Full Error:', error.message);
         return false;
     }
 };
