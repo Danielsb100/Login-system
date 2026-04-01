@@ -94,6 +94,27 @@ function logout() {
     window.location.href = '/index.html';
 }
 
+/**
+ * Redireciona para o projeto Multiplayer passando o token atual
+ */
+function goToMultiplayer() {
+    const token = getToken();
+    if (!token) {
+        alert('Você precisa estar logado para acessar o mundo 3D.');
+        return;
+    }
+
+    // A URL pode ser ajustada conforme necessário. 
+    // Se estiver rodando localmente e o multiplayer estiver na porta 3001:
+    const multiplayerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? `http://${window.location.hostname}:3001`
+        : 'https://multiplayer-project-production.up.railway.app'; // Exemplo de URL de produção
+
+    // Abre em uma nova aba com o token na URL
+    window.open(`${multiplayerUrl}?token=${token}`, '_blank');
+}
+window.goToMultiplayer = goToMultiplayer;
+
 // --- Advanced Asset State ---
 let currentAssetTab = 'image';
 let personalAssets = [];
