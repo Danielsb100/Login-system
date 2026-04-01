@@ -2,24 +2,15 @@ const nodemailer = require('nodemailer');
 
 const isHotmail = process.env.EMAIL_USER.includes('hotmail') || process.env.EMAIL_USER.includes('outlook');
 
-const transporter = nodemailer.createTransport(isHotmail ? {
-    host: "smtp-mail.outlook.com", // Servidor oficial do Outlook/Hotmail
-    port: 587,
-    secure: false, // STARTTLS
+const transporter = nodemailer.createTransport({
+    service: isHotmail ? 'hotmail' : 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
     tls: {
-        ciphers:'SSLv3',
-        rejectUnauthorized: false // Ajuda em alguns ambientes de rede
-    }
-} : {
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
+                rejectUnauthorized: false
+            }
 });
 
 /**
