@@ -1,7 +1,9 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Ou o serviço de sua preferência
+    service: process.env.EMAIL_USER.includes('hotmail') || process.env.EMAIL_USER.includes('outlook') 
+        ? 'hotmail' 
+        : 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
