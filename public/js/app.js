@@ -1,5 +1,5 @@
 const API_URL = ''; // Same origin
-console.log("App loaded v1.3 - 27/03 11:20");
+console.log("🚀 App Loaded v2.5 - Email Verification Active");
 
 window.onerror = function(message, source, lineno, colno, error) {
     console.error("Global Error:", message, "at", source, ":", lineno);
@@ -191,7 +191,10 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const data = await response.json();
     
     if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong');
+        const error = new Error(data.error || 'Something went wrong');
+        // Attach any extra properties from the backend (like needsVerification)
+        Object.assign(error, data);
+        throw error;
     }
     
     return data;
