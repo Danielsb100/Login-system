@@ -1,5 +1,7 @@
 const API_URL = ''; // Same origin
 console.log("🚀 App Loaded v2.5 - Email Verification Active");
+const APP_CONFIG = window.__APP_CONFIG__ || {};
+const MULTIPLAYER_URL = APP_CONFIG.multiplayerUrl || resolveLocalMultiplayerUrl();
 
 window.onerror = function(message, source, lineno, colno, error) {
     console.error("Global Error:", message, "at", source, ":", lineno);
@@ -8,6 +10,15 @@ window.onerror = function(message, source, lineno, colno, error) {
 };
 
 // SYNC_CHECK: 24/03/2026 16:40
+
+function resolveLocalMultiplayerUrl() {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return `http://${hostname}:3001`;
+    }
+
+    return '';
+}
 
 // --- UI Helpers ---
 async function openModuleEditor(id = null) {
@@ -111,12 +122,13 @@ function goToMultiplayer() {
 
     // A URL pode ser ajustada conforme necessário. 
     // Se estiver rodando localmente e o multiplayer estiver na porta 3001:
-    const multiplayerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? `http://${window.location.hostname}:3001`
-        : 'https://multiplayer-game-production-4b42.up.railway.app';
+    if (!MULTIPLAYER_URL) {
+        alert('A URL do mundo 3D nao esta configurada neste ambiente.');
+        return;
+    }
 
     // Abre em uma nova aba com o token na URL
-    window.open(`${multiplayerUrl}?token=${token}`, '_blank');
+    window.open(`${MULTIPLAYER_URL}?token=${encodeURIComponent(token)}`, '_blank');
 }
 window.goToMultiplayer = goToMultiplayer;
 
@@ -187,13 +199,27 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, headers };
     if (body) options.body = JSON.stringify(body);
 
-    const response = await fetch(`${API_URL}${endpoint}`, options);
-    const data = await response.json();
+    const apiBaseUrl = APP_CONFIG.apiBaseUrl || API_URL;
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, options);
+    const contentType = response.headers.get('content-type') || '';
+    const rawBody = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text();
+    const data = typeof rawBody === 'string'
+        ? (rawBody ? { message: rawBody } : {})
+        : rawBody;
     
     if (!response.ok) {
-        const error = new Error(data.error || 'Something went wrong');
+        const errorMessage =
+            typeof data.error === 'string'
+                ? data.error
+                : data?.error?.message || data.message || 'Something went wrong';
+
+        const error = new Error(errorMessage);
         // Attach any extra properties from the backend (like needsVerification)
-        Object.assign(error, data);
+        if (data && typeof data === 'object') {
+            Object.assign(error, data);
+        }
         throw error;
     }
     

@@ -1,14 +1,28 @@
 const jwt = require('jsonwebtoken');
+const env = require('../config/env');
+const { sendError } = require('../utils/http');
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  // The token is typically sent as 'Bearer <token>'
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
+  if (!token) {
+    return sendError(res, {
+      status: 401,
+      code: 'AUTH_TOKEN_MISSING',
+      message: 'Access denied. No token provided.'
+    });
+  }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey', (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid or expired token.' });
+  jwt.verify(token, env.auth.jwtSecret, (err, user) => {
+    if (err) {
+      return sendError(res, {
+        status: 403,
+        code: 'AUTH_TOKEN_INVALID',
+        message: 'Invalid or expired token.'
+      });
+    }
+
     req.user = user;
     next();
   });

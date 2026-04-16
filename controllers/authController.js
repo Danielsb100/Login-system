@@ -1,30 +1,48 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
+const env = require('../config/env');
 const { sendVerificationEmail } = require('../services/emailService');
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
+const { sendSuccess, sendError } = require('../utils/http');
+
+const buildPublicUser = (user) => ({
+  id: user.id,
+  username: user.username,
+  email: user.email,
+  role: user.role,
+  profilePicture: user.profilePicture,
+  isVerified: user.isVerified
+});
 
 const register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const username = req.body?.username?.trim();
+    const email = req.body?.email?.trim();
+    const password = req.body?.password;
 
-    // Check if user already exists
+    if (!username || !email || !password) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_REGISTER_VALIDATION_ERROR',
+        message: 'Username, email and password are required.'
+      });
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: { OR: [{ email }, { username }] }
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'Username or email already exists.' });
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_IDENTIFIER_CONFLICT',
+        message: 'Username or email already exists.'
+      });
     }
 
-    // Hash the password
-    const saltRounds = 10;
-    const password_hash = await bcrypt.hash(password, saltRounds);
-
-    // Generate a 6-digit verification code
+    const password_hash = await bcrypt.hash(password, 10);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Create the user
     const newUser = await prisma.user.create({
       data: {
         username,
@@ -34,146 +52,227 @@ const register = async (req, res) => {
       }
     });
 
-    // Send the email (don't await to avoid slowing down registration response)
     sendVerificationEmail(email, username, verificationCode);
 
-    res.status(201).json({
+    return sendSuccess(res, {
+      status: 201,
       message: 'User registered successfully. Please check your email for the verification code.',
-      needsVerification: true,
-      user: {
-        id: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-        role: newUser.role,
-        profilePicture: newUser.profilePicture,
-        isVerified: newUser.isVerified
+      data: {
+        needsVerification: true,
+        user: buildPublicUser(newUser)
       }
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error during registration.' });
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_REGISTER_FAILED',
+      message: 'Internal server error during registration.'
+    });
   }
 };
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = req.body?.email?.trim();
+    const password = req.body?.password;
 
-    // Find the user by email
+    if (!email || !password) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_LOGIN_VALIDATION_ERROR',
+        message: 'Email and password are required.'
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email }
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return sendError(res, {
+        status: 401,
+        code: 'AUTH_INVALID_CREDENTIALS',
+        message: 'Invalid email or password.'
+      });
     }
 
-    // Compare passwords
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return sendError(res, {
+        status: 401,
+        code: 'AUTH_INVALID_CREDENTIALS',
+        message: 'Invalid email or password.'
+      });
     }
 
-    // Check if user is verified
     if (!user.isVerified) {
-        return res.status(403).json({ 
-            error: 'Account not verified. Please check your email.',
-            needsVerification: true,
-            email: user.email 
-        });
+      return sendError(res, {
+        status: 403,
+        code: 'AUTH_ACCOUNT_NOT_VERIFIED',
+        message: 'Account not verified. Please check your email.',
+        extra: {
+          needsVerification: true,
+          email: user.email
+        }
+      });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       { id: user.id, username: user.username, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '24h' }
+      env.auth.jwtSecret,
+      { expiresIn: env.auth.tokenExpiresIn }
     );
 
-    res.status(200).json({
+    return sendSuccess(res, {
       message: 'Login successful',
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        profilePicture: user.profilePicture,
-        isVerified: user.isVerified
+      data: {
+        token,
+        user: buildPublicUser(user)
       }
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error during login.' });
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_LOGIN_FAILED',
+      message: 'Internal server error during login.'
+    });
   }
 };
 
 const verify = async (req, res) => {
-  // If the request reaches here, the authMiddleware has already validated the token
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, username: true, email: true, role: true, profilePicture: true, isVerified: true }
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        profilePicture: true,
+        isVerified: true
+      }
     });
-    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Extra check for multiplayer world or other clients
-    if (!user.isVerified) {
-        return res.status(403).json({ error: 'Account not verified' });
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        code: 'AUTH_USER_NOT_FOUND',
+        message: 'User not found'
+      });
     }
 
-    res.status(200).json({ 
-      message: 'Token is valid', 
-      user 
+    if (!user.isVerified) {
+      return sendError(res, {
+        status: 403,
+        code: 'AUTH_ACCOUNT_NOT_VERIFIED',
+        message: 'Account not verified'
+      });
+    }
+
+    return sendSuccess(res, {
+      message: 'Token is valid',
+      data: { user }
     });
   } catch (err) {
-    res.status(500).json({ error: 'Error verifying token user' });
+    console.error(err);
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_VERIFY_FAILED',
+      message: 'Error verifying token user'
+    });
   }
 };
 
 const verifyEmail = async (req, res) => {
-    try {
-        const { email, code } = req.body;
-        if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+  try {
+    const email = req.body?.email?.trim();
+    const code = req.body?.code?.trim();
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return res.status(404).json({ error: 'User not found' });
-
-        if (user.verificationCode !== code) {
-            return res.status(400).json({ error: 'Invalid verification code' });
-        }
-
-        // Mark as verified and clear the code
-        await prisma.user.update({
-            where: { email },
-            data: { isVerified: true, verificationCode: null }
-        });
-
-        res.status(200).json({ message: 'Email verified successfully! You can now log in.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error during email verification' });
+    if (!email || !code) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_VERIFY_EMAIL_VALIDATION_ERROR',
+        message: 'Email and code are required'
+      });
     }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        code: 'AUTH_USER_NOT_FOUND',
+        message: 'User not found'
+      });
+    }
+
+    if (user.verificationCode !== code) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_INVALID_VERIFICATION_CODE',
+        message: 'Invalid verification code'
+      });
+    }
+
+    await prisma.user.update({
+      where: { email },
+      data: { isVerified: true, verificationCode: null }
+    });
+
+    return sendSuccess(res, {
+      message: 'Email verified successfully! You can now log in.'
+    });
+  } catch (err) {
+    console.error(err);
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_VERIFY_EMAIL_FAILED',
+      message: 'Error during email verification'
+    });
+  }
 };
 
 const resendCode = async (req, res) => {
-    try {
-        const { email } = req.body;
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return res.status(404).json({ error: 'User not found' });
+  try {
+    const email = req.body?.email?.trim();
 
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        await prisma.user.update({
-            where: { email },
-            data: { verificationCode }
-        });
-
-        sendVerificationEmail(email, user.username, verificationCode);
-        res.status(200).json({ message: 'Verification code resent!' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error resending code' });
+    if (!email) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_RESEND_CODE_VALIDATION_ERROR',
+        message: 'Email is required'
+      });
     }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        code: 'AUTH_USER_NOT_FOUND',
+        message: 'User not found'
+      });
+    }
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    await prisma.user.update({
+      where: { email },
+      data: { verificationCode }
+    });
+
+    sendVerificationEmail(email, user.username, verificationCode);
+
+    return sendSuccess(res, {
+      message: 'Verification code resent!'
+    });
+  } catch (err) {
+    console.error(err);
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_RESEND_CODE_FAILED',
+      message: 'Error resending code'
+    });
+  }
 };
 
 module.exports = {

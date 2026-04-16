@@ -1,5 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
-const connectionString = process.env.DATABASE_URL || '';
+const env = require('./env');
+
+const connectionString = env.database.url;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required to initialize Prisma.');
+}
 
 let prisma;
 

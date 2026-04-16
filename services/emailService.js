@@ -1,25 +1,34 @@
 const nodemailer = require('nodemailer');
+const env = require('../config/env');
 
-const isHotmail = process.env.EMAIL_USER.includes('hotmail') || process.env.EMAIL_USER.includes('outlook');
+const isHotmail =
+    env.mail.user.includes('hotmail') || env.mail.user.includes('outlook');
 
-const transporter = nodemailer.createTransport({
-    service: isHotmail ? 'hotmail' : 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-                rejectUnauthorized: false
-            }
-});
+const transporter = env.mail.enabled
+    ? nodemailer.createTransport({
+        service: isHotmail ? 'hotmail' : 'gmail',
+        auth: {
+            user: env.mail.user,
+            pass: env.mail.pass
+        },
+        tls: {
+            rejectUnauthorized: false
+        }
+    })
+    : null;
 
 /**
  * Envia um e-mail com o código de verificação
  */
 const sendVerificationEmail = async (to, username, code) => {
     try {
+        if (!transporter) {
+            console.warn(`[mail] Verification email skipped for ${to}. EMAIL_USER/EMAIL_PASS are not configured.`);
+            return false;
+        }
+
         const mailOptions = {
-            from: `"Support Team" <${process.env.EMAIL_USER}>`,
+            from: `"${env.mail.fromName}" <${env.mail.user}>`,
             to: to,
             subject: 'Verify Your Account - Action Required',
             html: `
