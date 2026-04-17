@@ -51,7 +51,8 @@ const env = {
   },
   auth: {
     jwtSecret: process.env.JWT_SECRET || LEGACY_DEFAULT_JWT_SECRET,
-    tokenExpiresIn: process.env.JWT_EXPIRES_IN || '24h'
+    tokenExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    passwordResetTokenTtlMinutes: parsePositiveInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES, 30)
   },
   mail: {
     user: process.env.EMAIL_USER || '',
@@ -64,7 +65,8 @@ const env = {
   },
   public: {
     apiBaseUrl: process.env.PUBLIC_API_BASE_URL || '',
-    multiplayerUrl: process.env.PUBLIC_MULTIPLAYER_URL || ''
+    multiplayerUrl: process.env.PUBLIC_MULTIPLAYER_URL || '',
+    loginUrl: process.env.PUBLIC_LOGIN_URL || ''
   },
   upload: {
     maxFileSizeMb,

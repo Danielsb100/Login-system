@@ -12,6 +12,24 @@ enum Role {
   MASTER
 }
 
+enum AssignedRole {
+  STUDENT
+  TEACHER
+  TUTOR
+  BUSINESS_MENTOR
+  COORDINATOR
+  ADMIN
+  GUEST
+  SUPER_ADMIN
+}
+
+enum ConsentKind {
+  TERMS_AND_PRIVACY
+  MARKETING_EMAILS
+  PROFILE_DISCOVERY
+  WORLD_PROFILE_CARD
+}
+
 model User {
   id            Int            @id @default(autoincrement())
   username      String         @unique
@@ -33,9 +51,103 @@ model User {
   downloads     ModuleDocumentDownload[]
   placements    WorldModulePlacement[] @relation("MasterPlacements")
   auditLogs     AuditLog[]
+  profile       UserProfile?
+  preferences   UserPreference?
+  roleAssignments UserRoleAssignment[]
+  consentRecords ConsentRecord[]
+  passwordResetTokens PasswordResetToken[]
+  portfolioItems PortfolioItem[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model UserProfile {
+  id              Int      @id @default(autoincrement())
+  userId           Int      @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName      String?
+  headline         String?
+  bio              String?
+  interests        String[] @default([])
+  skills           String[] @default([])
+  spokenLanguages  String[] @default([])
+  timezone         String?
+  location         String?
+  organization     String?
+  course           String?
+  websiteUrl       String?
+  linkedinUrl      String?
+  githubUrl        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model UserPreference {
+  id                    Int      @id @default(autoincrement())
+  userId                 Int      @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language               String   @default("pt-BR")
+  theme                  String   @default("system")
+  emailNotifications     Boolean  @default(true)
+  marketingEmails        Boolean  @default(false)
+  allowProfileDiscovery  Boolean  @default(true)
+  showProfileInWorld     Boolean  @default(true)
+  allowDirectMessages    Boolean  @default(true)
+  reduceMotion           Boolean  @default(false)
+  highContrast           Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model UserRoleAssignment {
+  id         Int          @id @default(autoincrement())
+  userId      Int
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        AssignedRole
+  active      Boolean      @default(true)
+  isPrimary   Boolean      @default(false)
+  assignedAt  DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([userId, role])
+}
+
+model ConsentRecord {
+  id         Int         @id @default(autoincrement())
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        ConsentKind
+  granted     Boolean
+  version     String
+  source      String      @default("system")
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+}
+
+model PasswordResetToken {
+  id         Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model PortfolioItem {
+  id          Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemType     String   @default("LINK")
+  title        String
+  description  String?
+  url          String?
+  highlight    Boolean  @default(false)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Document {

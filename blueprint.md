@@ -562,6 +562,7 @@ Papéis alvo:
 
 - existe apenas `TrainingModule`;
 - não há curso, turma nem matrícula.
+- não existe mecanismo para o admin liberar acesso por aluno a curso/turma/conjunto de materiais.
 
 **Decisão arquitetural**
 
@@ -579,7 +580,9 @@ Evolução correta:
 - CRUD de curso;
 - CRUD de turma;
 - matrícula manual e automática;
+- liberação manual de acesso por aluno, feita pelo admin, usando matrícula/vínculo em curso ou turma como mecanismo oficial;
 - acesso a módulo condicionado por matrícula e pré-requisito;
+- materiais e módulos vinculados a curso/turma para que a liberação aconteça por conjunto acadêmico, e não por regra solta no frontend;
 - mural e lista de participantes por turma.
 
 **Implementação no dashboard**
@@ -587,6 +590,7 @@ Evolução correta:
 - catálogo de cursos;
 - "minhas turmas";
 - visão de progresso;
+- painel administrativo para conceder, revisar e remover liberação de acesso por aluno;
 - participantes e materiais por turma.
 
 **Implementação no mundo 3D**

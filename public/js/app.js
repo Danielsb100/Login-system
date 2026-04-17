@@ -2,6 +2,7 @@ const API_URL = ''; // Same origin
 console.log("🚀 App Loaded v2.5 - Email Verification Active");
 const APP_CONFIG = window.__APP_CONFIG__ || {};
 const MULTIPLAYER_URL = APP_CONFIG.multiplayerUrl || resolveLocalMultiplayerUrl();
+const DEFAULT_PROFILE_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='60' fill='%2316213e'/%3E%3Ccircle cx='60' cy='44' r='24' fill='%235ec8f8'/%3E%3Cpath d='M20 108c7-23 23-34 40-34s33 11 40 34' fill='%235ec8f8'/%3E%3C/svg%3E";
 
 window.onerror = function(message, source, lineno, colno, error) {
     console.error("Global Error:", message, "at", source, ":", lineno);
@@ -64,24 +65,27 @@ async function openModuleEditor(id = null) {
 window.openModuleEditor = openModuleEditor;
 
 function showMessage(elementId, message, isError = false) {
-    const el = document.getElementById(elementId);
+    const el = typeof elementId === 'string' ? document.getElementById(elementId) : elementId;
     if (!el) return;
     el.textContent = message;
     el.className = `form-message ${isError ? 'message-error' : 'message-success'}`;
     setTimeout(() => { el.textContent = ''; }, 5000);
 }
 
-function switchTab(tab) {
+function setAuthTabState(activeTab) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.form').forEach(form => form.classList.remove('active'));
-    
-    const targetBtn = document.getElementById(`tab-${tab}`);
-    const targetForm = document.getElementById(`${tab}-form`);
-    const verifySection = document.getElementById('verify-section');
-
+    const targetBtn = document.getElementById(`tab-${activeTab}`);
     if (targetBtn) targetBtn.classList.add('active');
-    if (targetForm) targetForm.classList.add('active');
-    if (verifySection) verifySection.classList.remove('active');
+}
+
+function activateAuthSection(sectionId, activeTab = 'login') {
+    document.querySelectorAll('.form').forEach(form => form.classList.remove('active'));
+    setAuthTabState(activeTab);
+    document.getElementById(sectionId)?.classList.add('active');
+}
+
+function switchTab(tab) {
+    activateAuthSection(`${tab}-form`, tab);
 }
 
 function getToken() {
@@ -133,14 +137,218 @@ function goToMultiplayer() {
 window.goToMultiplayer = goToMultiplayer;
 
 let currentVerifyEmail = '';
+let currentIdentity = null;
+let currentPortfolioItems = [];
+
+function formatRoleLabel(role) {
+    return String(role || 'GUEST')
+        .toLowerCase()
+        .split('_')
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function hasAnyRole(user, roles) {
+    const userRoles = new Set([
+        ...(user?.roles || []),
+        user?.primaryRole,
+        user?.legacyRole,
+        user?.role
+    ].filter(Boolean));
+
+    return roles.some(role => userRoles.has(role));
+}
+
+function fillInputValue(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.value = value ?? '';
+}
+
+function setCheckboxValue(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.checked = Boolean(value);
+}
+
+function showPasswordRequestSection(email = '') {
+    fillInputValue('password-request-email', email);
+    showMessage('password-request-message', '');
+    const debugEl = document.getElementById('password-request-debug');
+    if (debugEl) debugEl.textContent = '';
+    activateAuthSection('password-request-form', 'login');
+}
+
+function showPasswordResetSection({ token = '', email = '', debugText = '' } = {}) {
+    fillInputValue('password-reset-token', token);
+    fillInputValue('password-reset-email', email);
+    fillInputValue('password-reset-password', '');
+    fillInputValue('password-reset-confirm', '');
+    const debugEl = document.getElementById('password-reset-debug');
+    if (debugEl) debugEl.textContent = debugText;
+    activateAuthSection('password-reset-form', 'login');
+}
+
+function applyPasswordResetTokenFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const resetToken = params.get('resetToken');
+    const email = params.get('email') || '';
+
+    if (resetToken) {
+        showPasswordResetSection({ token: resetToken, email });
+    }
+}
 
 function showVerificationSection(email) {
     currentVerifyEmail = email;
-    document.querySelectorAll('.form').forEach(f => f.classList.remove('active'));
-    document.getElementById('verify-section').classList.add('active');
-    document.getElementById('display-verify-email').textContent = email;
-    document.getElementById('verify-message').textContent = '';
-    document.getElementById('verify-code').value = '';
+    activateAuthSection('verify-section', 'login');
+    const emailEl = document.getElementById('display-verify-email');
+    if (emailEl) emailEl.textContent = email;
+    showMessage('verify-message', '');
+    fillInputValue('verify-code', '');
+    const debugCodeEl = document.getElementById('verify-debug-code');
+    if (debugCodeEl) debugCodeEl.textContent = '';
+}
+
+function renderIdentityState(identity) {
+    if (!identity || !identity.user) return;
+
+    currentIdentity = identity;
+    currentPortfolioItems = identity.portfolio || [];
+
+    const user = identity.user;
+    const profile = identity.profile || {};
+    const preferences = identity.preferences || {};
+    const consents = identity.consents || {};
+
+    const displayName = profile.displayName || user.displayName || user.username;
+    const rolesText = (user.roles || []).map(formatRoleLabel).join(' • ') || formatRoleLabel(user.primaryRole || user.role);
+    const roleBadge = document.getElementById('profile-role');
+
+    document.getElementById('nav-user-badge').textContent = `Hello, ${displayName}`;
+    document.getElementById('profile-username').textContent = user.username;
+    document.getElementById('profile-email').textContent = user.email;
+    document.getElementById('profile-id').textContent = `#${user.id}`;
+    document.getElementById('profile-display-name-heading').textContent = displayName;
+    document.getElementById('profile-display-name').textContent = displayName;
+    document.getElementById('profile-headline-display').textContent = profile.headline || 'Adicione uma headline para contextualizar seu papel no ecossistema.';
+    document.getElementById('profile-roles-list').textContent = rolesText;
+    document.getElementById('profile-language').textContent = preferences.language || 'pt-BR';
+
+    if (roleBadge) {
+        roleBadge.innerText = formatRoleLabel(user.primaryRole || user.role);
+        roleBadge.className = `role-badge role-${String(user.primaryRole || user.role).toLowerCase()}`;
+    }
+
+    const profileDisplay = document.getElementById('profile-picture-display');
+    if (profileDisplay) {
+        console.log("Loading profile picture:", user.profilePicture);
+        profileDisplay.src = user.profilePicture || DEFAULT_PROFILE_AVATAR;
+    }
+
+    fillInputValue('profile-display-name-input', profile.displayName || '');
+    fillInputValue('profile-headline-input', profile.headline || '');
+    fillInputValue('profile-bio-input', profile.bio || '');
+    fillInputValue('profile-interests-input', (profile.interests || []).join(', '));
+    fillInputValue('profile-skills-input', (profile.skills || []).join(', '));
+    fillInputValue('profile-languages-input', (profile.spokenLanguages || []).join(', '));
+    fillInputValue('profile-organization-input', profile.organization || '');
+    fillInputValue('profile-course-input', profile.course || '');
+    fillInputValue('profile-location-input', profile.location || '');
+    fillInputValue('profile-timezone-input', profile.timezone || '');
+    fillInputValue('profile-website-input', profile.websiteUrl || '');
+    fillInputValue('profile-linkedin-input', profile.linkedinUrl || '');
+    fillInputValue('profile-github-input', profile.githubUrl || '');
+
+    fillInputValue('preference-language-input', preferences.language || 'pt-BR');
+    fillInputValue('preference-theme-input', preferences.theme || 'system');
+    setCheckboxValue('pref-email-notifications', preferences.emailNotifications);
+    setCheckboxValue('pref-allow-direct-messages', preferences.allowDirectMessages);
+    setCheckboxValue('pref-reduce-motion', preferences.reduceMotion);
+    setCheckboxValue('pref-high-contrast', preferences.highContrast);
+
+    setCheckboxValue('consent-terms-input', consents.termsAndPrivacy?.granted);
+    setCheckboxValue('consent-marketing-input', consents.marketingEmails?.granted ?? preferences.marketingEmails);
+    setCheckboxValue('consent-discovery-input', consents.profileDiscovery?.granted ?? preferences.allowProfileDiscovery);
+    setCheckboxValue('consent-world-profile-input', consents.worldProfileCard?.granted ?? preferences.showProfileInWorld);
+
+    const termsStatus = consents.termsAndPrivacy?.granted
+        ? `Aceito na versão ${consents.termsAndPrivacy.version}`
+        : 'Pendente';
+    document.getElementById('consent-terms-status').textContent = termsStatus;
+
+    renderPortfolioItems();
+}
+
+function renderPortfolioItems() {
+    const container = document.getElementById('portfolio-list');
+    if (!container) return;
+
+    if (!currentPortfolioItems.length) {
+        container.innerHTML = '<div class="identity-empty">Nenhum item de portfólio cadastrado ainda.</div>';
+        return;
+    }
+
+    container.innerHTML = currentPortfolioItems.map(item => `
+        <article class="portfolio-item">
+            <div class="portfolio-item-header">
+                <div>
+                    <h4>${item.title}</h4>
+                    <p>${formatRoleLabel(item.itemType || 'LINK')}</p>
+                </div>
+                ${item.highlight ? '<span class="portfolio-highlight">Destaque</span>' : ''}
+            </div>
+            <p class="portfolio-description">${item.description || 'Sem descrição.'}</p>
+            ${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.url}</a>` : ''}
+            <div class="portfolio-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="editPortfolioItem(${item.id})">Editar</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="deletePortfolioItemEntry(${item.id})">Excluir</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+async function editPortfolioItem(id) {
+    const item = currentPortfolioItems.find(entry => entry.id === id);
+    if (!item) {
+        alert('Item de portfólio não encontrado.');
+        return;
+    }
+
+    const title = prompt('Título do item', item.title);
+    if (title === null) return;
+
+    const url = prompt('URL do item', item.url || '');
+    if (url === null) return;
+
+    const description = prompt('Descrição do item', item.description || '');
+    if (description === null) return;
+
+    const itemType = prompt('Tipo do item (PROJECT, LINK, CERTIFICATE...)', item.itemType || 'LINK');
+    if (itemType === null) return;
+
+    try {
+        await apiCall(`/api/profile/portfolio/${id}`, 'PUT', {
+            title,
+            url,
+            description,
+            itemType
+        });
+        await refreshIdentityState();
+        showMessage('portfolio-message', 'Item de portfólio atualizado.', false);
+    } catch (error) {
+        showMessage('portfolio-message', error.message, true);
+    }
+}
+
+async function deletePortfolioItemEntry(id) {
+    if (!confirm('Deseja remover este item do portfólio?')) return;
+
+    try {
+        await apiCall(`/api/profile/portfolio/${id}`, 'DELETE');
+        await refreshIdentityState();
+        showMessage('portfolio-message', 'Item removido do portfólio.', false);
+    } catch (error) {
+        showMessage('portfolio-message', error.message, true);
+    }
 }
 
 // Verification Logic
@@ -157,6 +365,7 @@ if (btnVerify) {
             await apiCall('/auth/verify-email', 'POST', { email: currentVerifyEmail, code });
             
             showMessage('verify-message', 'Account verified! Redirecting to login...', false);
+            fillInputValue('login-email', currentVerifyEmail);
             setTimeout(() => {
                 switchTab('login');
             }, 2000);
@@ -175,8 +384,14 @@ if (btnResend) {
         try {
             btnResend.disabled = true;
             btnResend.textContent = 'Sending...';
-            await apiCall('/auth/resend-code', 'POST', { email: currentVerifyEmail });
+            const response = await apiCall('/auth/resend-code', 'POST', { email: currentVerifyEmail });
             showMessage('verify-message', 'Code resent! Please check your email.', false);
+            const debugCodeEl = document.getElementById('verify-debug-code');
+            if (debugCodeEl) {
+                debugCodeEl.textContent = response.debugVerificationCode
+                    ? `Código local de teste: ${response.debugVerificationCode}`
+                    : '';
+            }
         } catch (error) {
             showMessage('verify-message', error.message, true);
         } finally {
@@ -185,6 +400,75 @@ if (btnResend) {
         }
     });
 }
+
+const btnForgotPassword = document.getElementById('btn-forgot-password');
+if (btnForgotPassword) {
+    btnForgotPassword.addEventListener('click', () => {
+        showPasswordRequestSection(document.getElementById('login-email')?.value || '');
+    });
+}
+
+const passwordRequestForm = document.getElementById('password-request-form');
+if (passwordRequestForm) {
+    passwordRequestForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('password-request-email').value.trim();
+        const submitButton = passwordRequestForm.querySelector('button[type="submit"]');
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Sending...';
+            const response = await apiCall('/auth/password/request', 'POST', { email });
+            showMessage('password-request-message', response.message || 'Password reset instructions sent.', false);
+
+            if (response.debugResetToken) {
+                showPasswordResetSection({
+                    token: response.debugResetToken,
+                    email,
+                    debugText: `Token local de teste: ${response.debugResetToken}`
+                });
+            }
+        } catch (error) {
+            showMessage('password-request-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Send Reset Link';
+        }
+    });
+}
+
+const passwordResetForm = document.getElementById('password-reset-form');
+if (passwordResetForm) {
+    passwordResetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const token = document.getElementById('password-reset-token').value.trim();
+        const password = document.getElementById('password-reset-password').value;
+        const confirmPassword = document.getElementById('password-reset-confirm').value;
+        const submitButton = passwordResetForm.querySelector('button[type="submit"]');
+
+        if (password !== confirmPassword) {
+            showMessage('password-reset-message', 'Passwords do not match.', true);
+            return;
+        }
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Resetting...';
+            await apiCall('/auth/password/reset', 'POST', { token, password });
+            showMessage('password-reset-message', 'Password updated successfully. Redirecting to login...', false);
+            setTimeout(() => {
+                switchTab('login');
+            }, 1800);
+        } catch (error) {
+            showMessage('password-reset-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Reset Password';
+        }
+    });
+}
+
+applyPasswordResetTokenFromUrl();
 
 // --- Advanced Asset State ---
 let currentAssetTab = 'image';
@@ -273,17 +557,38 @@ if (registerForm) {
         const username = document.getElementById('register-username').value;
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
+        const acceptedTerms = document.getElementById('register-consent-terms')?.checked;
+        const marketingEmails = document.getElementById('register-consent-marketing')?.checked;
         const btn = registerForm.querySelector('button');
+
+        if (!acceptedTerms) {
+            showMessage('register-message', 'Você precisa aceitar os termos e a política de privacidade.', true);
+            return;
+        }
 
         // SYNC_CHECK: 24/03/2026 16:40
         try {
             btn.textContent = 'Creating account...';
             btn.disabled = true;
             
-            const res = await apiCall('/auth/register', 'POST', { username, email, password });
+            const res = await apiCall('/auth/register', 'POST', {
+                username,
+                email,
+                password,
+                consents: {
+                    termsAndPrivacy: true,
+                    marketingEmails: Boolean(marketingEmails)
+                }
+            });
             
             if (res.needsVerification) {
                 showVerificationSection(email);
+                const debugCodeEl = document.getElementById('verify-debug-code');
+                if (debugCodeEl) {
+                    debugCodeEl.textContent = res.debugVerificationCode
+                        ? `Código local de teste: ${res.debugVerificationCode}`
+                        : '';
+                }
             } else {
                 showMessage('register-message', 'Account created! Please log in.', false);
                 setTimeout(() => switchTab('login'), 2000);
@@ -301,6 +606,14 @@ if (registerForm) {
 
 // --- Dashboard Logic ---
 
+let adminUsersCache = [];
+
+async function refreshIdentityState() {
+    const identity = await apiCall('/api/profile/me');
+    renderIdentityState(identity);
+    return identity;
+}
+
 async function loadDashboard() {
     const token = getToken();
     if (!token) {
@@ -309,56 +622,30 @@ async function loadDashboard() {
     }
 
     try {
-        // Verify token and get profile info
-        const res = await apiCall('/auth/verify');
-        const user = res.user;
+        const identity = await refreshIdentityState();
+        const user = identity.user;
+        const isAdmin = hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN']) || user.role === 'ADMIN';
+        const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
 
-        // Update UI
-        document.getElementById('nav-user-badge').textContent = `Hello, ${user.username}`;
-        
-        document.getElementById('profile-username').textContent = user.username;
-        document.getElementById('profile-email').textContent = user.email;
-        document.getElementById('profile-id').textContent = `#${user.id}`;
-        
-        const roleBadge = document.getElementById('profile-role');
-        roleBadge.innerText = user.role;
-        roleBadge.className = `role-badge role-${user.role.toLowerCase()}`;
-        
-        // Handle Profile Picture UI
-        const profileDisplay = document.getElementById('profile-picture-display');
-        if (profileDisplay) {
-            console.log("Loading profile picture:", user.profilePicture);
-            profileDisplay.src = user.profilePicture || '/profile picture.png';
-        }
-
-        // If user is ADMIN or MASTER, load admin panel
-        if (user.role === 'ADMIN' || user.role === 'MASTER') {
+        if (isAdmin || canManageModules) {
             await loadAdminPanel();
 
-            if (user.role === 'MASTER') {
+            if (canManageModules) {
                 const btnReset = document.getElementById('btn-reset-db');
                 if (btnReset) btnReset.classList.remove('hidden');
-                
-                // Show Modules Tab
                 document.getElementById('tab-modules').classList.remove('hidden');
-                
-                // NEW: Load Teaching Modules for Master
                 await loadModulesPanel();
             }
         }
 
-        // Load personal shared assets
         await loadUserDocuments();
-
     } catch (error) {
         console.error('Dashboard error:', error);
-        // Only logout if it's a 401 or specific auth error
         if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
             alert('Sessão expirada. Por favor, faça login novamente.');
             logout();
         } else {
             console.error('Critical Dashboard failure: ', error.message);
-            // Optionally show error on screen instead of logging out
         }
     }
 }
@@ -372,6 +659,7 @@ async function loadAdminPanel() {
     try {
         const res = await apiCall('/api/users');
         const users = res.users;
+        adminUsersCache = users;
         
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No users found.</td></tr>';
@@ -386,9 +674,15 @@ async function loadAdminPanel() {
                 <td>#${u.id}</td>
                 <td><strong>${u.username}</strong></td>
                 <td>${u.email}</td>
-                <td><span class="role-badge" data-role="${u.role}">${u.role}</span></td>
+                <td>
+                    <span class="role-badge" data-role="${u.primaryRole || u.role}">${formatRoleLabel(u.primaryRole || u.role)}</span>
+                    <div class="admin-role-hint">${(u.roles || []).map(formatRoleLabel).join(', ') || formatRoleLabel(u.role)} • legado: ${u.legacyRole || u.role}</div>
+                </td>
                 <td>${date}</td>
                 <td style="text-align: right;">
+                    <button onclick="promptUpdateUserRoles(${u.id})" class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 6px;" title="Atualizar Papéis">
+                        <i class="fas fa-user-shield"></i>
+                    </button>
                     <button onclick="deleteUser(${u.id})" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3); padding: 4px 8px;" title="Excluir Usuário">
                         <i class="fas fa-times"></i>
                     </button>
@@ -402,6 +696,125 @@ async function loadAdminPanel() {
     }
 }
 
+const advancedProfileForm = document.getElementById('advanced-profile-form');
+if (advancedProfileForm) {
+    advancedProfileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitButton = advancedProfileForm.querySelector('button[type="submit"]');
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Salvando...';
+            const response = await apiCall('/api/profile/me', 'PUT', {
+                displayName: document.getElementById('profile-display-name-input').value,
+                headline: document.getElementById('profile-headline-input').value,
+                bio: document.getElementById('profile-bio-input').value,
+                interests: document.getElementById('profile-interests-input').value,
+                skills: document.getElementById('profile-skills-input').value,
+                spokenLanguages: document.getElementById('profile-languages-input').value,
+                organization: document.getElementById('profile-organization-input').value,
+                course: document.getElementById('profile-course-input').value,
+                location: document.getElementById('profile-location-input').value,
+                timezone: document.getElementById('profile-timezone-input').value,
+                websiteUrl: document.getElementById('profile-website-input').value,
+                linkedinUrl: document.getElementById('profile-linkedin-input').value,
+                githubUrl: document.getElementById('profile-github-input').value
+            });
+            renderIdentityState(response);
+            showMessage('advanced-profile-message', response.message || 'Perfil atualizado.', false);
+        } catch (error) {
+            showMessage('advanced-profile-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Salvar Perfil';
+        }
+    });
+}
+
+const preferencesForm = document.getElementById('preferences-form');
+if (preferencesForm) {
+    preferencesForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitButton = preferencesForm.querySelector('button[type="submit"]');
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Salvando...';
+            const response = await apiCall('/api/profile/preferences', 'PUT', {
+                language: document.getElementById('preference-language-input').value,
+                theme: document.getElementById('preference-theme-input').value,
+                emailNotifications: document.getElementById('pref-email-notifications').checked,
+                allowDirectMessages: document.getElementById('pref-allow-direct-messages').checked,
+                reduceMotion: document.getElementById('pref-reduce-motion').checked,
+                highContrast: document.getElementById('pref-high-contrast').checked
+            });
+            renderIdentityState(response);
+            showMessage('preferences-message', response.message || 'Preferências atualizadas.', false);
+        } catch (error) {
+            showMessage('preferences-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Salvar Preferências';
+        }
+    });
+}
+
+const consentForm = document.getElementById('consent-form');
+if (consentForm) {
+    consentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitButton = consentForm.querySelector('button[type="submit"]');
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Salvando...';
+            const response = await apiCall('/api/profile/consents', 'PUT', {
+                consents: {
+                    termsAndPrivacy: document.getElementById('consent-terms-input').checked,
+                    marketingEmails: document.getElementById('consent-marketing-input').checked,
+                    profileDiscovery: document.getElementById('consent-discovery-input').checked,
+                    worldProfileCard: document.getElementById('consent-world-profile-input').checked
+                }
+            });
+            await refreshIdentityState();
+            showMessage('consent-message', response.message || 'Consentimentos atualizados.', false);
+        } catch (error) {
+            showMessage('consent-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Salvar Consentimentos';
+        }
+    });
+}
+
+const portfolioForm = document.getElementById('portfolio-form');
+if (portfolioForm) {
+    portfolioForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitButton = portfolioForm.querySelector('button[type="submit"]');
+
+        try {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Adicionando...';
+            await apiCall('/api/profile/portfolio', 'POST', {
+                title: document.getElementById('portfolio-title-input').value,
+                itemType: document.getElementById('portfolio-type-input').value,
+                url: document.getElementById('portfolio-url-input').value,
+                description: document.getElementById('portfolio-description-input').value,
+                highlight: document.getElementById('portfolio-highlight-input').checked
+            });
+            portfolioForm.reset();
+            await refreshIdentityState();
+            showMessage('portfolio-message', 'Item adicionado ao portfólio.', false);
+        } catch (error) {
+            showMessage('portfolio-message', error.message, true);
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Adicionar Item';
+        }
+    });
+}
+
 async function deleteUser(id) {
     if (!confirm('Você tem certeza que deseja EXCLUIR DEFINITIVAMENTE este usuário e TODOS os seus dados associados? Essa ação não tem volta.')) return;
     try {
@@ -410,6 +823,37 @@ async function deleteUser(id) {
         await loadAdminPanel();
     } catch (err) {
         alert('Erro: ' + err.message);
+    }
+}
+
+async function promptUpdateUserRoles(id) {
+    const targetUser = adminUsersCache.find(user => user.id === id);
+    if (!targetUser) {
+        alert('Usuário não encontrado no cache atual.');
+        return;
+    }
+
+    const currentRoles = (targetUser.roles || []).join(', ');
+    const nextRoles = prompt('Informe os papéis reais separados por vírgula.\nEx.: STUDENT, TUTOR', currentRoles);
+
+    if (nextRoles === null) return;
+
+    const parsedRoles = nextRoles
+        .split(',')
+        .map(role => role.trim().toUpperCase())
+        .filter(Boolean);
+
+    if (!parsedRoles.length) {
+        alert('Informe pelo menos um papel.');
+        return;
+    }
+
+    try {
+        const res = await apiCall(`/api/users/${id}/roles`, 'PATCH', { roles: parsedRoles });
+        alert(res.message || 'Papéis atualizados com sucesso.');
+        await Promise.all([loadAdminPanel(), refreshIdentityState()]);
+    } catch (error) {
+        alert('Erro ao atualizar papéis: ' + error.message);
     }
 }
 
@@ -1739,6 +2183,7 @@ function closeSubModal() {
 // Export functions to window
 window.openModuleEditor = openModuleEditor;
 window.closeModuleEditor = closeModuleEditor;
+window.switchTab = switchTab;
 window.switchSection = switchSection;
 window.logout = logout;
 window.deleteModule = deleteModule;
@@ -1755,6 +2200,10 @@ window.switchPreviewTab = switchPreviewTab;
 window.closeSubModal = closeSubModal;
 window.selectModuleForPreview = selectModuleForPreview;
 window.showSubModal = showSubModal;
+window.promptUpdateUserRoles = promptUpdateUserRoles;
+window.editPortfolioItem = editPortfolioItem;
+window.deletePortfolioItemEntry = deletePortfolioItemEntry;
+window.showPasswordRequestSection = showPasswordRequestSection;
 
 // --- Profile Picture Cropping Logic ---
 let profileCropper = null;
@@ -1824,6 +2273,9 @@ if (btnCropSave) {
                 
                 alert('Foto de perfil atualizada com sucesso!');
                 document.getElementById('profile-picture-display').src = data.url;
+                if (window.location.pathname.includes('dashboard.html')) {
+                    await refreshIdentityState();
+                }
                 closeCropModal();
             } catch (err) {
                 alert('Erro ao salvar foto de perfil: ' + err.message);

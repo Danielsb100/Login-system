@@ -1144,3 +1144,132 @@ p {
     background: rgba(255, 255, 255, 0.1) !important;
     transform: translateX(5px);
 }
+
+.identity-workspace {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.identity-panel {
+    padding: 1.25rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.35);
+}
+
+.identity-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.identity-full-span {
+    grid-column: 1 / -1;
+}
+
+.identity-textarea,
+.identity-panel select {
+    width: 100%;
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--surface-border);
+    background: rgba(0, 0, 0, 0.18);
+    color: white;
+    font-family: inherit;
+}
+
+.identity-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.identity-toggle input {
+    margin-top: 0.25rem;
+}
+
+.identity-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.identity-consent-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+}
+
+.portfolio-list {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.portfolio-item {
+    padding: 1rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.portfolio-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.portfolio-item-header h4 {
+    margin: 0 0 0.2rem;
+}
+
+.portfolio-item-header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.portfolio-highlight {
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.portfolio-description {
+    margin: 0 0 0.75rem;
+    color: var(--text-muted);
+}
+
+.portfolio-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.identity-empty,
+.admin-role-hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+@media (max-width: 768px) {
+    .identity-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -7,11 +7,13 @@ const multer = require('multer');
 const env = require('./config/env');
 const prisma = require('./config/db');
 const { buildClientRuntimeConfig } = require('./config/runtime');
+const { backfillAllUserIdentities } = require('./services/identityService');
 const { sendSuccess, sendError } = require('./utils/http');
 
 const authController = require('./controllers/authController');
 const authenticateToken = require('./middleware/authMiddleware');
 const userController = require('./controllers/userController');
+const profileController = require('./controllers/profileController');
 const roleMiddleware = require('./middleware/roleMiddleware');
 const documentController = require('./controllers/documentController');
 const moduleController = require('./controllers/moduleController');
@@ -66,9 +68,12 @@ app.post('/auth/register', authController.register);
 app.post('/auth/login', authController.login);
 app.post('/auth/verify-email', authController.verifyEmail);
 app.post('/auth/resend-code', authController.resendCode);
+app.post('/auth/password/request', authController.requestPasswordReset);
+app.post('/auth/password/reset', authController.resetPassword);
 app.get('/auth/verify', authenticateToken, authController.verify);
 
 app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), userController.getAllUsers);
+app.patch('/api/users/:id/roles', authenticateToken, roleMiddleware(['ADMIN', 'MASTER', 'SUPER_ADMIN']), userController.updateUserRoles);
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
 app.delete('/api/users/:id', authenticateToken, roleMiddleware(['MASTER']), userController.deleteUser);
 app.post(
@@ -77,6 +82,15 @@ app.post(
   upload.single('profilePicture'),
   userController.uploadProfilePicture
 );
+app.get('/api/users/:id/profile-card', authenticateToken, profileController.getUserProfileCard);
+
+app.get('/api/profile/me', authenticateToken, profileController.getMyProfile);
+app.put('/api/profile/me', authenticateToken, profileController.updateMyProfile);
+app.put('/api/profile/preferences', authenticateToken, profileController.updateMyPreferences);
+app.put('/api/profile/consents', authenticateToken, profileController.updateMyConsents);
+app.post('/api/profile/portfolio', authenticateToken, profileController.createPortfolioItem);
+app.put('/api/profile/portfolio/:id', authenticateToken, profileController.updatePortfolioItem);
+app.delete('/api/profile/portfolio/:id', authenticateToken, profileController.deletePortfolioItem);
 
 app.post('/modules', authenticateToken, roleMiddleware(['MASTER']), moduleController.createModule);
 app.get('/modules/my', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyModules);
@@ -274,4 +288,5 @@ env.meta.warnings.forEach((warning) => {
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   await seedMasterUser();
+  await backfillAllUserIdentities();
 });

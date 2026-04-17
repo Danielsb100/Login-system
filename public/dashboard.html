@@ -40,13 +40,15 @@
                 <div class="section-header" style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 1.5rem;">
                         <div class="profile-avatar-wrapper" style="position: relative; width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.1); border: 2px solid var(--primary); cursor: pointer;" onclick="document.getElementById('profile-upload-input').click()">
-                            <img id="profile-picture-display" src="/profile picture.png" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                            <img id="profile-picture-display" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='60' fill='%2316213e'/%3E%3Ccircle cx='60' cy='44' r='24' fill='%235ec8f8'/%3E%3Cpath d='M20 108c7-23 23-34 40-34s33 11 40 34' fill='%235ec8f8'/%3E%3C/svg%3E" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
                             <div class="avatar-edit-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.7rem; text-align: center; padding: 2px 0;">Editar</div>
                         </div>
                         <input type="file" id="profile-upload-input" accept="image/*" style="display: none;" onchange="uploadProfilePicture(event)">
                         <div>
-                            <h2>Your Profile</h2>
+                            <h2 id="profile-display-name-heading">Your Profile</h2>
                             <div class="role-badge" id="profile-role">USER</div>
+                            <div id="profile-roles-list" style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-muted);">Sem papéis atribuídos.</div>
+                            <p id="profile-headline-display" style="margin-top: 0.5rem; max-width: 420px; color: var(--text-muted);">Adicione uma headline para contextualizar seu papel no ecossistema.</p>
                         </div>
                     </div>
                     <button onclick="goToMultiplayer()" class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
@@ -55,6 +57,10 @@
                 </div>
                 
                 <div class="profile-details">
+                    <div class="detail-item">
+                        <span class="detail-label">Display Name</span>
+                        <span class="detail-value" id="profile-display-name">-</span>
+                    </div>
                     <div class="detail-item">
                         <span class="detail-label">Username</span>
                         <span class="detail-value" id="profile-username">-</span>
@@ -67,6 +73,175 @@
                         <span class="detail-label">User ID</span>
                         <span class="detail-value" id="profile-id">-</span>
                     </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Language</span>
+                        <span class="detail-value" id="profile-language">-</span>
+                    </div>
+                </div>
+
+                <div class="identity-workspace">
+                    <section class="identity-panel glassmorphism">
+                        <div class="section-header" style="margin-bottom: 1rem;">
+                            <div>
+                                <h3>Perfil Avançado</h3>
+                                <p>Bio, interesses, habilidades, links e contexto acadêmico.</p>
+                            </div>
+                        </div>
+                        <form id="advanced-profile-form" class="identity-form-grid">
+                            <div class="input-group">
+                                <label for="profile-display-name-input">Display Name</label>
+                                <input type="text" id="profile-display-name-input" placeholder="Seu nome público">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-headline-input">Headline</label>
+                                <input type="text" id="profile-headline-input" placeholder="Ex.: Student in robotics and immersive learning">
+                            </div>
+                            <div class="input-group identity-full-span">
+                                <label for="profile-bio-input">Bio</label>
+                                <textarea id="profile-bio-input" rows="4" class="identity-textarea" placeholder="Conte quem você é, no que está trabalhando e onde quer chegar."></textarea>
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-interests-input">Interests</label>
+                                <input type="text" id="profile-interests-input" placeholder="XR, robotics, analytics">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-skills-input">Skills</label>
+                                <input type="text" id="profile-skills-input" placeholder="Three.js, tutoring, data analysis">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-languages-input">Languages</label>
+                                <input type="text" id="profile-languages-input" placeholder="Português, English">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-timezone-input">Timezone</label>
+                                <input type="text" id="profile-timezone-input" placeholder="America/Sao_Paulo">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-organization-input">Organization</label>
+                                <input type="text" id="profile-organization-input" placeholder="Universidade, empresa ou grupo">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-course-input">Course / Track</label>
+                                <input type="text" id="profile-course-input" placeholder="Robótica, XR, Engenharia">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-location-input">Location</label>
+                                <input type="text" id="profile-location-input" placeholder="Cidade / país">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-website-input">Website</label>
+                                <input type="url" id="profile-website-input" placeholder="https://...">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-linkedin-input">LinkedIn</label>
+                                <input type="url" id="profile-linkedin-input" placeholder="https://linkedin.com/in/...">
+                            </div>
+                            <div class="input-group">
+                                <label for="profile-github-input">GitHub</label>
+                                <input type="url" id="profile-github-input" placeholder="https://github.com/...">
+                            </div>
+                            <div class="identity-actions identity-full-span">
+                                <button type="submit" class="btn btn-primary">Salvar Perfil</button>
+                                <div id="advanced-profile-message" class="form-message"></div>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="identity-panel glassmorphism">
+                        <div class="section-header" style="margin-bottom: 1rem;">
+                            <div>
+                                <h3>Preferências</h3>
+                                <p>Idioma, tema, acessibilidade e comunicação.</p>
+                            </div>
+                        </div>
+                        <form id="preferences-form" class="identity-form-grid">
+                            <div class="input-group">
+                                <label for="preference-language-input">Language</label>
+                                <select id="preference-language-input">
+                                    <option value="pt-BR">Português (Brasil)</option>
+                                    <option value="en-US">English (US)</option>
+                                    <option value="es-ES">Español</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="preference-theme-input">Theme</label>
+                                <select id="preference-theme-input">
+                                    <option value="system">System</option>
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                </select>
+                            </div>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-email-notifications"> <span>Receber notificações por email</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-allow-direct-messages"> <span>Permitir contato direto de outros participantes</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-reduce-motion"> <span>Reduzir movimento e animações</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-high-contrast"> <span>Ativar alto contraste</span></label>
+                            <div class="identity-actions identity-full-span">
+                                <button type="submit" class="btn btn-primary">Salvar Preferências</button>
+                                <div id="preferences-message" class="form-message"></div>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="identity-panel glassmorphism">
+                        <div class="section-header" style="margin-bottom: 1rem;">
+                            <div>
+                                <h3>Consentimentos</h3>
+                                <p>Privacidade, visibilidade do perfil e comunicação.</p>
+                            </div>
+                        </div>
+                        <div class="identity-consent-status">
+                            <strong>Termos &amp; privacidade</strong>
+                            <span id="consent-terms-status">Pendente</span>
+                        </div>
+                        <form id="consent-form" class="identity-form-grid">
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-terms-input"> <span>Confirmo os termos atuais de uso e privacidade.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-marketing-input"> <span>Aceito receber comunicações de produto e oportunidades por email.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-discovery-input"> <span>Permitir descoberta básica do meu perfil na comunidade.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-world-profile-input"> <span>Permitir cartão de perfil enriquecido no mundo 3D.</span></label>
+                            <div class="identity-actions identity-full-span">
+                                <button type="submit" class="btn btn-primary">Salvar Consentimentos</button>
+                                <div id="consent-message" class="form-message"></div>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="identity-panel glassmorphism">
+                        <div class="section-header" style="margin-bottom: 1rem;">
+                            <div>
+                                <h3>Portfólio</h3>
+                                <p>Projetos, links, certificados e destaques profissionais.</p>
+                            </div>
+                        </div>
+                        <form id="portfolio-form" class="identity-form-grid">
+                            <div class="input-group">
+                                <label for="portfolio-title-input">Title</label>
+                                <input type="text" id="portfolio-title-input" placeholder="Ex.: Simulador XR para laboratório">
+                            </div>
+                            <div class="input-group">
+                                <label for="portfolio-type-input">Type</label>
+                                <select id="portfolio-type-input">
+                                    <option value="PROJECT">Project</option>
+                                    <option value="LINK">Link</option>
+                                    <option value="CERTIFICATE">Certificate</option>
+                                    <option value="ARTICLE">Article</option>
+                                </select>
+                            </div>
+                            <div class="input-group identity-full-span">
+                                <label for="portfolio-url-input">URL</label>
+                                <input type="url" id="portfolio-url-input" placeholder="https://...">
+                            </div>
+                            <div class="input-group identity-full-span">
+                                <label for="portfolio-description-input">Description</label>
+                                <textarea id="portfolio-description-input" rows="3" class="identity-textarea" placeholder="Descreva o contexto, o resultado e o impacto do item."></textarea>
+                            </div>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="portfolio-highlight-input"> <span>Marcar como destaque</span></label>
+                            <div class="identity-actions identity-full-span">
+                                <button type="submit" class="btn btn-primary">Adicionar Item</button>
+                                <div id="portfolio-message" class="form-message"></div>
+                            </div>
+                        </form>
+                        <div id="portfolio-list" class="portfolio-list"></div>
+                    </section>
                 </div>
 
                 <!-- Expandable Assets Accordion -->

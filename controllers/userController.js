@@ -1,65 +1,139 @@
+const fs = require('fs');
+const path = require('path');
+
 const prisma = require('../config/db');
+const { buildPublicUser, ensureUserIdentity, setUserAssignedRoles } = require('../services/identityService');
+const { sendSuccess, sendError } = require('../utils/http');
 
 const getAllUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
+      include: {
+        profile: true,
+        roleAssignments: {
+          where: { active: true },
+          orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'asc' }]
+        }
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
-    res.status(200).json({ users });
+
+    return sendSuccess(res, {
+      data: {
+        users: users.map((user) => ({
+          ...buildPublicUser(user),
+          createdAt: user.createdAt
+        }))
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to fetch users.' });
+    return sendError(res, {
+      status: 500,
+      code: 'USER_FETCH_FAILED',
+      message: 'Failed to fetch users.'
+    });
+  }
+};
+
+const updateUserRoles = async (req, res) => {
+  try {
+    const userId = Number.parseInt(req.params.id, 10);
+    const roles = Array.isArray(req.body?.roles) ? req.body.roles : [];
+
+    if (!Number.isFinite(userId) || roles.length === 0) {
+      return sendError(res, {
+        status: 400,
+        code: 'USER_ROLE_UPDATE_VALIDATION_ERROR',
+        message: 'User id and at least one assigned role are required.'
+      });
+    }
+
+    const updatedUser = await setUserAssignedRoles(userId, roles);
+    return sendSuccess(res, {
+      message: 'User roles updated successfully.',
+      data: {
+        user: buildPublicUser(updatedUser)
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, {
+      status: 500,
+      code: 'USER_ROLE_UPDATE_FAILED',
+      message: error.message || 'Failed to update user roles.'
+    });
   }
 };
 
 const resetDatabase = async (req, res) => {
   try {
-    // Exclui todos do banco de dados, MENOS o MASTER que chamou a função!
     await prisma.user.deleteMany({
       where: {
         id: { not: req.user.id }
       }
     });
-    res.status(200).json({ message: 'Todos os usuários comuns foram limpos do banco!' });
+
+    return sendSuccess(res, {
+      message: 'Todos os usuários comuns foram limpos do banco!'
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Falha ao tentar resetar os usuários.' });
+    return sendError(res, {
+      status: 500,
+      code: 'USER_RESET_FAILED',
+      message: 'Falha ao tentar resetar os usuários.'
+    });
   }
 };
 
 const deleteUser = async (req, res) => {
   try {
-    const userId = parseInt(req.params.id, 10);
-    if (userId === req.user.id) {
-      return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
+    const userId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(userId)) {
+      return sendError(res, {
+        status: 400,
+        code: 'USER_DELETE_VALIDATION_ERROR',
+        message: 'Invalid user id.'
+      });
     }
-    
+
+    if (userId === req.user.id) {
+      return sendError(res, {
+        status: 400,
+        code: 'USER_DELETE_SELF_FORBIDDEN',
+        message: 'Você não pode excluir a si mesmo.'
+      });
+    }
+
     await prisma.user.delete({
       where: { id: userId }
     });
-    
-    res.status(200).json({ message: 'Usuário deletado com sucesso!' });
+
+    return sendSuccess(res, {
+      message: 'Usuário deletado com sucesso!'
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Falha ao tentar deletar o usuário.' });
+    return sendError(res, {
+      status: 500,
+      code: 'USER_DELETE_FAILED',
+      message: 'Falha ao tentar deletar o usuário.'
+    });
   }
 };
 
-const fs = require('fs');
-const path = require('path');
-
 const uploadProfilePicture = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada.' });
+    if (!req.file) {
+      return sendError(res, {
+        status: 400,
+        code: 'PROFILE_PICTURE_MISSING',
+        message: 'Nenhuma imagem enviada.'
+      });
+    }
 
     const user = req.user;
     const fileExt = path.extname(req.file.originalname) || '.png';
@@ -75,20 +149,33 @@ const uploadProfilePicture = async (req, res) => {
 
     const fileUrl = `/uploads/profiles/${filename}`;
 
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: user.id },
       data: { profilePicture: fileUrl }
     });
 
-    res.status(200).json({ message: 'Foto de perfil atualizada!', url: fileUrl });
+    const updatedUser = await ensureUserIdentity(user.id);
+
+    return sendSuccess(res, {
+      message: 'Foto de perfil atualizada!',
+      data: {
+        url: fileUrl,
+        user: buildPublicUser(updatedUser)
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Falha ao salvar a foto de perfil.' });
+    return sendError(res, {
+      status: 500,
+      code: 'PROFILE_PICTURE_UPLOAD_FAILED',
+      message: 'Falha ao salvar a foto de perfil.'
+    });
   }
 };
 
 module.exports = {
   getAllUsers,
+  updateUserRoles,
   resetDatabase,
   deleteUser,
   uploadProfilePicture

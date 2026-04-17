@@ -1,30 +1,97 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+
 const prisma = require('../config/db');
 const env = require('../config/env');
-const { sendVerificationEmail } = require('../services/emailService');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailService');
+const {
+  DEFAULT_CONSENT_VERSION,
+  IDENTITY_USER_INCLUDE,
+  buildPublicUser,
+  ensureUserIdentity,
+  upsertConsentRecords
+} = require('../services/identityService');
 const { sendSuccess, sendError } = require('../utils/http');
 
-const buildPublicUser = (user) => ({
-  id: user.id,
-  username: user.username,
-  email: user.email,
-  role: user.role,
-  profilePicture: user.profilePicture,
-  isVerified: user.isVerified
-});
+const MIN_PASSWORD_LENGTH = 6;
+
+function buildResetBaseUrl(req) {
+  const configuredUrl = env.public.loginUrl?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '');
+  }
+
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function buildPasswordResetUrl(req, token, email) {
+  const baseUrl = buildResetBaseUrl(req);
+  return `${baseUrl}/index.html?resetToken=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+}
+
+function buildPasswordResetTokenHash(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function buildRegisterConsentPayload(consents) {
+  if (!consents || typeof consents !== 'object') {
+    return null;
+  }
+
+  const payload = {};
+
+  if (typeof consents.termsAndPrivacy === 'boolean') {
+    payload.termsAndPrivacy = {
+      granted: consents.termsAndPrivacy,
+      version: consents.termsVersion || DEFAULT_CONSENT_VERSION
+    };
+  }
+
+  if (typeof consents.marketingEmails === 'boolean') {
+    payload.marketingEmails = {
+      granted: consents.marketingEmails,
+      version: consents.marketingVersion || DEFAULT_CONSENT_VERSION
+    };
+  }
+
+  if (typeof consents.profileDiscovery === 'boolean') {
+    payload.profileDiscovery = {
+      granted: consents.profileDiscovery,
+      version: consents.profileVersion || DEFAULT_CONSENT_VERSION
+    };
+  }
+
+  if (typeof consents.worldProfileCard === 'boolean') {
+    payload.worldProfileCard = {
+      granted: consents.worldProfileCard,
+      version: consents.worldProfileVersion || DEFAULT_CONSENT_VERSION
+    };
+  }
+
+  return Object.keys(payload).length > 0 ? payload : null;
+}
 
 const register = async (req, res) => {
   try {
     const username = req.body?.username?.trim();
     const email = req.body?.email?.trim();
     const password = req.body?.password;
+    const consentPayload = buildRegisterConsentPayload(req.body?.consents);
 
     if (!username || !email || !password) {
       return sendError(res, {
         status: 400,
         code: 'AUTH_REGISTER_VALIDATION_ERROR',
         message: 'Username, email and password are required.'
+      });
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_REGISTER_PASSWORD_TOO_SHORT',
+        message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`
       });
     }
 
@@ -40,26 +107,42 @@ const register = async (req, res) => {
       });
     }
 
-    const password_hash = await bcrypt.hash(password, 10);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = await prisma.user.create({
-      data: {
-        username,
-        email,
-        password_hash,
-        verificationCode
+    const createdUser = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          username,
+          email,
+          password_hash: passwordHash,
+          verificationCode
+        }
+      });
+
+      await ensureUserIdentity(newUser.id, tx);
+
+      if (consentPayload) {
+        await upsertConsentRecords(newUser.id, consentPayload, 'register', tx);
       }
+
+      return tx.user.findUnique({
+        where: { id: newUser.id },
+        include: IDENTITY_USER_INCLUDE
+      });
     });
 
-    sendVerificationEmail(email, username, verificationCode);
+    await sendVerificationEmail(email, username, verificationCode);
 
     return sendSuccess(res, {
       status: 201,
       message: 'User registered successfully. Please check your email for the verification code.',
       data: {
         needsVerification: true,
-        user: buildPublicUser(newUser)
+        user: buildPublicUser(createdUser),
+        ...(env.nodeEnv !== 'production' && !env.mail.enabled
+          ? { debugVerificationCode: verificationCode }
+          : {})
       }
     });
   } catch (error) {
@@ -118,8 +201,18 @@ const login = async (req, res) => {
       });
     }
 
+    const fullUser = await ensureUserIdentity(user.id);
+    const publicUser = buildPublicUser(fullUser);
     const token = jwt.sign(
-      { id: user.id, username: user.username, email: user.email, role: user.role },
+      {
+        id: fullUser.id,
+        username: fullUser.username,
+        email: fullUser.email,
+        role: fullUser.role,
+        legacyRole: fullUser.role,
+        roles: publicUser.roles,
+        primaryRole: publicUser.primaryRole
+      },
       env.auth.jwtSecret,
       { expiresIn: env.auth.tokenExpiresIn }
     );
@@ -128,7 +221,7 @@ const login = async (req, res) => {
       message: 'Login successful',
       data: {
         token,
-        user: buildPublicUser(user)
+        user: publicUser
       }
     });
   } catch (error) {
@@ -143,17 +236,7 @@ const login = async (req, res) => {
 
 const verify = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        profilePicture: true,
-        isVerified: true
-      }
-    });
+    const user = await ensureUserIdentity(req.user.id);
 
     if (!user) {
       return sendError(res, {
@@ -173,7 +256,7 @@ const verify = async (req, res) => {
 
     return sendSuccess(res, {
       message: 'Token is valid',
-      data: { user }
+      data: { user: buildPublicUser(user) }
     });
   } catch (err) {
     console.error(err);
@@ -254,16 +337,28 @@ const resendCode = async (req, res) => {
       });
     }
 
+    if (user.isVerified) {
+      return sendError(res, {
+        status: 409,
+        code: 'AUTH_ACCOUNT_ALREADY_VERIFIED',
+        message: 'Account is already verified.'
+      });
+    }
+
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     await prisma.user.update({
       where: { email },
       data: { verificationCode }
     });
 
-    sendVerificationEmail(email, user.username, verificationCode);
+    await sendVerificationEmail(email, user.username, verificationCode);
 
     return sendSuccess(res, {
-      message: 'Verification code resent!'
+      message: 'Verification code resent!',
+      data:
+        env.nodeEnv !== 'production' && !env.mail.enabled
+          ? { debugVerificationCode: verificationCode }
+          : undefined
     });
   } catch (err) {
     console.error(err);
@@ -275,10 +370,145 @@ const resendCode = async (req, res) => {
   }
 };
 
+const requestPasswordReset = async (req, res) => {
+  try {
+    const email = req.body?.email?.trim();
+
+    if (!email) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_PASSWORD_RESET_REQUEST_VALIDATION_ERROR',
+        message: 'Email is required.'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      return sendSuccess(res, {
+        message: 'If the email exists, password reset instructions have been sent.'
+      });
+    }
+
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = buildPasswordResetTokenHash(plainToken);
+    const expiresAt = new Date(Date.now() + env.auth.passwordResetTokenTtlMinutes * 60 * 1000);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.passwordResetToken.deleteMany({
+        where: { userId: user.id }
+      });
+
+      await tx.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt
+        }
+      });
+    });
+
+    const resetUrl = buildPasswordResetUrl(req, plainToken, user.email);
+    const emailSent = await sendPasswordResetEmail(user.email, user.username, resetUrl);
+
+    return sendSuccess(res, {
+      message: 'If the email exists, password reset instructions have been sent.',
+      data:
+        env.nodeEnv !== 'production' && !emailSent
+          ? {
+              debugResetToken: plainToken,
+              debugResetUrl: resetUrl,
+              expiresAt
+            }
+          : undefined
+    });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_PASSWORD_RESET_REQUEST_FAILED',
+      message: 'Error requesting password reset.'
+    });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const token = req.body?.token?.trim();
+    const password = req.body?.password;
+
+    if (!token || !password) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_PASSWORD_RESET_VALIDATION_ERROR',
+        message: 'Token and new password are required.'
+      });
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_PASSWORD_RESET_PASSWORD_TOO_SHORT',
+        message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`
+      });
+    }
+
+    const tokenHash = buildPasswordResetTokenHash(token);
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: true
+      }
+    });
+
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt.getTime() < Date.now()) {
+      return sendError(res, {
+        status: 400,
+        code: 'AUTH_PASSWORD_RESET_TOKEN_INVALID',
+        message: 'Password reset token is invalid or expired.'
+      });
+    }
+
+    const newPasswordHash = await bcrypt.hash(password, 10);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { password_hash: newPasswordHash }
+      });
+
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId: resetToken.userId,
+          usedAt: null
+        },
+        data: {
+          usedAt: new Date()
+        }
+      });
+    });
+
+    return sendSuccess(res, {
+      message: 'Password updated successfully. You can now log in.'
+    });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, {
+      status: 500,
+      code: 'AUTH_PASSWORD_RESET_FAILED',
+      message: 'Error resetting password.'
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   verify,
   verifyEmail,
-  resendCode
+  resendCode,
+  requestPasswordReset,
+  resetPassword
 };
