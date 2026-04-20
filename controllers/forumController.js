@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { notifyForumReply } = require('../services/notificationService');
 
 const createThread = async (req, res) => {
     try {
@@ -50,19 +51,41 @@ const createReply = async (req, res) => {
         const { threadId } = req.params;
         const { content } = req.body;
         const userId = req.user.id;
+        const parsedThreadId = parseInt(threadId);
 
-        const thread = await prisma.forumThread.findUnique({ where: { id: parseInt(threadId) } });
-        if (!thread) return res.status(404).json({ error: 'Thread not found' });
-
-        const reply = await prisma.forumReply.create({
-            data: {
-                threadId: parseInt(threadId),
-                userId,
-                content
+        const reply = await prisma.$transaction(async (tx) => {
+            const thread = await tx.forumThread.findUnique({
+                where: { id: parsedThreadId },
+                include: { module: true }
+            });
+            if (!thread) {
+                throw new Error('THREAD_NOT_FOUND');
             }
+
+            const createdReply = await tx.forumReply.create({
+                data: {
+                    threadId: parsedThreadId,
+                    userId,
+                    content
+                }
+            });
+
+            await notifyForumReply({
+                thread,
+                reply: createdReply,
+                actorUserId: userId
+            }, tx);
+
+            return createdReply;
         });
+
         res.status(201).json(reply);
     } catch (error) {
+        if (error.message === 'THREAD_NOT_FOUND') {
+            return res.status(404).json({ error: 'Thread not found' });
+        }
+
+        console.error(error);
         res.status(500).json({ error: 'Failed to create reply' });
     }
 };

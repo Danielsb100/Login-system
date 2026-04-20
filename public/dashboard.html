@@ -79,6 +79,72 @@
                     </div>
                 </div>
 
+                <section class="operations-panel glassmorphism fade-in">
+                    <div class="section-header operations-panel-header">
+                        <div>
+                            <h3>Inbox &amp; Agenda Operacional</h3>
+                            <p>Notificações inteligentes, fazer hoje, urgências, metas da semana e lembretes internos.</p>
+                        </div>
+                        <div class="operations-summary-badges">
+                            <span class="operations-pill" id="ops-unread-count">0 não lidas</span>
+                            <span class="operations-pill warning" id="ops-urgent-count">0 urgências</span>
+                            <button type="button" id="btn-mark-notifications-read" class="btn btn-secondary btn-sm">Marcar inbox como lida</button>
+                        </div>
+                    </div>
+
+                    <div class="operations-grid">
+                        <section class="operations-card">
+                            <div class="operations-card-header">
+                                <h4>Inbox</h4>
+                                <span id="ops-inbox-meta" class="operations-meta">0 itens</span>
+                            </div>
+                            <div id="notifications-inbox" class="operations-list empty-state-list">
+                                <div class="empty-state-inline">Nenhuma notificação por enquanto.</div>
+                            </div>
+                        </section>
+
+                        <section class="operations-card">
+                            <div class="operations-card-header">
+                                <h4>Fazer hoje</h4>
+                                <span id="ops-today-meta" class="operations-meta">0 pendências</span>
+                            </div>
+                            <div id="operations-today" class="operations-list empty-state-list">
+                                <div class="empty-state-inline">Nada planejado para hoje.</div>
+                            </div>
+                        </section>
+
+                        <section class="operations-card operations-card-urgent">
+                            <div class="operations-card-header">
+                                <h4>Urgências</h4>
+                                <span id="ops-urgent-meta" class="operations-meta">0 bloqueios</span>
+                            </div>
+                            <div id="operations-urgent" class="operations-list empty-state-list">
+                                <div class="empty-state-inline">Sem urgências no momento.</div>
+                            </div>
+                        </section>
+
+                        <section class="operations-card">
+                            <div class="operations-card-header">
+                                <h4>Metas da semana</h4>
+                                <span id="ops-week-meta" class="operations-meta">0 objetivos</span>
+                            </div>
+                            <div id="operations-week" class="operations-list empty-state-list">
+                                <div class="empty-state-inline">Ainda sem metas operacionais nesta semana.</div>
+                            </div>
+                        </section>
+
+                        <section class="operations-card operations-card-wide">
+                            <div class="operations-card-header">
+                                <h4>Lembretes automáticos</h4>
+                                <span id="ops-reminders-meta" class="operations-meta">0 lembretes</span>
+                            </div>
+                            <div id="operations-reminders" class="operations-list empty-state-list">
+                                <div class="empty-state-inline">Nenhum lembrete automático aberto.</div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
                 <div class="identity-workspace">
                     <section class="identity-panel glassmorphism">
                         <div class="section-header" style="margin-bottom: 1rem;">

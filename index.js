@@ -22,6 +22,7 @@ const forumController = require('./controllers/forumController');
 const analyticsController = require('./controllers/analyticsController');
 const placementController = require('./controllers/placementController');
 const reportController = require('./controllers/reportController');
+const notificationController = require('./controllers/notificationController');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -91,6 +92,12 @@ app.put('/api/profile/consents', authenticateToken, profileController.updateMyCo
 app.post('/api/profile/portfolio', authenticateToken, profileController.createPortfolioItem);
 app.put('/api/profile/portfolio/:id', authenticateToken, profileController.updatePortfolioItem);
 app.delete('/api/profile/portfolio/:id', authenticateToken, profileController.deletePortfolioItem);
+
+app.get('/api/notifications/summary', authenticateToken, notificationController.getSummary);
+app.patch('/api/notifications/read-all', authenticateToken, notificationController.setAllNotificationsRead);
+app.patch('/api/notifications/:id/read', authenticateToken, notificationController.setNotificationRead);
+app.patch('/api/tasks/:id', authenticateToken, notificationController.updateTaskStatus);
+app.patch('/api/reminders/:id', authenticateToken, notificationController.updateReminder);
 
 app.post('/modules', authenticateToken, roleMiddleware(['MASTER']), moduleController.createModule);
 app.get('/modules/my', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyModules);

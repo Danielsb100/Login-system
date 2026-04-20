@@ -30,6 +30,42 @@ enum ConsentKind {
   WORLD_PROFILE_CARD
 }
 
+enum NotificationType {
+  MODULE_PUBLISHED
+  FORUM_REPLY
+  QUIZ_SUBMITTED
+  EVENT_INVITE
+  ENROLLMENT_CREATED
+  FEEDBACK_RECEIVED
+  SYSTEM_REMINDER
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReminderStatus {
+  OPEN
+  COMPLETED
+  DISMISSED
+}
+
+enum TaskQueueStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+}
+
 model User {
   id            Int            @id @default(autoincrement())
   username      String         @unique
@@ -57,6 +93,10 @@ model User {
   consentRecords ConsentRecord[]
   passwordResetTokens PasswordResetToken[]
   portfolioItems PortfolioItem[]
+  notifications Notification[] @relation("NotificationRecipient")
+  actorNotifications Notification[] @relation("NotificationActor")
+  reminders Reminder[]
+  taskQueueItems TaskQueueItem[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -148,6 +188,75 @@ model PortfolioItem {
   order        Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model Notification {
+  id               Int                  @id @default(autoincrement())
+  userId           Int
+  user             User                 @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  type             NotificationType
+  status           NotificationStatus   @default(UNREAD)
+  priority         NotificationPriority @default(MEDIUM)
+  title            String
+  message          String
+  actionUrl        String?
+  actorUserId      Int?
+  actorUser        User?                @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  sourceEntityType String?
+  sourceEntityId   Int?
+  metadata         Json?
+  readAt           DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime             @default(now())
+
+  @@index([userId, status, createdAt])
+  @@index([type, createdAt])
+}
+
+model Reminder {
+  id               Int                  @id @default(autoincrement())
+  userId           Int
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             NotificationType     @default(SYSTEM_REMINDER)
+  status           ReminderStatus       @default(OPEN)
+  priority         NotificationPriority @default(MEDIUM)
+  title            String
+  description      String?
+  dueAt            DateTime?
+  actionUrl        String?
+  sourceEntityType String?
+  sourceEntityId   Int?
+  metadata         Json?
+  completedAt      DateTime?
+  dismissedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([userId, status, dueAt])
+}
+
+model TaskQueueItem {
+  id               Int                  @id @default(autoincrement())
+  userId           Int
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             NotificationType
+  status           TaskQueueStatus      @default(PENDING)
+  priority         NotificationPriority @default(MEDIUM)
+  title            String
+  summary          String?
+  bucket           String               @default("TODAY")
+  scheduledFor     DateTime?
+  dueAt            DateTime?
+  actionUrl        String?
+  sourceEntityType String?
+  sourceEntityId   Int?
+  metadata         Json?
+  completedAt      DateTime?
+  dismissedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([userId, status, bucket, dueAt])
 }
 
 model Document {

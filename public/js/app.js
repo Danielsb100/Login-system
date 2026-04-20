@@ -139,6 +139,14 @@ window.goToMultiplayer = goToMultiplayer;
 let currentVerifyEmail = '';
 let currentIdentity = null;
 let currentPortfolioItems = [];
+let currentNotificationsSummary = null;
+
+const PRIORITY_LABELS = {
+    LOW: 'Baixa',
+    MEDIUM: 'Média',
+    HIGH: 'Alta',
+    CRITICAL: 'Crítica'
+};
 
 function formatRoleLabel(role) {
     return String(role || 'GUEST')
@@ -168,6 +176,178 @@ function setCheckboxValue(id, value) {
     const element = document.getElementById(id);
     if (element) element.checked = Boolean(value);
 }
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatDateLabel(value) {
+    if (!value) return 'Sem prazo definido';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Sem prazo definido';
+
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function renderEmptyState(containerId, message) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = `<div class="empty-state-inline">${escapeHtml(message)}</div>`;
+}
+
+function renderOperationItems(containerId, items, renderer, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!items || items.length === 0) {
+        renderEmptyState(containerId, emptyMessage);
+        return;
+    }
+
+    container.innerHTML = items.map(renderer).join('');
+}
+
+function renderNotificationItem(item) {
+    const statusTag = item.status === 'UNREAD' ? '<span class="operation-tag priority-medium">Não lida</span>' : '<span class="operation-tag">Lida</span>';
+    const actionLink = item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : '';
+    const readAction = item.status === 'UNREAD'
+        ? `<button type="button" class="btn btn-secondary btn-sm" onclick="markNotificationRead(${Number(item.id)})">Marcar como lida</button>`
+        : '';
+
+    return `
+        <article class="operation-item ${item.status === 'UNREAD' ? 'is-unread' : ''}">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.message)}</p>
+                </div>
+                ${statusTag}
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Baixa')}</span>
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.createdAt))}</span>
+                    <span class="operation-tag">${escapeHtml(item.type || 'SYSTEM')}</span>
+                </div>
+                <div class="operation-actions">
+                    ${actionLink}
+                    ${readAction}
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderTaskQueueItem(item) {
+    const statusAction = item.status === 'IN_PROGRESS'
+        ? `<button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'COMPLETED')">Concluir</button>`
+        : `<button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'IN_PROGRESS')">Iniciar</button>`;
+
+    return `
+        <article class="operation-item ${item.priority === 'CRITICAL' ? 'is-urgent' : ''}">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.summary || 'Sem resumo operacional.')}</p>
+                </div>
+                <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Baixa')}</span>
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag">${escapeHtml(item.bucket || 'TODAY')}</span>
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.dueAt || item.scheduledFor))}</span>
+                </div>
+                <div class="operation-actions">
+                    ${item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : ''}
+                    ${statusAction}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'DISMISSED')">Dispensar</button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderReminderItem(item) {
+    return `
+        <article class="operation-item">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.description || 'Lembrete interno sem descrição adicional.')}</p>
+                </div>
+                <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Baixa')}</span>
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.dueAt))}</span>
+                    <span class="operation-tag">${escapeHtml(item.type || 'SYSTEM_REMINDER')}</span>
+                </div>
+                <div class="operation-actions">
+                    ${item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : ''}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateReminderStatus(${Number(item.id)}, 'COMPLETED')">Concluir</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateReminderStatus(${Number(item.id)}, 'DISMISSED')">Dispensar</button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderNotificationsSummary(summary) {
+    currentNotificationsSummary = summary;
+    document.getElementById('ops-unread-count').textContent = `${summary.counts.unread} não lidas`;
+    document.getElementById('ops-urgent-count').textContent = `${summary.counts.urgent} urgências`;
+    document.getElementById('ops-inbox-meta').textContent = `${summary.inbox.length} itens`;
+    document.getElementById('ops-today-meta').textContent = `${summary.operational.today.length} pendências`;
+    document.getElementById('ops-urgent-meta').textContent = `${summary.operational.urgent.length} bloqueios`;
+    document.getElementById('ops-week-meta').textContent = `${summary.weeklyGoals.length} objetivos`;
+    document.getElementById('ops-reminders-meta').textContent = `${summary.reminders.length} lembretes`;
+
+    renderOperationItems('notifications-inbox', summary.inbox, renderNotificationItem, 'Nenhuma notificação por enquanto.');
+    renderOperationItems('operations-today', summary.operational.today, renderTaskQueueItem, 'Nada planejado para hoje.');
+    renderOperationItems('operations-urgent', summary.operational.urgent, renderTaskQueueItem, 'Sem urgências no momento.');
+    renderOperationItems('operations-week', summary.weeklyGoals, renderTaskQueueItem, 'Ainda sem metas operacionais nesta semana.');
+    renderOperationItems('operations-reminders', summary.reminders, renderReminderItem, 'Nenhum lembrete automático aberto.');
+}
+
+async function loadNotificationsSummary() {
+    const summary = await apiCall('/api/notifications/summary');
+    renderNotificationsSummary(summary);
+    return summary;
+}
+
+async function markNotificationRead(id) {
+    await apiCall(`/api/notifications/${id}/read`, 'PATCH');
+    await loadNotificationsSummary();
+}
+window.markNotificationRead = markNotificationRead;
+
+async function markAllNotificationsRead() {
+    await apiCall('/api/notifications/read-all', 'PATCH');
+    await loadNotificationsSummary();
+}
+window.markAllNotificationsRead = markAllNotificationsRead;
+
+async function updateTaskQueueItemStatus(id, status) {
+    await apiCall(`/api/tasks/${id}`, 'PATCH', { status });
+    await loadNotificationsSummary();
+}
+window.updateTaskQueueItemStatus = updateTaskQueueItemStatus;
+
+async function updateReminderStatus(id, status) {
+    await apiCall(`/api/reminders/${id}`, 'PATCH', { status });
+    await loadNotificationsSummary();
+}
+window.updateReminderStatus = updateReminderStatus;
 
 function showPasswordRequestSection(email = '') {
     fillInputValue('password-request-email', email);
@@ -608,6 +788,23 @@ if (registerForm) {
 
 let adminUsersCache = [];
 
+const markNotificationsReadButton = document.getElementById('btn-mark-notifications-read');
+if (markNotificationsReadButton) {
+    markNotificationsReadButton.addEventListener('click', async () => {
+        try {
+            markNotificationsReadButton.disabled = true;
+            markNotificationsReadButton.textContent = 'Atualizando...';
+            await markAllNotificationsRead();
+        } catch (error) {
+            console.error('Failed to mark notifications as read:', error);
+            alert(error.message || 'Não foi possível atualizar a inbox.');
+        } finally {
+            markNotificationsReadButton.disabled = false;
+            markNotificationsReadButton.textContent = 'Marcar inbox como lida';
+        }
+    });
+}
+
 async function refreshIdentityState() {
     const identity = await apiCall('/api/profile/me');
     renderIdentityState(identity);
@@ -623,6 +820,7 @@ async function loadDashboard() {
 
     try {
         const identity = await refreshIdentityState();
+        await loadNotificationsSummary();
         const user = identity.user;
         const isAdmin = hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN']) || user.role === 'ADMIN';
         const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
