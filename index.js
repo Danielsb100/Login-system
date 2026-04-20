@@ -75,6 +75,7 @@ app.post('/auth/password/reset', authController.resetPassword);
 app.get('/auth/verify', authenticateToken, authController.verify);
 
 app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), userController.getAllUsers);
+app.get('/api/users/search', authenticateToken, roleMiddleware(['MASTER']), userController.searchUsers);
 app.patch('/api/users/:id/roles', authenticateToken, roleMiddleware(['ADMIN', 'MASTER', 'SUPER_ADMIN']), userController.updateUserRoles);
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
 app.delete('/api/users/:id', authenticateToken, roleMiddleware(['MASTER']), userController.deleteUser);

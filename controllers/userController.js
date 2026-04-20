@@ -68,6 +68,48 @@ const updateUserRoles = async (req, res) => {
   }
 };
 
+const searchUsers = async (req, res) => {
+  try {
+    const query = String(req.query?.q || '').trim();
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 10, 1), 25);
+
+    if (!query || query.length < 2) {
+      return sendSuccess(res, { data: { users: [] } });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { username: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } }
+        ]
+      },
+      include: {
+        profile: true,
+        roleAssignments: {
+          where: { active: true },
+          orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'asc' }]
+        }
+      },
+      orderBy: [{ username: 'asc' }],
+      take: limit
+    });
+
+    return sendSuccess(res, {
+      data: {
+        users: users.map((user) => buildPublicUser(user))
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, {
+      status: 500,
+      code: 'USER_SEARCH_FAILED',
+      message: 'Failed to search users.'
+    });
+  }
+};
+
 const resetDatabase = async (req, res) => {
   try {
     await prisma.user.deleteMany({
@@ -175,6 +217,7 @@ const uploadProfilePicture = async (req, res) => {
 
 module.exports = {
   getAllUsers,
+  searchUsers,
   updateUserRoles,
   resetDatabase,
   deleteUser,

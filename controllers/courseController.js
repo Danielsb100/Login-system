@@ -163,7 +163,18 @@ async function assertCourseAccess(courseId, user) {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     include: {
-      enrollments: true,
+      enrollments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              profile: { select: { displayName: true } }
+            }
+          }
+        }
+      },
       completions: true,
       courseModules: {
         include: {
@@ -335,6 +346,9 @@ async function getCourseDetail(req, res) {
         ? course.enrollments.map((item) => ({
             id: item.id,
             userId: item.userId,
+            username: item.user?.username,
+            email: item.user?.email,
+            displayName: item.user?.profile?.displayName || item.user?.username,
             status: item.status,
             progressPercent: item.progressPercent
           }))

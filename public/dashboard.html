@@ -439,9 +439,11 @@
                                         <h4>Enrollments</h4>
                                         <span id="course-enrollments-meta" class="operations-meta">0 learners</span>
                                     </div>
-                                    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; align-items:center;">
-                                        <input type="number" id="course-enrollment-user-id" placeholder="User ID" class="glassmorphism" style="flex:1; border-radius:12px; padding:0.75rem 1rem; border:1px solid rgba(255,255,255,0.08); color:white; background:rgba(0,0,0,0.2);">
-                                        <button id="btn-enroll-user" class="btn btn-primary btn-sm">Enroll</button>
+                                    <div style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;">
+                                        <input type="text" id="course-enrollment-query" placeholder="Search by email or username" class="glassmorphism" style="width:100%; border-radius:12px; padding:0.75rem 1rem; border:1px solid rgba(255,255,255,0.08); color:white; background:rgba(0,0,0,0.2);">
+                                        <div id="course-enrollment-search-results" class="operations-list empty-state-list">
+                                            <div class="empty-state-inline">Search for a learner to enroll.</div>
+                                        </div>
                                     </div>
                                     <div id="course-enrollments-list" class="operations-list empty-state-list">
                                         <div class="empty-state-inline">No learners enrolled yet.</div>
@@ -646,13 +648,28 @@
     <!-- Cropper Modal -->
     <div id="crop-modal" class="modal hidden" style="z-index: 300;">
         <div class="modal-content glassmorphism" style="max-width: 500px;">
-            <h3 style="margin-bottom: 1rem;">Ajustar Foto de Perfil</h3>
+            <h3 style="margin-bottom: 1rem;">Adjust Profile Photo</h3>
             <div style="width: 100%; max-height: 400px; display: flex; justify-content: center; background-color: #000; overflow: hidden;">
                 <img id="image-to-crop" src="" style="max-width: 100%;">
             </div>
             <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
                 <button id="btn-crop-save" class="btn btn-primary">Save Profile</button>
-                <button onclick="closeCropModal()" class="btn btn-secondary">Cancelar</button>
+                <button onclick="closeCropModal()" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="roles-modal" class="modal hidden" style="z-index: 320;">
+        <div class="modal-content glassmorphism" style="max-width: 560px;">
+            <div class="modal-header">
+                <h3 style="margin:0;">Update User Roles</h3>
+                <span class="close" onclick="closeUserRolesModal()">&times;</span>
+            </div>
+            <p id="roles-modal-user-meta" style="color: var(--text-muted); margin-bottom: 1rem;">Select the roles for this user.</p>
+            <div id="roles-modal-options" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0.75rem;"></div>
+            <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                <button id="btn-save-user-roles" class="btn btn-primary">Save Roles</button>
+                <button onclick="closeUserRolesModal()" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>

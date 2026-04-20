@@ -3,7 +3,8 @@ let coursesState = {
     canManageCourses: false,
     courses: [],
     selectedCourseId: null,
-    selectedCourse: null
+    selectedCourse: null,
+    enrollmentSearchResults: []
 };
 
 function escapeCourseHtml(value) {
@@ -176,29 +177,60 @@ function renderCourseEnrollments(course) {
     const card = document.getElementById('course-enrollments-card');
     const meta = document.getElementById('course-enrollments-meta');
     const list = document.getElementById('course-enrollments-list');
-    if (!card || !meta || !list) return;
+    const searchResults = document.getElementById('course-enrollment-search-results');
+    if (!card || !meta || !list || !searchResults) return;
 
     card.classList.toggle('hidden', !course.canManage);
     if (!course.canManage) return;
 
     const enrollments = course.enrollments || [];
     meta.textContent = `${enrollments.length} learners`;
+    const searchLabel = coursesState.enrollmentSearchResults.length ? `${coursesState.enrollmentSearchResults.length} matches found` : 'Search for a learner to enroll.';
     if (!enrollments.length) {
         list.innerHTML = '<div class="empty-state-inline">No learners enrolled yet.</div>';
+    } else {
+        list.innerHTML = enrollments.map((enrollment) => `
+            <article class="operation-item">
+                <div class="operation-item-head">
+                    <div>
+                        <h5>${escapeCourseHtml(enrollment.displayName || enrollment.username || `User #${enrollment.userId}`)}</h5>
+                        <p>${escapeCourseHtml(enrollment.email || `User #${enrollment.userId}`)} • Status: ${escapeCourseHtml(enrollment.status)}</p>
+                    </div>
+                    <span class="operation-tag">${Number(enrollment.progressPercent || 0)}%</span>
+                </div>
+            </article>
+        `).join('');
+    }
+
+    if (!coursesState.enrollmentSearchResults.length) {
+        searchResults.innerHTML = `<div class="empty-state-inline">${escapeCourseHtml(searchLabel)}</div>`;
         return;
     }
 
-    list.innerHTML = enrollments.map((enrollment) => `
+    searchResults.innerHTML = coursesState.enrollmentSearchResults.map((user) => `
         <article class="operation-item">
             <div class="operation-item-head">
                 <div>
-                    <h5>User #${enrollment.userId}</h5>
-                    <p>Status: ${escapeCourseHtml(enrollment.status)}</p>
+                    <h5>${escapeCourseHtml(user.displayName || user.username)}</h5>
+                    <p>${escapeCourseHtml(user.email)} • ${escapeCourseHtml((user.roles || []).join(', ') || user.primaryRole || 'STUDENT')}</p>
                 </div>
-                <span class="operation-tag">${Number(enrollment.progressPercent || 0)}%</span>
+                <button type="button" class="btn btn-primary btn-sm" data-enroll-user-id="${user.id}">Enroll</button>
             </div>
         </article>
     `).join('');
+
+    searchResults.querySelectorAll('[data-enroll-user-id]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            try {
+                button.disabled = true;
+                await enrollUser(Number(button.dataset.enrollUserId));
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
 }
 
 function renderCourseDetail(course) {
@@ -276,16 +308,16 @@ async function attachExistingModule() {
     await loadCourseDetail(coursesState.selectedCourseId);
 }
 
-async function enrollUser() {
+async function enrollUser(userId) {
     if (!coursesState.selectedCourse) return;
-    const userIdField = document.getElementById('course-enrollment-user-id');
-    const userId = Number(userIdField?.value);
     if (!userId) {
-        alert('Enter a valid user ID.');
+        alert('Select a valid learner.');
         return;
     }
     await window.apiCall(`/courses/${coursesState.selectedCourseId}/enrollments`, 'POST', { userId });
-    userIdField.value = '';
+    coursesState.enrollmentSearchResults = [];
+    const queryField = document.getElementById('course-enrollment-query');
+    if (queryField) queryField.value = '';
     await loadCourseDetail(coursesState.selectedCourseId);
 }
 
@@ -340,14 +372,27 @@ window.loadCoursesPanel = async function loadCoursesPanel({ user, canManageCours
         workbenchButton.onclick = () => window.switchSection?.('modules');
     }
 
-    const enrollButton = document.getElementById('btn-enroll-user');
-    if (enrollButton) {
-        enrollButton.onclick = async () => {
-            try {
-                await enrollUser();
-            } catch (error) {
-                alert(error.message);
-            }
+    const queryInput = document.getElementById('course-enrollment-query');
+    if (queryInput) {
+        let searchTimeout = null;
+        queryInput.oninput = () => {
+            const value = queryInput.value.trim();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                if (!value || value.length < 2) {
+                    coursesState.enrollmentSearchResults = [];
+                    renderCourseEnrollments(coursesState.selectedCourse || { canManage: true, enrollments: [] });
+                    return;
+                }
+                try {
+                    const result = await window.apiCall(`/api/users/search?q=${encodeURIComponent(value)}&limit=8`);
+                    const enrolledIds = new Set((coursesState.selectedCourse?.enrollments || []).map((entry) => entry.userId));
+                    coursesState.enrollmentSearchResults = (result.users || []).filter((userEntry) => !enrolledIds.has(userEntry.id));
+                    renderCourseEnrollments(coursesState.selectedCourse || { canManage: true, enrollments: [] });
+                } catch (error) {
+                    console.error('Enrollment search failed:', error);
+                }
+            }, 250);
         };
     }
 

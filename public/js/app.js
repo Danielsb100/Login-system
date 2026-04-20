@@ -788,6 +788,8 @@ if (registerForm) {
 // --- Dashboard Logic ---
 
 let adminUsersCache = [];
+const ASSIGNABLE_ROLE_OPTIONS = ['STUDENT', 'TEACHER', 'TUTOR', 'BUSINESS_MENTOR', 'COORDINATOR', 'ADMIN', 'GUEST', 'SUPER_ADMIN'];
+let currentRoleModalUserId = null;
 
 const markNotificationsReadButton = document.getElementById('btn-mark-notifications-read');
 if (markNotificationsReadButton) {
@@ -886,7 +888,7 @@ async function loadAdminPanel() {
                 </td>
                 <td>${date}</td>
                 <td style="text-align: right;">
-                    <button onclick="promptUpdateUserRoles(${u.id})" class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 6px;" title="Update Roles">
+                    <button onclick="openUserRolesModal(${u.id})" class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 6px;" title="Update Roles">
                         <i class="fas fa-user-shield"></i>
                     </button>
                     <button onclick="deleteUser(${u.id})" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3); padding: 4px 8px;" title="Delete User">
@@ -1032,35 +1034,69 @@ async function deleteUser(id) {
     }
 }
 
-async function promptUpdateUserRoles(id) {
+async function openUserRolesModal(id) {
     const targetUser = adminUsersCache.find(user => user.id === id);
     if (!targetUser) {
         alert('User not found in the current cache.');
         return;
     }
 
-    const currentRoles = (targetUser.roles || []).join(', ');
-    const nextRoles = prompt('Enter the real roles separated by commas.\nEx.: STUDENT, TUTOR', currentRoles);
+    currentRoleModalUserId = id;
+    const modal = document.getElementById('roles-modal');
+    const options = document.getElementById('roles-modal-options');
+    const meta = document.getElementById('roles-modal-user-meta');
+    if (!modal || !options || !meta) return;
 
-    if (nextRoles === null) return;
+    const activeRoles = new Set(targetUser.roles || []);
+    meta.textContent = `${targetUser.username} • ${targetUser.email}`;
+    options.innerHTML = ASSIGNABLE_ROLE_OPTIONS.map((role) => `
+        <label class="identity-toggle" style="padding:0.9rem; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);">
+            <input type="checkbox" data-role-option="${role}" ${activeRoles.has(role) ? 'checked' : ''}>
+            <span>${formatRoleLabel(role)}</span>
+        </label>
+    `).join('');
 
-    const parsedRoles = nextRoles
-        .split(',')
-        .map(role => role.trim().toUpperCase())
-        .filter(Boolean);
+    modal.classList.remove('hidden');
+}
+window.openUserRolesModal = openUserRolesModal;
 
-    if (!parsedRoles.length) {
-        alert('Enter at least one role.');
+function closeUserRolesModal() {
+    const modal = document.getElementById('roles-modal');
+    if (modal) modal.classList.add('hidden');
+    currentRoleModalUserId = null;
+}
+window.closeUserRolesModal = closeUserRolesModal;
+
+async function saveUserRolesFromModal() {
+    if (!currentRoleModalUserId) return;
+    const selectedRoles = Array.from(document.querySelectorAll('[data-role-option]:checked')).map((input) => input.dataset.roleOption);
+    if (!selectedRoles.length) {
+        alert('Select at least one role.');
         return;
     }
 
+    const saveButton = document.getElementById('btn-save-user-roles');
     try {
-        const res = await apiCall(`/api/users/${id}/roles`, 'PATCH', { roles: parsedRoles });
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.textContent = 'Saving...';
+        }
+        const res = await apiCall(`/api/users/${currentRoleModalUserId}/roles`, 'PATCH', { roles: selectedRoles });
         alert(res.message || 'Roles updated successfully.');
+        closeUserRolesModal();
         await Promise.all([loadAdminPanel(), refreshIdentityState()]);
     } catch (error) {
         alert('Error updating roles: ' + error.message);
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save Roles';
+        }
     }
+}
+
+async function promptUpdateUserRoles(id) {
+    return openUserRolesModal(id);
 }
 
 async function resetDatabase() {
@@ -2491,4 +2527,9 @@ if (btnCropSave) {
             }
         }, 'image/png');
     });
+}
+
+const btnSaveUserRoles = document.getElementById('btn-save-user-roles');
+if (btnSaveUserRoles) {
+    btnSaveUserRoles.addEventListener('click', saveUserRolesFromModal);
 }
