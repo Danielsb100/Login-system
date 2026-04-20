@@ -283,9 +283,10 @@ const deleteQuizQuestion = async (req, res) => {
 const submitQuiz = async (req, res) => {
     try {
         const { id } = req.params; // moduleId
-        const { answers } = req.body; // array of { questionId, optionId }
+        const { answers, courseId } = req.body; // array of { questionId, optionId }
         const userId = req.user.id;
         const moduleId = parseInt(id);
+        const parsedCourseId = courseId ? parseInt(courseId) : null;
 
         const module = await prisma.trainingModule.findUnique({ 
             where: { id: moduleId },
@@ -337,6 +338,28 @@ const submitQuiz = async (req, res) => {
                     }
                 }
             });
+
+            if (parsedCourseId) {
+                await tx.moduleCompletion.upsert({
+                    where: {
+                        courseId_moduleId_userId: {
+                            courseId: parsedCourseId,
+                            moduleId,
+                            userId
+                        }
+                    },
+                    update: {
+                        source: req.body.source || 'MULTIPLAYER_WORLD',
+                        completedAt: new Date()
+                    },
+                    create: {
+                        courseId: parsedCourseId,
+                        moduleId,
+                        userId,
+                        source: req.body.source || 'MULTIPLAYER_WORLD'
+                    }
+                });
+            }
 
             await notifyQuizSubmitted({
                 module,

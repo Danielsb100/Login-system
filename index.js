@@ -23,6 +23,7 @@ const analyticsController = require('./controllers/analyticsController');
 const placementController = require('./controllers/placementController');
 const reportController = require('./controllers/reportController');
 const notificationController = require('./controllers/notificationController');
+const courseController = require('./controllers/courseController');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -98,6 +99,19 @@ app.patch('/api/notifications/read-all', authenticateToken, notificationControll
 app.patch('/api/notifications/:id/read', authenticateToken, notificationController.setNotificationRead);
 app.patch('/api/tasks/:id', authenticateToken, notificationController.updateTaskStatus);
 app.patch('/api/reminders/:id', authenticateToken, notificationController.updateReminder);
+
+app.post('/courses', authenticateToken, roleMiddleware(['MASTER']), courseController.createCourse);
+app.get('/courses/my', authenticateToken, roleMiddleware(['MASTER']), courseController.getMyCourses);
+app.get('/courses/accessible', authenticateToken, courseController.getAccessibleCourses);
+app.get('/courses/:id', authenticateToken, courseController.getCourseDetail);
+app.put('/courses/:id', authenticateToken, roleMiddleware(['MASTER']), courseController.updateCourse);
+app.post('/courses/:id/modules', authenticateToken, roleMiddleware(['MASTER']), courseController.addModuleToCourse);
+app.patch('/courses/:id/modules/reorder', authenticateToken, roleMiddleware(['MASTER']), courseController.reorderCourseModules);
+app.patch('/courses/:id/modules/:courseModuleId', authenticateToken, roleMiddleware(['MASTER']), courseController.updateCourseModule);
+app.delete('/courses/:id/modules/:courseModuleId', authenticateToken, roleMiddleware(['MASTER']), courseController.removeCourseModule);
+app.post('/courses/:id/enrollments', authenticateToken, roleMiddleware(['MASTER']), courseController.enrollUser);
+app.get('/courses/:id/runtime', authenticateToken, courseController.getCourseRuntime);
+app.post('/courses/:id/modules/:moduleId/complete', authenticateToken, courseController.completeCourseModule);
 
 app.post('/modules', authenticateToken, roleMiddleware(['MASTER']), moduleController.createModule);
 app.get('/modules/my', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyModules);

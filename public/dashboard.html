@@ -30,8 +30,9 @@
     <div class="container dashboard-container">
         <!-- New Navigation Tabs -->
         <div class="dashboard-nav-tabs" id="main-nav-tabs">
-            <button class="dash-tab active" onclick="switchSection('profile')">Geral</button>
-            <button class="dash-tab hidden" id="tab-modules" onclick="switchSection('modules')">Módulos</button>
+            <button class="dash-tab active" onclick="switchSection('profile')">General</button>
+            <button class="dash-tab" id="tab-courses" onclick="switchSection('courses')">Courses</button>
+            <button class="dash-tab hidden" id="tab-modules" onclick="switchSection('modules')">Modules</button>
         </div>
         
         <!-- PROFILE GROUP -->
@@ -41,18 +42,18 @@
                     <div style="display: flex; align-items: center; gap: 1.5rem;">
                         <div class="profile-avatar-wrapper" style="position: relative; width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.1); border: 2px solid var(--primary); cursor: pointer;" onclick="document.getElementById('profile-upload-input').click()">
                             <img id="profile-picture-display" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='60' fill='%2316213e'/%3E%3Ccircle cx='60' cy='44' r='24' fill='%235ec8f8'/%3E%3Cpath d='M20 108c7-23 23-34 40-34s33 11 40 34' fill='%235ec8f8'/%3E%3C/svg%3E" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
-                            <div class="avatar-edit-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.7rem; text-align: center; padding: 2px 0;">Editar</div>
+                            <div class="avatar-edit-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.7rem; text-align: center; padding: 2px 0;">Edit</div>
                         </div>
                         <input type="file" id="profile-upload-input" accept="image/*" style="display: none;" onchange="uploadProfilePicture(event)">
                         <div>
                             <h2 id="profile-display-name-heading">Your Profile</h2>
                             <div class="role-badge" id="profile-role">USER</div>
-                            <div id="profile-roles-list" style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-muted);">Sem papéis atribuídos.</div>
-                            <p id="profile-headline-display" style="margin-top: 0.5rem; max-width: 420px; color: var(--text-muted);">Adicione uma headline para contextualizar seu papel no ecossistema.</p>
+                            <div id="profile-roles-list" style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-muted);">No roles assigned.</div>
+                            <p id="profile-headline-display" style="margin-top: 0.5rem; max-width: 420px; color: var(--text-muted);">Add a headline to contextualize your role in the ecosystem.</p>
                         </div>
                     </div>
                     <button onclick="goToMultiplayer()" class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Entrar no Mundo 3D
+                        Enter the 3D World
                     </button>
                 </div>
                 
@@ -82,13 +83,13 @@
                 <section class="operations-panel glassmorphism fade-in">
                     <div class="section-header operations-panel-header">
                         <div>
-                            <h3>Inbox &amp; Agenda Operacional</h3>
-                            <p>Notificações inteligentes, fazer hoje, urgências, metas da semana e lembretes internos.</p>
+                            <h3>Inbox &amp; Operational Agenda</h3>
+                            <p>Smart notifications, today's tasks, urgencies, weekly goals, and internal reminders.</p>
                         </div>
                         <div class="operations-summary-badges">
-                            <span class="operations-pill" id="ops-unread-count">0 não lidas</span>
-                            <span class="operations-pill warning" id="ops-urgent-count">0 urgências</span>
-                            <button type="button" id="btn-mark-notifications-read" class="btn btn-secondary btn-sm">Marcar inbox como lida</button>
+                            <span class="operations-pill" id="ops-unread-count">0 unread</span>
+                            <span class="operations-pill warning" id="ops-urgent-count">0 urgent</span>
+                            <button type="button" id="btn-mark-notifications-read" class="btn btn-secondary btn-sm">Mark inbox as read</button>
                         </div>
                     </div>
 
@@ -99,47 +100,47 @@
                                 <span id="ops-inbox-meta" class="operations-meta">0 itens</span>
                             </div>
                             <div id="notifications-inbox" class="operations-list empty-state-list">
-                                <div class="empty-state-inline">Nenhuma notificação por enquanto.</div>
+                                <div class="empty-state-inline">No notifications yet.</div>
                             </div>
                         </section>
 
                         <section class="operations-card">
                             <div class="operations-card-header">
-                                <h4>Fazer hoje</h4>
-                                <span id="ops-today-meta" class="operations-meta">0 pendências</span>
+                                <h4>Do today</h4>
+                                <span id="ops-today-meta" class="operations-meta">0 pending</span>
                             </div>
                             <div id="operations-today" class="operations-list empty-state-list">
-                                <div class="empty-state-inline">Nada planejado para hoje.</div>
+                                <div class="empty-state-inline">Nothing planned for today.</div>
                             </div>
                         </section>
 
                         <section class="operations-card operations-card-urgent">
                             <div class="operations-card-header">
-                                <h4>Urgências</h4>
+                                <h4>Urgencies</h4>
                                 <span id="ops-urgent-meta" class="operations-meta">0 bloqueios</span>
                             </div>
                             <div id="operations-urgent" class="operations-list empty-state-list">
-                                <div class="empty-state-inline">Sem urgências no momento.</div>
+                                <div class="empty-state-inline">No urgencies right now.</div>
                             </div>
                         </section>
 
                         <section class="operations-card">
                             <div class="operations-card-header">
-                                <h4>Metas da semana</h4>
+                                <h4>Weekly goals</h4>
                                 <span id="ops-week-meta" class="operations-meta">0 objetivos</span>
                             </div>
                             <div id="operations-week" class="operations-list empty-state-list">
-                                <div class="empty-state-inline">Ainda sem metas operacionais nesta semana.</div>
+                                <div class="empty-state-inline">No operational goals yet this week.</div>
                             </div>
                         </section>
 
                         <section class="operations-card operations-card-wide">
                             <div class="operations-card-header">
-                                <h4>Lembretes automáticos</h4>
-                                <span id="ops-reminders-meta" class="operations-meta">0 lembretes</span>
+                                <h4>Automatic reminders</h4>
+                                <span id="ops-reminders-meta" class="operations-meta">0 reminders</span>
                             </div>
                             <div id="operations-reminders" class="operations-list empty-state-list">
-                                <div class="empty-state-inline">Nenhum lembrete automático aberto.</div>
+                                <div class="empty-state-inline">No open automatic reminders.</div>
                             </div>
                         </section>
                     </div>
@@ -149,14 +150,14 @@
                     <section class="identity-panel glassmorphism">
                         <div class="section-header" style="margin-bottom: 1rem;">
                             <div>
-                                <h3>Perfil Avançado</h3>
-                                <p>Bio, interesses, habilidades, links e contexto acadêmico.</p>
+                                <h3>Advanced Profile</h3>
+                                <p>Bio, interests, skills, links, and academic context.</p>
                             </div>
                         </div>
                         <form id="advanced-profile-form" class="identity-form-grid">
                             <div class="input-group">
                                 <label for="profile-display-name-input">Display Name</label>
-                                <input type="text" id="profile-display-name-input" placeholder="Seu nome público">
+                                <input type="text" id="profile-display-name-input" placeholder="Your public name">
                             </div>
                             <div class="input-group">
                                 <label for="profile-headline-input">Headline</label>
@@ -164,7 +165,7 @@
                             </div>
                             <div class="input-group identity-full-span">
                                 <label for="profile-bio-input">Bio</label>
-                                <textarea id="profile-bio-input" rows="4" class="identity-textarea" placeholder="Conte quem você é, no que está trabalhando e onde quer chegar."></textarea>
+                                <textarea id="profile-bio-input" rows="4" class="identity-textarea" placeholder="Tell people who you are, what you are working on, and where you want to go."></textarea>
                             </div>
                             <div class="input-group">
                                 <label for="profile-interests-input">Interests</label>
@@ -176,7 +177,7 @@
                             </div>
                             <div class="input-group">
                                 <label for="profile-languages-input">Languages</label>
-                                <input type="text" id="profile-languages-input" placeholder="Português, English">
+                                <input type="text" id="profile-languages-input" placeholder="Portuguese, English">
                             </div>
                             <div class="input-group">
                                 <label for="profile-timezone-input">Timezone</label>
@@ -188,11 +189,11 @@
                             </div>
                             <div class="input-group">
                                 <label for="profile-course-input">Course / Track</label>
-                                <input type="text" id="profile-course-input" placeholder="Robótica, XR, Engenharia">
+                                <input type="text" id="profile-course-input" placeholder="Robotics, XR, Engineering">
                             </div>
                             <div class="input-group">
                                 <label for="profile-location-input">Location</label>
-                                <input type="text" id="profile-location-input" placeholder="Cidade / país">
+                                <input type="text" id="profile-location-input" placeholder="City / country">
                             </div>
                             <div class="input-group">
                                 <label for="profile-website-input">Website</label>
@@ -207,7 +208,7 @@
                                 <input type="url" id="profile-github-input" placeholder="https://github.com/...">
                             </div>
                             <div class="identity-actions identity-full-span">
-                                <button type="submit" class="btn btn-primary">Salvar Perfil</button>
+                                <button type="submit" class="btn btn-primary">Save Profile</button>
                                 <div id="advanced-profile-message" class="form-message"></div>
                             </div>
                         </form>
@@ -216,15 +217,15 @@
                     <section class="identity-panel glassmorphism">
                         <div class="section-header" style="margin-bottom: 1rem;">
                             <div>
-                                <h3>Preferências</h3>
-                                <p>Idioma, tema, acessibilidade e comunicação.</p>
+                                <h3>Preferences</h3>
+                                <p>Language, theme, accessibility, and communication.</p>
                             </div>
                         </div>
                         <form id="preferences-form" class="identity-form-grid">
                             <div class="input-group">
                                 <label for="preference-language-input">Language</label>
                                 <select id="preference-language-input">
-                                    <option value="pt-BR">Português (Brasil)</option>
+                                    <option value="pt-BR">Portuguese (Brazil)</option>
                                     <option value="en-US">English (US)</option>
                                     <option value="es-ES">Español</option>
                                 </select>
@@ -237,12 +238,12 @@
                                     <option value="dark">Dark</option>
                                 </select>
                             </div>
-                            <label class="identity-toggle"><input type="checkbox" id="pref-email-notifications"> <span>Receber notificações por email</span></label>
-                            <label class="identity-toggle"><input type="checkbox" id="pref-allow-direct-messages"> <span>Permitir contato direto de outros participantes</span></label>
-                            <label class="identity-toggle"><input type="checkbox" id="pref-reduce-motion"> <span>Reduzir movimento e animações</span></label>
-                            <label class="identity-toggle"><input type="checkbox" id="pref-high-contrast"> <span>Ativar alto contraste</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-email-notifications"> <span>Receive email notifications</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-allow-direct-messages"> <span>Allow direct contact from other participants</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-reduce-motion"> <span>Reduce motion and animations</span></label>
+                            <label class="identity-toggle"><input type="checkbox" id="pref-high-contrast"> <span>Enable high contrast</span></label>
                             <div class="identity-actions identity-full-span">
-                                <button type="submit" class="btn btn-primary">Salvar Preferências</button>
+                                <button type="submit" class="btn btn-primary">Save Preferences</button>
                                 <div id="preferences-message" class="form-message"></div>
                             </div>
                         </form>
@@ -251,21 +252,21 @@
                     <section class="identity-panel glassmorphism">
                         <div class="section-header" style="margin-bottom: 1rem;">
                             <div>
-                                <h3>Consentimentos</h3>
-                                <p>Privacidade, visibilidade do perfil e comunicação.</p>
+                                <h3>Consents</h3>
+                                <p>Privacy, profile visibility, and communication.</p>
                             </div>
                         </div>
                         <div class="identity-consent-status">
                             <strong>Termos &amp; privacidade</strong>
-                            <span id="consent-terms-status">Pendente</span>
+                            <span id="consent-terms-status">Pending</span>
                         </div>
                         <form id="consent-form" class="identity-form-grid">
-                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-terms-input"> <span>Confirmo os termos atuais de uso e privacidade.</span></label>
-                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-marketing-input"> <span>Aceito receber comunicações de produto e oportunidades por email.</span></label>
-                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-discovery-input"> <span>Permitir descoberta básica do meu perfil na comunidade.</span></label>
-                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-world-profile-input"> <span>Permitir cartão de perfil enriquecido no mundo 3D.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-terms-input"> <span>I confirm the current terms of use and privacy policy.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-marketing-input"> <span>I agree to receive product communications and opportunities by email.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-discovery-input"> <span>Allow basic discovery of my profile in the community.</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="consent-world-profile-input"> <span>Allow an enriched profile card in the 3D world.</span></label>
                             <div class="identity-actions identity-full-span">
-                                <button type="submit" class="btn btn-primary">Salvar Consentimentos</button>
+                                <button type="submit" class="btn btn-primary">Save Consents</button>
                                 <div id="consent-message" class="form-message"></div>
                             </div>
                         </form>
@@ -274,14 +275,14 @@
                     <section class="identity-panel glassmorphism">
                         <div class="section-header" style="margin-bottom: 1rem;">
                             <div>
-                                <h3>Portfólio</h3>
-                                <p>Projetos, links, certificados e destaques profissionais.</p>
+                                <h3>Portfolio</h3>
+                                <p>Projects, links, certificates, and professional highlights.</p>
                             </div>
                         </div>
                         <form id="portfolio-form" class="identity-form-grid">
                             <div class="input-group">
                                 <label for="portfolio-title-input">Title</label>
-                                <input type="text" id="portfolio-title-input" placeholder="Ex.: Simulador XR para laboratório">
+                                <input type="text" id="portfolio-title-input" placeholder="Example: XR simulator for the lab">
                             </div>
                             <div class="input-group">
                                 <label for="portfolio-type-input">Type</label>
@@ -298,11 +299,11 @@
                             </div>
                             <div class="input-group identity-full-span">
                                 <label for="portfolio-description-input">Description</label>
-                                <textarea id="portfolio-description-input" rows="3" class="identity-textarea" placeholder="Descreva o contexto, o resultado e o impacto do item."></textarea>
+                                <textarea id="portfolio-description-input" rows="3" class="identity-textarea" placeholder="Describe the context, outcome, and impact of this item."></textarea>
                             </div>
-                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="portfolio-highlight-input"> <span>Marcar como destaque</span></label>
+                            <label class="identity-toggle identity-full-span"><input type="checkbox" id="portfolio-highlight-input"> <span>Mark as highlighted</span></label>
                             <div class="identity-actions identity-full-span">
-                                <button type="submit" class="btn btn-primary">Adicionar Item</button>
+                                <button type="submit" class="btn btn-primary">Add Item</button>
                                 <div id="portfolio-message" class="form-message"></div>
                             </div>
                         </form>
@@ -324,7 +325,7 @@
                         <div id="doc-message" class="form-message"></div>
                         <div class="asset-tabs">
                             <button class="tab-btn active" data-tab="image">Imagens</button>
-                            <button class="tab-btn" data-tab="video">Vídeos</button>
+                            <button class="tab-btn" data-tab="video">Videos</button>
                             <button class="tab-btn" data-tab="pdf">PDF</button>
                             <button class="tab-btn" data-tab="word">Word</button>
                         </div>
@@ -354,7 +355,7 @@
                 <div class="section-header">
                     <div>
                         <h2>User Management</h2>
-                        <p>Visualização de todos os usuários registrados no sistema.</p>
+                        <p>Overview of all users registered in the system.</p>
                     </div>
                     <button onclick="resetDatabase()" id="btn-reset-db" class="btn btn-secondary btn-sm hidden" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">
                     Limpar Banco
@@ -370,7 +371,7 @@
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Created</th>
-                                <th>Ação</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="users-table-body">
@@ -381,23 +382,95 @@
             </section>
         </div>
 
+        <div id="group-courses" class="section-group hidden">
+            <section class="card glassmorphism fade-in" id="courses-panel">
+                <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div>
+                        <h2>Courses & Learning Worlds</h2>
+                        <p>Organize ordered module trails and open a dedicated 3D world per course.</p>
+                    </div>
+                    <button id="btn-create-course" class="btn btn-primary btn-sm hidden">+ Create Course</button>
+                </div>
+
+                <div style="display:grid; grid-template-columns:minmax(280px, 360px) minmax(0, 1fr); gap:1.5rem; align-items:start;">
+                    <aside class="glassmorphism" style="padding:1rem; border-radius:20px; border:1px solid rgba(255,255,255,0.08);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; gap:0.75rem;">
+                            <strong>Your available courses</strong>
+                            <span id="courses-counter" class="operations-meta">0 courses</span>
+                        </div>
+                        <div id="courses-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <div class="empty-state-inline">Loading courses...</div>
+                        </div>
+                    </aside>
+
+                    <section id="course-detail-panel" class="glassmorphism" style="padding:1.25rem; border-radius:20px; border:1px solid rgba(255,255,255,0.08); min-height:320px;">
+                        <div id="course-detail-empty" class="empty-state-inline">Select a course to see its trail, modules, enrollments, and 3D world access.</div>
+                        <div id="course-detail-content" class="hidden">
+                            <div class="section-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                                <div>
+                                    <h3 id="course-title">Course</h3>
+                                    <p id="course-description">Course description</p>
+                                </div>
+                                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                                    <span id="course-progress-pill" class="operations-pill">0% progress</span>
+                                    <button id="btn-open-course-world" class="btn btn-primary btn-sm">Open 3D course world</button>
+                                </div>
+                            </div>
+
+                            <div id="course-manager-actions" class="hidden" style="margin-bottom:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+                                <button id="btn-edit-course" class="btn btn-secondary btn-sm">Edit Course</button>
+                                <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Attach Existing Module</button>
+                                <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Go to Modules Workbench</button>
+                            </div>
+
+                            <div class="operations-grid" style="margin-top:1rem;">
+                                <section class="operations-card operations-card-wide">
+                                    <div class="operations-card-header">
+                                        <h4>Ordered module trail</h4>
+                                        <span id="course-modules-meta" class="operations-meta">0 modules</span>
+                                    </div>
+                                    <div id="course-modules-list" class="operations-list empty-state-list">
+                                        <div class="empty-state-inline">No modules attached yet.</div>
+                                    </div>
+                                </section>
+
+                                <section class="operations-card hidden" id="course-enrollments-card">
+                                    <div class="operations-card-header">
+                                        <h4>Enrollments</h4>
+                                        <span id="course-enrollments-meta" class="operations-meta">0 learners</span>
+                                    </div>
+                                    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; align-items:center;">
+                                        <input type="number" id="course-enrollment-user-id" placeholder="User ID" class="glassmorphism" style="flex:1; border-radius:12px; padding:0.75rem 1rem; border:1px solid rgba(255,255,255,0.08); color:white; background:rgba(0,0,0,0.2);">
+                                        <button id="btn-enroll-user" class="btn btn-primary btn-sm">Enroll</button>
+                                    </div>
+                                    <div id="course-enrollments-list" class="operations-list empty-state-list">
+                                        <div class="empty-state-inline">No learners enrolled yet.</div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </div>
+
         <!-- MODULES GROUP -->
         <div id="group-modules" class="section-group hidden">
             <section class="card glassmorphism section-admin slide-up" id="modules-panel" style="display: block !important;">
                 <div class="section-header">
                     <div>
-                        <h2>Meus Módulos de Ensino</h2>
-                        <p id="module-counter">Limite: 0/5 módulos criados</p>
+                        <h2>My Teaching Modules</h2>
+                        <p id="module-counter">Limit: 0/5 modules created</p>
                     </div>
                     <button id="btn-create-module" class="btn btn-primary btn-sm" style="position: relative; z-index: 100; cursor: pointer !important;">
-                    + Criar Módulo
+                    + Create Module
                     </button>
                 </div>
                 
                 <div id="modules-list" class="modules-grid">
                     <!-- Populated via JS as Cards -->
                     <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
-                        Carregando módulos...
+                        Loading modules...
                     </div>
                 </div>
             </section>
@@ -405,27 +478,27 @@
             <!-- New Preview Section -->
             <div id="module-preview-section" class="module-preview-pane hidden">
                 <div class="preview-header">
-                    <h2 id="preview-title">Título do Módulo</h2>
+                    <h2 id="preview-title">Module Title</h2>
                     <div class="actions" style="display: flex; gap: 0.5rem;">
-                        <button id="btn-add-video-direct" class="btn btn-secondary btn-sm"><i class="fas fa-video"></i> + Vídeo</button>
+                        <button id="btn-add-video-direct" class="btn btn-secondary btn-sm"><i class="fas fa-video"></i> + Video</button>
                         <button id="btn-add-doc-direct" class="btn btn-secondary btn-sm"><i class="fas fa-file-alt"></i> + Doc</button>
                         <button id="btn-add-quiz-direct" class="btn btn-secondary btn-sm"><i class="fas fa-question-circle"></i> + Quiz</button>
-                        <button id="btn-edit-preview" class="btn btn-primary btn-sm">Editar Módulo</button>
+                        <button id="btn-edit-preview" class="btn btn-primary btn-sm">Edit Module</button>
                     </div>
                 </div>
                 
                 <!-- Horizontal Preview Tabs -->
                 <div class="preview-tabs">
-                    <button class="prev-tab active" data-pane="videos" onclick="switchPreviewTab('videos')">Vídeos</button>
+                    <button class="prev-tab active" data-pane="videos" onclick="switchPreviewTab('videos')">Videos</button>
                     <button class="prev-tab" data-pane="docs" onclick="switchPreviewTab('docs')">Documentos</button>
                     <button class="prev-tab" data-pane="quiz" onclick="switchPreviewTab('quiz')">Quiz</button>
-                    <button class="prev-tab" data-pane="reports" onclick="switchPreviewTab('reports')">Relatórios</button>
+                    <button class="prev-tab" data-pane="reports" onclick="switchPreviewTab('reports')">Reports</button>
                 </div>
 
                 <div class="preview-content">
                     <!-- Videos Pane -->
                     <div id="prev-pane-videos" class="prev-pane active">
-                        <div id="preview-videos-summary" class="assets-grid">Nenhum vídeo.</div>
+                        <div id="preview-videos-summary" class="assets-grid">No videos.</div>
                     </div>
 
                     <!-- Documents Pane (Sub-Tabs and Grid) -->
@@ -454,7 +527,7 @@
 
                     <!-- Reports Pane -->
                     <div id="prev-pane-reports" class="prev-pane">
-                        <div id="preview-reports-summary">Selecione um módulo para ver as estatísticas.</div>
+                        <div id="preview-reports-summary">Select a module to view statistics.</div>
                     </div>
                 </div>
             </div>
@@ -466,18 +539,18 @@
     <div id="module-editor-modal" class="modal hidden">
         <div class="modal-content glassmorphism" style="max-width: 900px;">
             <div class="modal-header">
-                <h2 id="editor-title">Editar Módulo</h2>
+                <h2 id="editor-title">Edit Module</h2>
                 <span class="close" onclick="closeModuleEditor()">&times;</span>
             </div>
             
             <div class="editor-container">
                 <div class="inner-tabs" id="editor-tabs">
-                    <button class="inner-tab-btn active" data-tab="basics">Geral</button>
-                    <button class="inner-tab-btn" data-tab="videos">Vídeos</button>
+                    <button class="inner-tab-btn active" data-tab="basics">General</button>
+                    <button class="inner-tab-btn" data-tab="videos">Videos</button>
                     <button class="inner-tab-btn" data-tab="docs">Documentos</button>
                     <button class="inner-tab-btn" data-tab="quiz">Quiz</button>
-                    <button class="inner-tab-btn" data-tab="forum">Fórum</button>
-                    <button class="inner-tab-btn" data-tab="reports">Relatórios</button>
+                    <button class="inner-tab-btn" data-tab="forum">Forum</button>
+                    <button class="inner-tab-btn" data-tab="reports">Reports</button>
                 </div>
 
                 <div class="editor-panes">
@@ -485,11 +558,11 @@
                     <div class="tab-pane active" id="pane-basics">
                         <form id="module-basics-form" class="editor-form">
                             <div class="input-group">
-                                <label>Título do Módulo</label>
-                                <input type="text" id="m-title" required placeholder="Ex: Introdução ao Three.js">
+                                <label>Module Title</label>
+                                <input type="text" id="m-title" required placeholder="Ex: Introduction to Three.js">
                             </div>
                             <div class="input-group">
-                                <label>Descrição</label>
+                                <label>Description</label>
                                 <textarea id="m-description" rows="4" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 1rem; color: white; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); font-family: inherit;"></textarea>
                             </div>
                             <div class="input-group">
@@ -497,10 +570,10 @@
                                 <input type="text" id="m-cover" placeholder="https://...">
                             </div>
                             <div class="form-actions" style="display: flex; gap: 1rem; align-items: center; margin-top: 1.5rem;">
-                                <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
                                 <button type="button" id="btn-publish-module" class="btn btn-secondary">Publicar</button>
                                 <div style="flex-grow: 1;"></div>
-                                <button type="button" id="btn-delete-module-editor" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">Excluir Módulo</button>
+                                <button type="button" id="btn-delete-module-editor" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">Delete Module</button>
                             </div>
                         </form>
                     </div>
@@ -508,7 +581,7 @@
                     <!-- Videos Pane -->
                     <div class="tab-pane" id="pane-videos">
                         <div class="header-actions" style="margin-bottom: 1.5rem;">
-                            <button onclick="showAddVideoForm()" class="btn btn-secondary btn-sm">+ Adicionar Vídeo</button>
+                            <button onclick="showAddVideoForm()" class="btn btn-secondary btn-sm">+ Add Video</button>
                         </div>
                         <ul id="v-list" class="content-list"></ul>
                     </div>
@@ -532,7 +605,7 @@
                     <!-- Forum Pane -->
                     <div class="tab-pane" id="pane-forum">
                         <div id="f-list" class="content-list">
-                            <p style="text-align: center; color: var(--text-muted); padding: 2rem;">As discussões do fórum aparecerão aqui quando os usuários interagirem.</p>
+                            <p style="text-align: center; color: var(--text-muted); padding: 2rem;">Forum discussions will appear here when users interact.</p>
                         </div>
                     </div>
 
@@ -543,10 +616,10 @@
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Usuário</th>
+                                        <th>User</th>
                                         <th>Progresso</th>
                                         <th>Nota Quiz</th>
-                                        <th>Ações</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="r-users-body"></tbody>
@@ -558,7 +631,7 @@
         </div>
     </div>
 
-    <!-- Sub-modais para adicionar conteúdo -->
+    <!-- Sub-modals for adding content -->
     <div id="sub-modal" class="modal hidden" style="z-index: 200;">
         <div class="modal-content glassmorphism" style="max-width: 500px;">
             <h3 id="sub-modal-title" style="margin-bottom: 1.5rem;">Sub Modal</h3>
@@ -578,7 +651,7 @@
                 <img id="image-to-crop" src="" style="max-width: 100%;">
             </div>
             <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
-                <button id="btn-crop-save" class="btn btn-primary">Salvar Perfil</button>
+                <button id="btn-crop-save" class="btn btn-primary">Save Profile</button>
                 <button onclick="closeCropModal()" class="btn btn-secondary">Cancelar</button>
             </div>
         </div>
@@ -589,6 +662,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="/app-config.js?v=1"></script>
     <script src="/js/app.js?v=2.1"></script>
+    <script src="/js/courses.js?v=1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             loadDashboard();

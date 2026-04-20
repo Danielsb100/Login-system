@@ -97,6 +97,9 @@ model User {
   actorNotifications Notification[] @relation("NotificationActor")
   reminders Reminder[]
   taskQueueItems TaskQueueItem[]
+  ownedCourses Course[] @relation("CourseOwner")
+  enrollments Enrollment[]
+  moduleCompletions ModuleCompletion[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -286,6 +289,18 @@ enum PlacementStatus {
   DELETED
 }
 
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  CANCELLED
+}
+
 enum LogSource {
   DASHBOARD
   MULTIPLAYER_WORLD
@@ -309,9 +324,72 @@ model TrainingModule {
   threads        ForumThread[]
   accessLogs     ModuleAccessLog[]
   placements     WorldModulePlacement[]
+  courseModules  CourseModule[]
+  completions    ModuleCompletion[]
   
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model Course {
+  id              Int                    @id @default(autoincrement())
+  ownerMasterId   Int
+  owner           User                   @relation("CourseOwner", fields: [ownerMasterId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  coverImage      String?
+  status          CourseStatus           @default(DRAFT)
+  sceneId         String                 @unique
+  courseModules   CourseModule[]
+  enrollments     Enrollment[]
+  completions     ModuleCompletion[]
+  placements      WorldModulePlacement[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+}
+
+model CourseModule {
+  id              Int                    @id @default(autoincrement())
+  courseId        Int
+  course          Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId        Int
+  module          TrainingModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  orderIndex      Int
+  isRequired      Boolean                @default(true)
+  roomLabel       String?
+  placement       WorldModulePlacement?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@unique([courseId, moduleId])
+}
+
+model Enrollment {
+  id              Int                    @id @default(autoincrement())
+  courseId        Int
+  course          Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          EnrollmentStatus       @default(ENROLLED)
+  progressPercent Float                  @default(0)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@unique([courseId, userId])
+}
+
+model ModuleCompletion {
+  id              Int                    @id @default(autoincrement())
+  courseId        Int
+  course          Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId        Int
+  module          TrainingModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source          LogSource              @default(DASHBOARD)
+  completedAt     DateTime               @default(now())
+
+  @@unique([courseId, moduleId, userId])
 }
 
 model ModuleVideo {
@@ -456,6 +534,10 @@ model WorldModulePlacement {
   id            Int             @id @default(autoincrement())
   ownerMasterId Int
   master        User            @relation("MasterPlacements", fields: [ownerMasterId], references: [id], onDelete: Cascade)
+  courseId      Int?
+  course        Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseModuleId Int?           @unique
+  courseModule  CourseModule?   @relation(fields: [courseModuleId], references: [id], onDelete: SetNull)
   moduleId      Int?
   module        TrainingModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   sceneId       String
