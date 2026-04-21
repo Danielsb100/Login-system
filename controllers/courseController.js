@@ -182,6 +182,9 @@ async function assertCourseAccess(courseId, user) {
           placement: true
         },
         orderBy: { orderIndex: 'asc' }
+      },
+      landingPage: {
+        select: { id: true, title: true, compiledHtml: true, compiledCss: true }
       }
     }
   });
@@ -294,7 +297,10 @@ async function getAccessibleCourses(req, res) {
           orderBy: { orderIndex: 'asc' }
         },
         enrollments: true,
-        completions: true
+        completions: true,
+        landingPage: {
+          select: { id: true, title: true }
+        }
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -313,7 +319,8 @@ async function getAccessibleCourses(req, res) {
         progressPercent: progress.progressPercent,
         completedCount: progress.completedCount,
         modules: progress.modules,
-        canManage: managerView
+        canManage: managerView,
+        landingPage: course.landingPage
       };
     });
 
@@ -342,6 +349,7 @@ async function getCourseDetail(req, res) {
       progressPercent: progress.progressPercent,
       completedCount: progress.completedCount,
       modules: progress.modules,
+      landingPage: course.landingPage,
       enrollments: managerView
         ? course.enrollments.map((item) => ({
             id: item.id,
@@ -583,7 +591,8 @@ async function getCourseRuntime(req, res) {
       enrollment,
       progressPercent: progress.progressPercent,
       completedCount: progress.completedCount,
-      modules: progress.modules
+      modules: progress.modules,
+      landingPage: course.landingPage
     });
   } catch (error) {
     if (error.message === 'COURSE_NOT_FOUND') {

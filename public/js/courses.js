@@ -250,6 +250,19 @@ function renderCourseDetail(course) {
     document.getElementById('course-title').textContent = course.title;
     document.getElementById('course-description').textContent = course.description || 'No description yet.';
     document.getElementById('course-progress-pill').textContent = `${course.progressPercent || 0}% progress`;
+    
+    const lpPill = document.getElementById('course-landing-page-pill');
+    if (lpPill) {
+        if (course.landingPage) {
+            lpPill.textContent = 'LP: ' + course.landingPage.title;
+            lpPill.style.borderColor = 'rgba(96,165,250,0.4)';
+            lpPill.style.color = '#60a5fa';
+        } else {
+            lpPill.textContent = 'No Landing Page';
+            lpPill.style.borderColor = 'rgba(255,255,255,0.1)';
+            lpPill.style.color = 'var(--text-muted)';
+        }
+    }
     const openCourseWorldButton = document.getElementById('btn-open-course-world');
     if (openCourseWorldButton) {
         openCourseWorldButton.textContent = 'Enter this course world';
@@ -397,6 +410,99 @@ async function attachExistingModule() {
     modal.classList.remove('hidden');
 }
 
+let __selectedLandingPageId = null;
+
+async function openLinkLandingPageModal() {
+    if (!coursesState.selectedCourse) return;
+    const modal = document.getElementById('course-landing-page-modal');
+    const listContainer = document.getElementById('course-landing-page-options');
+    const emptyMsg = document.getElementById('course-landing-page-empty');
+    if (!modal || !listContainer || !emptyMsg) return;
+
+    try {
+        const pages = await window.apiCall('/landing-pages');
+        if (!modal.classList.contains('hidden') && __selectedLandingPageId) {
+            // keep selection across re-renders
+        } else {
+            __selectedLandingPageId = coursesState.selectedCourse.landingPage ? coursesState.selectedCourse.landingPage.id : null;
+        }
+
+        listContainer.innerHTML = '';
+        if (!pages || pages.length === 0) {
+            emptyMsg.classList.remove('hidden');
+        } else {
+            emptyMsg.classList.add('hidden');
+            pages.forEach(page => {
+                const isSelected = __selectedLandingPageId === page.id;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'glassmorphism';
+                btn.style.cssText = `text-align:left; width:100%; padding:0.9rem 1rem; border-radius:16px; border:1px solid ${isSelected ? 'rgba(96,165,250,0.7)' : 'rgba(255,255,255,0.08)'}; background:${isSelected ? 'rgba(37,99,235,0.22)' : 'rgba(15,23,42,0.5)'}; color:white; cursor:pointer;`;
+                btn.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                        <div>
+                            <strong style="display:block; margin-bottom:0.25rem;">${escapeCourseHtml(page.title)}</strong>
+                            <span style="font-size:0.82rem; color:var(--text-muted);">${page.course ? (page.course.id === coursesState.selectedCourseId ? 'Linked to this course' : `Linked to another course: ${page.course.title}`) : 'Unlinked'}</span>
+                        </div>
+                    </div>
+                `;
+                btn.onclick = () => {
+                    __selectedLandingPageId = page.id;
+                    openLinkLandingPageModal(); // re-render list
+                };
+                listContainer.appendChild(btn);
+            });
+        }
+
+        const confirmBtn = document.getElementById('btn-confirm-landing-page');
+        const unlinkBtn = document.getElementById('btn-unlink-landing-page');
+
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                if (!__selectedLandingPageId) { alert('Select a landing page'); return; }
+                try {
+                    confirmBtn.disabled = true;
+                    // First fetch the old landing page to unlink if it exists? No needed, Prisma handles 1-1 reassignment
+                    await window.apiCall(`/landing-pages/${__selectedLandingPageId}`, 'PUT', { courseId: coursesState.selectedCourseId });
+                    modal.classList.add('hidden');
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                    if (window.loadLandingPages) window.loadLandingPages(); // Refresh the landing pages tab state if available
+                } catch(e) {
+                    alert(e.message);
+                } finally {
+                    confirmBtn.disabled = false;
+                }
+            };
+        }
+
+        if (unlinkBtn) {
+            // Only active if there's currently a linked landing page
+            unlinkBtn.style.opacity = coursesState.selectedCourse.landingPage ? '1' : '0.4';
+            unlinkBtn.onclick = async () => {
+                if (!coursesState.selectedCourse.landingPage) return;
+                try {
+                    unlinkBtn.disabled = true;
+                    await window.apiCall(`/landing-pages/${coursesState.selectedCourse.landingPage.id}`, 'PUT', { courseId: null });
+                    modal.classList.add('hidden');
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                    if (window.loadLandingPages) window.loadLandingPages();
+                } catch(e) {
+                    alert(e.message);
+                } finally {
+                    unlinkBtn.disabled = false;
+                }
+            };
+        }
+
+        modal.classList.remove('hidden');
+    } catch(e) {
+        alert('Failed to load landing pages.');
+        console.error(e);
+    }
+}
+
 async function enrollUser(userId) {
     if (!coursesState.selectedCourse) return;
     if (!userId) {
@@ -459,6 +565,11 @@ window.loadCoursesPanel = async function loadCoursesPanel({ user, canManageCours
     const workbenchButton = document.getElementById('btn-open-module-workbench');
     if (workbenchButton) {
         workbenchButton.onclick = () => window.switchSection?.('modules');
+    }
+
+    const linkLandingPageBtn = document.getElementById('btn-link-landing-page');
+    if (linkLandingPageBtn) {
+        linkLandingPageBtn.onclick = openLinkLandingPageModal;
     }
 
     const queryInput = document.getElementById('course-enrollment-query');

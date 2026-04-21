@@ -24,6 +24,7 @@ const placementController = require('./controllers/placementController');
 const reportController = require('./controllers/reportController');
 const notificationController = require('./controllers/notificationController');
 const courseController = require('./controllers/courseController');
+const landingPageController = require('./controllers/landingPageController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
@@ -116,6 +117,15 @@ app.delete('/courses/:id/modules/:courseModuleId', authenticateToken, roleMiddle
 app.post('/courses/:id/enrollments', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.enrollUser);
 app.get('/courses/:id/runtime', authenticateToken, courseController.getCourseRuntime);
 app.post('/courses/:id/modules/:moduleId/complete', authenticateToken, courseController.completeCourseModule);
+
+// --- Landing Pages API ---
+app.get('/api/landing-pages', authenticateToken, landingPageController.getLandingPages);
+app.get('/api/landing-pages/:id', authenticateToken, landingPageController.getLandingPageById);
+app.get('/api/landing-pages/course/:courseId', landingPageController.getLandingPageByCourseId);
+app.post('/api/landing-pages', authenticateToken, landingPageController.createLandingPage);
+app.put('/api/landing-pages/:id', authenticateToken, landingPageController.updateLandingPage);
+app.delete('/api/landing-pages/:id', authenticateToken, landingPageController.deleteLandingPage);
+
 
 app.post('/modules', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.createModule);
 app.get('/modules/my', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.getMyModules);
