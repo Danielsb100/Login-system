@@ -836,6 +836,8 @@ async function loadDashboard() {
                 const btnReset = document.getElementById('btn-reset-db');
                 if (btnReset) btnReset.classList.remove('hidden');
                 document.getElementById('tab-modules').classList.remove('hidden');
+                const tabLanding = document.getElementById('tab-landingPages');
+                if (tabLanding) tabLanding.classList.remove('hidden');
                 await loadModulesPanel();
             }
         }
