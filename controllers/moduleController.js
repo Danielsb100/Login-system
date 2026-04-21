@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { notifyModulePublished } = require('../services/notificationService');
 
 /**
  * Helper to format module based on target (Edit vs Runtime)
@@ -189,18 +190,32 @@ const updateModule = async (req, res) => {
 const patchStatus = async (req, res, status) => {
     try {
         const { id } = req.params;
-        const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
+        const moduleId = parseInt(id);
+        const module = await prisma.trainingModule.findUnique({ where: { id: moduleId } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
         if (module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
             return res.status(403).json({ error: 'Not authorized' });
         }
 
-        const updated = await prisma.trainingModule.update({
-            where: { id: parseInt(id) },
-            data: { status }
+        const updated = await prisma.$transaction(async (tx) => {
+            const nextModule = await tx.trainingModule.update({
+                where: { id: moduleId },
+                data: { status }
+            });
+
+            if (status === 'PUBLISHED' && module.status !== 'PUBLISHED') {
+                await notifyModulePublished({
+                    module: nextModule,
+                    actorUserId: req.user.id
+                }, tx);
+            }
+
+            return nextModule;
         });
+
         res.json(updated);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Failed to update status' });
     }
 };

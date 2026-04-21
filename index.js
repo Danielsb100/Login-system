@@ -22,6 +22,11 @@ const forumController = require('./controllers/forumController');
 const analyticsController = require('./controllers/analyticsController');
 const placementController = require('./controllers/placementController');
 const reportController = require('./controllers/reportController');
+const notificationController = require('./controllers/notificationController');
+const courseController = require('./controllers/courseController');
+
+const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
+const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -73,6 +78,7 @@ app.post('/auth/password/reset', authController.resetPassword);
 app.get('/auth/verify', authenticateToken, authController.verify);
 
 app.get('/api/users', authenticateToken, roleMiddleware(['ADMIN', 'MASTER']), userController.getAllUsers);
+app.get('/api/users/search', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), userController.searchUsers);
 app.patch('/api/users/:id/roles', authenticateToken, roleMiddleware(['ADMIN', 'MASTER', 'SUPER_ADMIN']), userController.updateUserRoles);
 app.post('/api/users/reset', authenticateToken, roleMiddleware(['MASTER']), userController.resetDatabase);
 app.delete('/api/users/:id', authenticateToken, roleMiddleware(['MASTER']), userController.deleteUser);
@@ -92,60 +98,79 @@ app.post('/api/profile/portfolio', authenticateToken, profileController.createPo
 app.put('/api/profile/portfolio/:id', authenticateToken, profileController.updatePortfolioItem);
 app.delete('/api/profile/portfolio/:id', authenticateToken, profileController.deletePortfolioItem);
 
-app.post('/modules', authenticateToken, roleMiddleware(['MASTER']), moduleController.createModule);
-app.get('/modules/my', authenticateToken, roleMiddleware(['MASTER']), moduleController.getMyModules);
+app.get('/api/notifications/summary', authenticateToken, notificationController.getSummary);
+app.patch('/api/notifications/read-all', authenticateToken, notificationController.setAllNotificationsRead);
+app.patch('/api/notifications/:id/read', authenticateToken, notificationController.setNotificationRead);
+app.patch('/api/tasks/:id', authenticateToken, notificationController.updateTaskStatus);
+app.patch('/api/reminders/:id', authenticateToken, notificationController.updateReminder);
+
+app.post('/courses', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.createCourse);
+app.get('/courses/my', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.getMyCourses);
+app.get('/courses/accessible', authenticateToken, courseController.getAccessibleCourses);
+app.get('/courses/:id', authenticateToken, courseController.getCourseDetail);
+app.put('/courses/:id', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.updateCourse);
+app.post('/courses/:id/modules', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.addModuleToCourse);
+app.patch('/courses/:id/modules/reorder', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.reorderCourseModules);
+app.patch('/courses/:id/modules/:courseModuleId', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.updateCourseModule);
+app.delete('/courses/:id/modules/:courseModuleId', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.removeCourseModule);
+app.post('/courses/:id/enrollments', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), courseController.enrollUser);
+app.get('/courses/:id/runtime', authenticateToken, courseController.getCourseRuntime);
+app.post('/courses/:id/modules/:moduleId/complete', authenticateToken, courseController.completeCourseModule);
+
+app.post('/modules', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.createModule);
+app.get('/modules/my', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.getMyModules);
 app.get(
   '/modules/my/assignable',
   authenticateToken,
-  roleMiddleware(['MASTER']),
+  roleMiddleware(MODULE_MANAGER_ROLES),
   moduleController.getMyAssignableModules
 );
 app.get('/modules', authenticateToken, moduleController.getAllPublishedModules);
 app.get('/modules/:id', authenticateToken, moduleController.getModuleById);
-app.put('/modules/:id', authenticateToken, roleMiddleware(['MASTER']), moduleController.updateModule);
-app.patch('/modules/:id/publish', authenticateToken, roleMiddleware(['MASTER']), (req, res) =>
+app.put('/modules/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.updateModule);
+app.patch('/modules/:id/publish', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), (req, res) =>
   moduleController.patchStatus(req, res, 'PUBLISHED')
 );
-app.patch('/modules/:id/archive', authenticateToken, roleMiddleware(['MASTER']), (req, res) =>
+app.patch('/modules/:id/archive', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), (req, res) =>
   moduleController.patchStatus(req, res, 'ARCHIVED')
 );
-app.delete('/modules/:id', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), moduleController.deleteModule);
+app.delete('/modules/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.deleteModule);
 
-app.get('/modules/:id/edit-format', authenticateToken, roleMiddleware(['MASTER', 'ADMIN']), moduleController.getEditFormat);
+app.get('/modules/:id/edit-format', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), moduleController.getEditFormat);
 app.get('/runtime/modules/:id', authenticateToken, moduleController.getRuntimeFormat);
 
-app.post('/modules/:id/videos', authenticateToken, roleMiddleware(['MASTER']), contentController.addVideo);
-app.put('/modules/:id/videos/:videoId', authenticateToken, roleMiddleware(['MASTER']), contentController.updateVideo);
+app.post('/modules/:id/videos', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addVideo);
+app.put('/modules/:id/videos/:videoId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.updateVideo);
 app.delete(
   '/modules/:id/videos/:videoId',
   authenticateToken,
-  roleMiddleware(['MASTER']),
+  roleMiddleware(MODULE_MANAGER_ROLES),
   contentController.deleteVideo
 );
 
-app.post('/modules/:id/documents', authenticateToken, roleMiddleware(['MASTER']), contentController.addDocument);
+app.post('/modules/:id/documents', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addDocument);
 app.put(
   '/modules/:id/documents/:documentId',
   authenticateToken,
-  roleMiddleware(['MASTER']),
+  roleMiddleware(MODULE_MANAGER_ROLES),
   contentController.updateDocument
 );
 app.delete(
   '/modules/:id/documents/:documentId',
   authenticateToken,
-  roleMiddleware(['MASTER']),
+  roleMiddleware(MODULE_MANAGER_ROLES),
   contentController.deleteDocument
 );
-
-app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(['MASTER']), contentController.createQuiz);
-app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(['MASTER']), contentController.deleteQuiz);
-app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(['MASTER']), contentController.addQuizQuestion);
-app.delete(
-  '/modules/:id/quiz/questions/:questionId',
+app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createQuiz);
+app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuiz);
+app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addQuizQuestion);
+app.put(
+  '/quizzes/:quizId/questions/:questionId',
   authenticateToken,
-  roleMiddleware(['MASTER']),
-  contentController.deleteQuizQuestion
+  roleMiddleware(MODULE_MANAGER_ROLES),
+  contentController.updateQuizQuestion
 );
+
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
 

@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { notifyQuizSubmitted } = require('../services/notificationService');
 
 // --- Video Management ---
 
@@ -282,11 +283,13 @@ const deleteQuizQuestion = async (req, res) => {
 const submitQuiz = async (req, res) => {
     try {
         const { id } = req.params; // moduleId
-        const { answers } = req.body; // array of { questionId, optionId }
+        const { answers, courseId } = req.body; // array of { questionId, optionId }
         const userId = req.user.id;
+        const moduleId = parseInt(id);
+        const parsedCourseId = courseId ? parseInt(courseId) : null;
 
         const module = await prisma.trainingModule.findUnique({ 
-            where: { id: parseInt(id) },
+            where: { id: moduleId },
             include: { quizzes: { include: { questions: { include: { options: true } } } } }
         });
 
@@ -318,21 +321,53 @@ const submitQuiz = async (req, res) => {
 
         // Get attempt number
         const lastSubmission = await prisma.quizSubmission.findFirst({
-            where: { moduleId: parseInt(id), userId },
+            where: { moduleId, userId },
             orderBy: { attemptNumber: 'desc' }
         });
         const attemptNumber = lastSubmission ? lastSubmission.attemptNumber + 1 : 1;
 
-        const submission = await prisma.quizSubmission.create({
-            data: {
-                moduleId: parseInt(id),
-                userId,
-                score,
-                attemptNumber,
-                answers: {
-                    create: resultAnswers
+        const submission = await prisma.$transaction(async (tx) => {
+            const createdSubmission = await tx.quizSubmission.create({
+                data: {
+                    moduleId,
+                    userId,
+                    score,
+                    attemptNumber,
+                    answers: {
+                        create: resultAnswers
+                    }
                 }
+            });
+
+            if (parsedCourseId) {
+                await tx.moduleCompletion.upsert({
+                    where: {
+                        courseId_moduleId_userId: {
+                            courseId: parsedCourseId,
+                            moduleId,
+                            userId
+                        }
+                    },
+                    update: {
+                        source: req.body.source || 'MULTIPLAYER_WORLD',
+                        completedAt: new Date()
+                    },
+                    create: {
+                        courseId: parsedCourseId,
+                        moduleId,
+                        userId,
+                        source: req.body.source || 'MULTIPLAYER_WORLD'
+                    }
+                });
             }
+
+            await notifyQuizSubmitted({
+                module,
+                submission: createdSubmission,
+                actorUserId: userId
+            }, tx);
+
+            return createdSubmission;
         });
 
         res.status(201).json({

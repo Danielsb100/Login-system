@@ -44,7 +44,7 @@ async function openModuleEditor(id = null) {
     }
 
     if (!id) {
-        title.textContent = 'Criar Novo Módulo';
+        title.textContent = 'Create New Module';
         const form = document.getElementById('module-basics-form');
         if (form) form.reset();
         const tabs = document.getElementById('editor-tabs');
@@ -53,7 +53,7 @@ async function openModuleEditor(id = null) {
         return;
     }
 
-    title.textContent = 'Configurar Conteúdo do Módulo';
+    title.textContent = 'Configure Module Content';
     if (modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'block'; // Force show
@@ -117,28 +117,40 @@ function logout() {
 /**
  * Redireciona para o projeto Multiplayer passando o token atual
  */
-function goToMultiplayer() {
+function goToMultiplayer(courseId = null) {
     const token = getToken();
     if (!token) {
-        alert('Você precisa estar logado para acessar o mundo 3D.');
+        alert('You need to be logged in to access the 3D world.');
         return;
     }
 
-    // A URL pode ser ajustada conforme necessário. 
-    // Se estiver rodando localmente e o multiplayer estiver na porta 3001:
     if (!MULTIPLAYER_URL) {
-        alert('A URL do mundo 3D nao esta configurada neste ambiente.');
+        alert('The 3D world URL is not configured in this environment.');
         return;
     }
 
-    // Abre em uma nova aba com o token na URL
-    window.open(`${MULTIPLAYER_URL}?token=${encodeURIComponent(token)}`, '_blank');
+    const targetUrl = new URL(MULTIPLAYER_URL);
+    targetUrl.searchParams.set('token', token);
+    if (courseId) {
+        targetUrl.searchParams.set('courseId', String(courseId));
+    }
+
+    window.open(targetUrl.toString(), '_blank');
 }
 window.goToMultiplayer = goToMultiplayer;
+window.getCurrentIdentity = () => currentIdentity;
 
 let currentVerifyEmail = '';
 let currentIdentity = null;
 let currentPortfolioItems = [];
+let currentNotificationsSummary = null;
+
+const PRIORITY_LABELS = {
+    LOW: 'Low',
+    MEDIUM: 'Medium',
+    HIGH: 'High',
+    CRITICAL: 'Critical'
+};
 
 function formatRoleLabel(role) {
     return String(role || 'GUEST')
@@ -168,6 +180,178 @@ function setCheckboxValue(id, value) {
     const element = document.getElementById(id);
     if (element) element.checked = Boolean(value);
 }
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatDateLabel(value) {
+    if (!value) return 'No due date';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'No due date';
+
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function renderEmptyState(containerId, message) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = `<div class="empty-state-inline">${escapeHtml(message)}</div>`;
+}
+
+function renderOperationItems(containerId, items, renderer, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!items || items.length === 0) {
+        renderEmptyState(containerId, emptyMessage);
+        return;
+    }
+
+    container.innerHTML = items.map(renderer).join('');
+}
+
+function renderNotificationItem(item) {
+    const statusTag = item.status === 'UNREAD' ? '<span class="operation-tag priority-medium">Unread</span>' : '<span class="operation-tag">Read</span>';
+    const actionLink = item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : '';
+    const readAction = item.status === 'UNREAD'
+        ? `<button type="button" class="btn btn-secondary btn-sm" onclick="markNotificationRead(${Number(item.id)})">Mark as read</button>`
+        : '';
+
+    return `
+        <article class="operation-item ${item.status === 'UNREAD' ? 'is-unread' : ''}">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.message)}</p>
+                </div>
+                ${statusTag}
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Low')}</span>
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.createdAt))}</span>
+                    <span class="operation-tag">${escapeHtml(item.type || 'SYSTEM')}</span>
+                </div>
+                <div class="operation-actions">
+                    ${actionLink}
+                    ${readAction}
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderTaskQueueItem(item) {
+    const statusAction = item.status === 'IN_PROGRESS'
+        ? `<button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'COMPLETED')">Complete</button>`
+        : `<button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'IN_PROGRESS')">Start</button>`;
+
+    return `
+        <article class="operation-item ${item.priority === 'CRITICAL' ? 'is-urgent' : ''}">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.summary || 'No operational summary.')}</p>
+                </div>
+                <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Low')}</span>
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag">${escapeHtml(item.bucket || 'TODAY')}</span>
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.dueAt || item.scheduledFor))}</span>
+                </div>
+                <div class="operation-actions">
+                    ${item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : ''}
+                    ${statusAction}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateTaskQueueItemStatus(${Number(item.id)}, 'DISMISSED')">Dismiss</button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderReminderItem(item) {
+    return `
+        <article class="operation-item">
+            <div class="operation-item-head">
+                <div>
+                    <h5>${escapeHtml(item.title)}</h5>
+                    <p>${escapeHtml(item.description || 'Internal reminder with no additional description.')}</p>
+                </div>
+                <span class="operation-tag priority-${String(item.priority || 'LOW').toLowerCase()}">${escapeHtml(PRIORITY_LABELS[item.priority] || item.priority || 'Low')}</span>
+            </div>
+            <div class="operation-item-footer">
+                <div class="operation-meta-row">
+                    <span class="operation-tag">${escapeHtml(formatDateLabel(item.dueAt))}</span>
+                    <span class="operation-tag">${escapeHtml(item.type || 'SYSTEM_REMINDER')}</span>
+                </div>
+                <div class="operation-actions">
+                    ${item.actionUrl ? `<a class="operation-link" href="${escapeHtml(item.actionUrl)}">Abrir</a>` : ''}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateReminderStatus(${Number(item.id)}, 'COMPLETED')">Complete</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="updateReminderStatus(${Number(item.id)}, 'DISMISSED')">Dismiss</button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderNotificationsSummary(summary) {
+    currentNotificationsSummary = summary;
+    document.getElementById('ops-unread-count').textContent = `${summary.counts.unread} unread`;
+    document.getElementById('ops-urgent-count').textContent = `${summary.counts.urgent} urgent`;
+    document.getElementById('ops-inbox-meta').textContent = `${summary.inbox.length} itens`;
+    document.getElementById('ops-today-meta').textContent = `${summary.operational.today.length} pending`;
+    document.getElementById('ops-urgent-meta').textContent = `${summary.operational.urgent.length} blocked`;
+    document.getElementById('ops-week-meta').textContent = `${summary.weeklyGoals.length} goals`;
+    document.getElementById('ops-reminders-meta').textContent = `${summary.reminders.length} reminders`;
+
+    renderOperationItems('notifications-inbox', summary.inbox, renderNotificationItem, 'No notifications yet.');
+    renderOperationItems('operations-today', summary.operational.today, renderTaskQueueItem, 'Nothing planned for today.');
+    renderOperationItems('operations-urgent', summary.operational.urgent, renderTaskQueueItem, 'Sem urgent no momento.');
+    renderOperationItems('operations-week', summary.weeklyGoals, renderTaskQueueItem, 'No operational goals yet this week.');
+    renderOperationItems('operations-reminders', summary.reminders, renderReminderItem, 'No open automatic reminders.');
+}
+
+async function loadNotificationsSummary() {
+    const summary = await apiCall('/api/notifications/summary');
+    renderNotificationsSummary(summary);
+    return summary;
+}
+
+async function markNotificationRead(id) {
+    await apiCall(`/api/notifications/${id}/read`, 'PATCH');
+    await loadNotificationsSummary();
+}
+window.markNotificationRead = markNotificationRead;
+
+async function markAllNotificationsRead() {
+    await apiCall('/api/notifications/read-all', 'PATCH');
+    await loadNotificationsSummary();
+}
+window.markAllNotificationsRead = markAllNotificationsRead;
+
+async function updateTaskQueueItemStatus(id, status) {
+    await apiCall(`/api/tasks/${id}`, 'PATCH', { status });
+    await loadNotificationsSummary();
+}
+window.updateTaskQueueItemStatus = updateTaskQueueItemStatus;
+
+async function updateReminderStatus(id, status) {
+    await apiCall(`/api/reminders/${id}`, 'PATCH', { status });
+    await loadNotificationsSummary();
+}
+window.updateReminderStatus = updateReminderStatus;
 
 function showPasswordRequestSection(email = '') {
     fillInputValue('password-request-email', email);
@@ -229,7 +413,7 @@ function renderIdentityState(identity) {
     document.getElementById('profile-id').textContent = `#${user.id}`;
     document.getElementById('profile-display-name-heading').textContent = displayName;
     document.getElementById('profile-display-name').textContent = displayName;
-    document.getElementById('profile-headline-display').textContent = profile.headline || 'Adicione uma headline para contextualizar seu papel no ecossistema.';
+    document.getElementById('profile-headline-display').textContent = profile.headline || 'Add a headline to contextualize your role in the ecosystem.';
     document.getElementById('profile-roles-list').textContent = rolesText;
     document.getElementById('profile-language').textContent = preferences.language || 'pt-BR';
 
@@ -271,7 +455,7 @@ function renderIdentityState(identity) {
     setCheckboxValue('consent-world-profile-input', consents.worldProfileCard?.granted ?? preferences.showProfileInWorld);
 
     const termsStatus = consents.termsAndPrivacy?.granted
-        ? `Aceito na versão ${consents.termsAndPrivacy.version}`
+        ? `Accepted in version ${consents.termsAndPrivacy.version}`
         : 'Pendente';
     document.getElementById('consent-terms-status').textContent = termsStatus;
 
@@ -283,7 +467,7 @@ function renderPortfolioItems() {
     if (!container) return;
 
     if (!currentPortfolioItems.length) {
-        container.innerHTML = '<div class="identity-empty">Nenhum item de portfólio cadastrado ainda.</div>';
+        container.innerHTML = '<div class="identity-empty">No portfolio items added yet.</div>';
         return;
     }
 
@@ -296,11 +480,11 @@ function renderPortfolioItems() {
                 </div>
                 ${item.highlight ? '<span class="portfolio-highlight">Destaque</span>' : ''}
             </div>
-            <p class="portfolio-description">${item.description || 'Sem descrição.'}</p>
+            <p class="portfolio-description">${item.description || 'No description.'}</p>
             ${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.url}</a>` : ''}
             <div class="portfolio-actions">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="editPortfolioItem(${item.id})">Editar</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="deletePortfolioItemEntry(${item.id})">Excluir</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="editPortfolioItem(${item.id})">Edit</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="deletePortfolioItemEntry(${item.id})">Delete</button>
             </div>
         </article>
     `).join('');
@@ -309,17 +493,17 @@ function renderPortfolioItems() {
 async function editPortfolioItem(id) {
     const item = currentPortfolioItems.find(entry => entry.id === id);
     if (!item) {
-        alert('Item de portfólio não encontrado.');
+        alert('Portfolio item not found.');
         return;
     }
 
-    const title = prompt('Título do item', item.title);
+    const title = prompt('Item title', item.title);
     if (title === null) return;
 
     const url = prompt('URL do item', item.url || '');
     if (url === null) return;
 
-    const description = prompt('Descrição do item', item.description || '');
+    const description = prompt('Item description', item.description || '');
     if (description === null) return;
 
     const itemType = prompt('Tipo do item (PROJECT, LINK, CERTIFICATE...)', item.itemType || 'LINK');
@@ -333,19 +517,19 @@ async function editPortfolioItem(id) {
             itemType
         });
         await refreshIdentityState();
-        showMessage('portfolio-message', 'Item de portfólio atualizado.', false);
+        showMessage('portfolio-message', 'Portfolio item updated.', false);
     } catch (error) {
         showMessage('portfolio-message', error.message, true);
     }
 }
 
 async function deletePortfolioItemEntry(id) {
-    if (!confirm('Deseja remover este item do portfólio?')) return;
+    if (!confirm('Do you want to remove this portfolio item?')) return;
 
     try {
         await apiCall(`/api/profile/portfolio/${id}`, 'DELETE');
         await refreshIdentityState();
-        showMessage('portfolio-message', 'Item removido do portfólio.', false);
+        showMessage('portfolio-message', 'Portfolio item removed.', false);
     } catch (error) {
         showMessage('portfolio-message', error.message, true);
     }
@@ -389,7 +573,7 @@ if (btnResend) {
             const debugCodeEl = document.getElementById('verify-debug-code');
             if (debugCodeEl) {
                 debugCodeEl.textContent = response.debugVerificationCode
-                    ? `Código local de teste: ${response.debugVerificationCode}`
+                    ? `Local test code: ${response.debugVerificationCode}`
                     : '';
             }
         } catch (error) {
@@ -497,18 +681,15 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         const errorMessage =
             typeof data.error === 'string'
                 ? data.error
-                : data?.error?.message || data.message || 'Something went wrong';
-
-        const error = new Error(errorMessage);
-        // Attach any extra properties from the backend (like needsVerification)
-        if (data && typeof data === 'object') {
-            Object.assign(error, data);
-        }
-        throw error;
+                : typeof data.message === 'string'
+                    ? data.message
+                    : 'Unexpected request error';
+        throw new Error(errorMessage);
     }
-    
+
     return data;
 }
+window.apiCall = apiCall;
 
 // Global Robust Listener for Module Creation
 document.addEventListener('click', (e) => {
@@ -562,7 +743,7 @@ if (registerForm) {
         const btn = registerForm.querySelector('button');
 
         if (!acceptedTerms) {
-            showMessage('register-message', 'Você precisa aceitar os termos e a política de privacidade.', true);
+            showMessage('register-message', 'You need to accept the terms and privacy policy.', true);
             return;
         }
 
@@ -586,7 +767,7 @@ if (registerForm) {
                 const debugCodeEl = document.getElementById('verify-debug-code');
                 if (debugCodeEl) {
                     debugCodeEl.textContent = res.debugVerificationCode
-                        ? `Código local de teste: ${res.debugVerificationCode}`
+                        ? `Local test code: ${res.debugVerificationCode}`
                         : '';
                 }
             } else {
@@ -607,6 +788,25 @@ if (registerForm) {
 // --- Dashboard Logic ---
 
 let adminUsersCache = [];
+const ASSIGNABLE_ROLE_OPTIONS = ['STUDENT', 'TEACHER', 'TUTOR', 'BUSINESS_MENTOR', 'COORDINATOR', 'ADMIN', 'GUEST', 'SUPER_ADMIN'];
+let currentRoleModalUserId = null;
+
+const markNotificationsReadButton = document.getElementById('btn-mark-notifications-read');
+if (markNotificationsReadButton) {
+    markNotificationsReadButton.addEventListener('click', async () => {
+        try {
+            markNotificationsReadButton.disabled = true;
+            markNotificationsReadButton.textContent = 'Updating...';
+            await markAllNotificationsRead();
+        } catch (error) {
+            console.error('Failed to mark notifications as read:', error);
+            alert(error.message || 'Could not update the inbox.');
+        } finally {
+            markNotificationsReadButton.disabled = false;
+            markNotificationsReadButton.textContent = 'Mark inbox as read';
+        }
+    });
+}
 
 async function refreshIdentityState() {
     const identity = await apiCall('/api/profile/me');
@@ -623,9 +823,11 @@ async function loadDashboard() {
 
     try {
         const identity = await refreshIdentityState();
+        await loadNotificationsSummary();
         const user = identity.user;
         const isAdmin = hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN']) || user.role === 'ADMIN';
-        const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
+        const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'TUTOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
+        const canManageCourses = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'TUTOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
 
         if (isAdmin || canManageModules) {
             await loadAdminPanel();
@@ -638,11 +840,18 @@ async function loadDashboard() {
             }
         }
 
+        if (window.loadCoursesPanel) {
+            await window.loadCoursesPanel({
+                user,
+                canManageCourses
+            });
+        }
+
         await loadUserDocuments();
     } catch (error) {
         console.error('Dashboard error:', error);
         if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
-            alert('Sessão expirada. Por favor, faça login novamente.');
+            alert('Session expired. Please log in again.');
             logout();
         } else {
             console.error('Critical Dashboard failure: ', error.message);
@@ -680,10 +889,10 @@ async function loadAdminPanel() {
                 </td>
                 <td>${date}</td>
                 <td style="text-align: right;">
-                    <button onclick="promptUpdateUserRoles(${u.id})" class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 6px;" title="Atualizar Papéis">
+                    <button onclick="openUserRolesModal(${u.id})" class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 6px;" title="Update Roles">
                         <i class="fas fa-user-shield"></i>
                     </button>
-                    <button onclick="deleteUser(${u.id})" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3); padding: 4px 8px;" title="Excluir Usuário">
+                    <button onclick="deleteUser(${u.id})" class="btn btn-secondary btn-sm" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3); padding: 4px 8px;" title="Delete User">
                         <i class="fas fa-times"></i>
                     </button>
                 </td>
@@ -704,7 +913,7 @@ if (advancedProfileForm) {
 
         try {
             submitButton.disabled = true;
-            submitButton.textContent = 'Salvando...';
+            submitButton.textContent = 'Saving...';
             const response = await apiCall('/api/profile/me', 'PUT', {
                 displayName: document.getElementById('profile-display-name-input').value,
                 headline: document.getElementById('profile-headline-input').value,
@@ -721,12 +930,12 @@ if (advancedProfileForm) {
                 githubUrl: document.getElementById('profile-github-input').value
             });
             renderIdentityState(response);
-            showMessage('advanced-profile-message', response.message || 'Perfil atualizado.', false);
+            showMessage('advanced-profile-message', response.message || 'Profile updated.', false);
         } catch (error) {
             showMessage('advanced-profile-message', error.message, true);
         } finally {
             submitButton.disabled = false;
-            submitButton.textContent = 'Salvar Perfil';
+            submitButton.textContent = 'Save Profile';
         }
     });
 }
@@ -739,7 +948,7 @@ if (preferencesForm) {
 
         try {
             submitButton.disabled = true;
-            submitButton.textContent = 'Salvando...';
+            submitButton.textContent = 'Saving...';
             const response = await apiCall('/api/profile/preferences', 'PUT', {
                 language: document.getElementById('preference-language-input').value,
                 theme: document.getElementById('preference-theme-input').value,
@@ -749,12 +958,12 @@ if (preferencesForm) {
                 highContrast: document.getElementById('pref-high-contrast').checked
             });
             renderIdentityState(response);
-            showMessage('preferences-message', response.message || 'Preferências atualizadas.', false);
+            showMessage('preferences-message', response.message || 'Preferences updated.', false);
         } catch (error) {
             showMessage('preferences-message', error.message, true);
         } finally {
             submitButton.disabled = false;
-            submitButton.textContent = 'Salvar Preferências';
+            submitButton.textContent = 'Save Preferences';
         }
     });
 }
@@ -767,7 +976,7 @@ if (consentForm) {
 
         try {
             submitButton.disabled = true;
-            submitButton.textContent = 'Salvando...';
+            submitButton.textContent = 'Saving...';
             const response = await apiCall('/api/profile/consents', 'PUT', {
                 consents: {
                     termsAndPrivacy: document.getElementById('consent-terms-input').checked,
@@ -777,12 +986,12 @@ if (consentForm) {
                 }
             });
             await refreshIdentityState();
-            showMessage('consent-message', response.message || 'Consentimentos atualizados.', false);
+            showMessage('consent-message', response.message || 'Consents updated.', false);
         } catch (error) {
             showMessage('consent-message', error.message, true);
         } finally {
             submitButton.disabled = false;
-            submitButton.textContent = 'Salvar Consentimentos';
+            submitButton.textContent = 'Save Consents';
         }
     });
 }
@@ -805,66 +1014,100 @@ if (portfolioForm) {
             });
             portfolioForm.reset();
             await refreshIdentityState();
-            showMessage('portfolio-message', 'Item adicionado ao portfólio.', false);
+            showMessage('portfolio-message', 'Portfolio item added.', false);
         } catch (error) {
             showMessage('portfolio-message', error.message, true);
         } finally {
             submitButton.disabled = false;
-            submitButton.textContent = 'Adicionar Item';
+            submitButton.textContent = 'Add Item';
         }
     });
 }
 
 async function deleteUser(id) {
-    if (!confirm('Você tem certeza que deseja EXCLUIR DEFINITIVAMENTE este usuário e TODOS os seus dados associados? Essa ação não tem volta.')) return;
+    if (!confirm('Are you sure you want to PERMANENTLY DELETE this user and ALL associated data? This action cannot be undone.')) return;
     try {
         const res = await apiCall('/api/users/' + id, 'DELETE');
         alert(res.message);
         await loadAdminPanel();
     } catch (err) {
-        alert('Erro: ' + err.message);
+        alert('Error: ' + err.message);
+    }
+}
+
+async function openUserRolesModal(id) {
+    const targetUser = adminUsersCache.find(user => user.id === id);
+    if (!targetUser) {
+        alert('User not found in the current cache.');
+        return;
+    }
+
+    currentRoleModalUserId = id;
+    const modal = document.getElementById('roles-modal');
+    const options = document.getElementById('roles-modal-options');
+    const meta = document.getElementById('roles-modal-user-meta');
+    if (!modal || !options || !meta) return;
+
+    const activeRoles = new Set(targetUser.roles || []);
+    meta.textContent = `${targetUser.username} • ${targetUser.email}`;
+    options.innerHTML = ASSIGNABLE_ROLE_OPTIONS.map((role) => `
+        <label class="identity-toggle" style="padding:0.9rem; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);">
+            <input type="checkbox" data-role-option="${role}" ${activeRoles.has(role) ? 'checked' : ''}>
+            <span>${formatRoleLabel(role)}</span>
+        </label>
+    `).join('');
+
+    modal.classList.remove('hidden');
+}
+window.openUserRolesModal = openUserRolesModal;
+
+function closeUserRolesModal() {
+    const modal = document.getElementById('roles-modal');
+    if (modal) modal.classList.add('hidden');
+    currentRoleModalUserId = null;
+}
+window.closeUserRolesModal = closeUserRolesModal;
+
+async function saveUserRolesFromModal() {
+    if (!currentRoleModalUserId) return;
+    const selectedRoles = Array.from(document.querySelectorAll('[data-role-option]:checked')).map((input) => input.dataset.roleOption);
+    if (!selectedRoles.length) {
+        alert('Select at least one role.');
+        return;
+    }
+
+    const saveButton = document.getElementById('btn-save-user-roles');
+    try {
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.textContent = 'Saving...';
+        }
+        const res = await apiCall(`/api/users/${currentRoleModalUserId}/roles`, 'PATCH', { roles: selectedRoles });
+        alert(res.message || 'Roles updated successfully.');
+        closeUserRolesModal();
+        await Promise.all([loadAdminPanel(), refreshIdentityState()]);
+    } catch (error) {
+        alert('Error updating roles: ' + error.message);
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save Roles';
+        }
     }
 }
 
 async function promptUpdateUserRoles(id) {
-    const targetUser = adminUsersCache.find(user => user.id === id);
-    if (!targetUser) {
-        alert('Usuário não encontrado no cache atual.');
-        return;
-    }
-
-    const currentRoles = (targetUser.roles || []).join(', ');
-    const nextRoles = prompt('Informe os papéis reais separados por vírgula.\nEx.: STUDENT, TUTOR', currentRoles);
-
-    if (nextRoles === null) return;
-
-    const parsedRoles = nextRoles
-        .split(',')
-        .map(role => role.trim().toUpperCase())
-        .filter(Boolean);
-
-    if (!parsedRoles.length) {
-        alert('Informe pelo menos um papel.');
-        return;
-    }
-
-    try {
-        const res = await apiCall(`/api/users/${id}/roles`, 'PATCH', { roles: parsedRoles });
-        alert(res.message || 'Papéis atualizados com sucesso.');
-        await Promise.all([loadAdminPanel(), refreshIdentityState()]);
-    } catch (error) {
-        alert('Erro ao atualizar papéis: ' + error.message);
-    }
+    return openUserRolesModal(id);
 }
 
 async function resetDatabase() {
-    const confirmation = confirm("TEM CERTEZA ABSOLUTA?\n\nIsso irá deletar TODOS os usuários do sistema, deixando apenas a sua própria conta MASTER ativa. Essa ação não pode ser desfeita!");
+    const confirmation = confirm("ARE YOU ABSOLUTELY SURE?\n\nThis will delete ALL users in the system, leaving only your own MASTER account active. This action cannot be undone!");
     if (!confirmation) return;
 
     try {
         const btnReset = document.getElementById('btn-reset-db');
         const originalText = btnReset.textContent;
-        btnReset.textContent = "Apagando...";
+        btnReset.textContent = "Deleting...";
         btnReset.disabled = true;
 
         const res = await apiCall('/api/users/reset', 'POST');
@@ -876,7 +1119,7 @@ async function resetDatabase() {
         btnReset.textContent = originalText;
         btnReset.disabled = false;
     } catch (err) {
-        alert('Erro ao resetar: ' + err.message);
+        alert('Error resetting: ' + err.message);
     }
 }
 // --- Document Management logic ---
@@ -1214,13 +1457,13 @@ async function loadModulesPanel() {
 
     try {
         const modules = await apiCall('/modules/my');
-        counter.textContent = `Limite: ${modules.length}/5 módulos criados`;
+        counter.textContent = `Limit: ${modules.length}/5 modules created`;
         
         const btnCreate = document.getElementById('btn-create-module');
         if (btnCreate) btnCreate.disabled = modules.length >= 5;
 
         if (modules.length === 0) {
-            modulesList.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Você ainda não criou nenhum módulo.</div>';
+            modulesList.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">You have not created any modules yet.</div>';
             return;
         }
 
@@ -1235,7 +1478,7 @@ async function loadModulesPanel() {
                    <span class="role-badge" style="font-size: 0.7rem;">${m.status}</span>
                 </div>
                 <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                    ${m.description || 'Sem descrição.'}
+                    ${m.description || 'No description.'}
                 </p>
                 <div class="module-meta">
                     <span><i class="fas fa-video"></i> ${m._count.videos}</span>
@@ -1248,7 +1491,7 @@ async function loadModulesPanel() {
             modulesList.appendChild(card);
         });
     } catch (error) {
-        modulesList.innerHTML = `<div style="grid-column: 1/-1; color: var(--error); text-align: center;">Erro ao carregar módulos: ${error.message}</div>`;
+        modulesList.innerHTML = `<div style="grid-column: 1/-1; color: var(--error); text-align: center;">Error loading modules: ${error.message}</div>`;
     }
 }
 
@@ -1314,7 +1557,7 @@ async function selectModuleForPreview(moduleId) {
         videoGrid.innerHTML = '';
         
         if (m.videos.length === 0) {
-            videoGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhum vídeo cadastrado.</div>';
+            videoGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No videos added.</div>';
         } else {
             for (const v of m.videos) {
                 const card = document.createElement('div');
@@ -1442,13 +1685,13 @@ async function selectModuleForPreview(moduleId) {
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" style="font-size: 1.5rem;">${overview.averageScore ? overview.averageScore.toFixed(1) : 0}%</div>
-                        <div class="stat-label">Média</div>
+                        <div class="stat-label">Average</div>
                     </div>
                 </div>
             `;
         } catch (e) {
             console.error('Report summary error:', e);
-            document.getElementById('preview-reports-summary').innerHTML = 'Erro ao carregar relatórios.';
+            document.getElementById('preview-reports-summary').innerHTML = 'Error loading reports.';
         }
 
         // Action Buttons
@@ -1515,11 +1758,11 @@ async function loadModuleData(id) {
             btnPublish.onclick = async () => {
                 await updateModuleStatus(id, isPublished ? 'DRAFT' : 'PUBLISHED');
                 await loadModuleData(id); // Refresh editor
-                alert(isPublished ? 'Módulo ocultado!' : 'Módulo publicado!');
+                alert(isPublished ? 'Module hidden!' : 'Module published!');
             };
         }
     } catch (error) {
-        alert('Erro ao carregar dados do módulo: ' + error.message);
+        alert('Error loading module data: ' + error.message);
     }
 }
 
@@ -1539,16 +1782,16 @@ if (mbForm) {
             await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
             await loadModulesPanel();
             closeModuleEditor();
-            alert('Módulo atualizado!');
+            alert('Module updated!');
         } else {
             const res = await apiCall('/modules', 'POST', data);
             currentModuleId = res.id;
             await loadModulesPanel();
             closeModuleEditor(); // Fixed: Close after create
-            alert('Módulo criado!');
+            alert('Module created!');
         }
     } catch (error) {
-        alert('Erro: ' + error.message);
+        alert('Error: ' + error.message);
     }
     });
 }
@@ -1564,7 +1807,7 @@ async function updateModuleStatus(id, status) {
 }
 
 async function deleteModule(id) {
-    if (!confirm('Tem certeza que deseja excluir permanentemente este módulo e todo seu conteúdo?')) return;
+    if (!confirm('Are you sure you want to permanently delete this module and all its content?')) return;
     try {
         await apiCall(`/modules/${id}`, 'DELETE');
         loadModulesPanel();
@@ -1573,7 +1816,7 @@ async function deleteModule(id) {
         closeModuleEditor();
         document.getElementById('module-preview-section').classList.add('hidden');
     } catch (error) {
-        alert('Erro ao excluir: ' + error.message);
+        alert('Error deleting: ' + error.message);
     }
 }
 
@@ -1601,7 +1844,7 @@ function renderVideoList() {
                 <span>${v.title}</span>
             </div>
             <div class="actions">
-                <button onclick="deleteVideo(${v.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Excluir</button>
+                <button onclick="deleteVideo(${v.id})" class="btn btn-secondary btn-sm" style="color: var(--error);">Delete</button>
             </div>
         `;
         list.appendChild(li);
@@ -1609,18 +1852,18 @@ function renderVideoList() {
 }
 
 async function showAddVideoForm() {
-    showSubModal('Adicionar Vídeo', `
+    showSubModal('Add Video', `
         <div class="input-group">
-            <label>Título do Vídeo</label>
+            <label>Video Title</label>
             <input type="text" id="v-title-in" placeholder="Ex: Aula 01 - Fundamentos">
         </div>
         <div class="input-group">
-            <label>URL do Vídeo (YouTube/Vimeo/etc)</label>
+            <label>Video URL (YouTube/Vimeo/etc)</label>
             <input type="text" id="v-url-in" placeholder="https://...">
         </div>
         <div style="text-align: center; margin: 0.5rem 0; color: var(--text-muted); font-size: 0.8rem;">--- OU ---</div>
         <div class="input-group">
-            <label>Upload de Arquivo de Vídeo</label>
+            <label>Video File Upload</label>
             <input type="file" id="v-file-in" accept="video/*" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
         </div>
     `, async () => {
@@ -1648,7 +1891,7 @@ async function showAddVideoForm() {
                 finalUrl = `/api/documents/download/${data.id}`;
             } catch (err) {
                 console.error('Upload Error:', err);
-                alert('Erro no upload do vídeo: ' + err.message);
+                alert('Error uploading video: ' + err.message);
                 okBtn.textContent = 'Confirmar';
                 okBtn.disabled = false;
                 return;
@@ -1656,7 +1899,7 @@ async function showAddVideoForm() {
         }
 
         if (!finalUrl || !title) {
-            alert('Por favor, insira um título e uma URL ou selecione um arquivo.');
+            alert('Please enter a title and a URL or select a file.');
             return;
         }
 
@@ -1666,13 +1909,13 @@ async function showAddVideoForm() {
             await loadModuleData(currentModuleId);
             closeSubModal();
         } catch (err) {
-            alert('Erro ao salvar vídeo: ' + err.message);
+            alert('Error saving video: ' + err.message);
         }
     });
 }
 
 async function deleteVideo(videoId) {
-    if (!confirm('Excluir vídeo?')) return;
+    if (!confirm('Delete video?')) return;
     await apiCall(`/modules/${currentModuleId}/videos/${videoId}`, 'DELETE');
     await loadModuleData(currentModuleId);
 }
@@ -1710,7 +1953,7 @@ function renderDocList() {
 }
 
 async function deleteModuleDoc(docId) {
-    if (!confirm('Excluir documento?')) return;
+    if (!confirm('Delete documento?')) return;
     await apiCall(`/modules/${currentModuleId}/documents/${docId}`, 'DELETE');
     await loadModuleData(currentModuleId);
 }
@@ -1770,31 +2013,31 @@ async function showAddDocForm() {
         });
     };
 
-    showSubModal('Vincular Documento', `
+    showSubModal('Link Document', `
         <div class="doc-selector-container">
             <div class="input-group">
-                <label>Título de Exibição</label>
+                <label>Display Title</label>
                 <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
             </div>
 
             <div class="modal-tabs" style="margin-bottom: 1rem;">
-                <button class="inner-tab-btn active" id="tab-doc-upload" onclick="toggleDocSelectorMode('upload')">Novo Upload</button>
-                <button class="inner-tab-btn" id="tab-doc-library" onclick="toggleDocSelectorMode('library')">Minha Biblioteca</button>
+                <button class="inner-tab-btn active" id="tab-doc-upload" onclick="toggleDocSelectorMode('upload')">New Upload</button>
+                <button class="inner-tab-btn" id="tab-doc-library" onclick="toggleDocSelectorMode('library')">My Library</button>
             </div>
 
             <div id="mode-doc-upload" class="selector-mode-pane">
                 <div class="upload-dropzone" onclick="document.getElementById('d-file-hidden').click()">
                     <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                    <p id="upload-status-text">Clique para selecionar um arquivo</p>
+                    <p id="upload-status-text">Click to select a file</p>
                     <input type="file" id="d-file-hidden" class="hidden">
                 </div>
             </div>
 
             <div id="mode-doc-library" class="selector-mode-pane hidden">
                 <div class="doc-tabs">
-                    <button class="doc-tab active" data-filter="all">Tudo</button>
-                    <button class="doc-tab" data-filter="image">Imagens</button>
-                    <button class="doc-tab" data-filter="video">Vídeos</button>
+                    <button class="doc-tab active" data-filter="all">All</button>
+                    <button class="doc-tab" data-filter="image">Images</button>
+                    <button class="doc-tab" data-filter="video">Videos</button>
                     <button class="doc-tab" data-filter="pdf">PDF</button>
                     <button class="doc-tab" data-filter="word">Word</button>
                 </div>
@@ -1813,7 +2056,7 @@ async function showAddDocForm() {
             return;
         }
         
-        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         okBtn.disabled = true;
 
         const order = (currentModuleData && currentModuleData.documents) ? currentModuleData.documents.length : 0;
@@ -1874,7 +2117,7 @@ async function showAddDocForm() {
                     if (titleIn && !titleIn.value) titleIn.value = file.name;
                 } catch (err) {
                     alert('Erro no upload: ' + err.message);
-                    statusText.textContent = 'Clique para selecionar um arquivo';
+                    statusText.textContent = 'Click to select a file';
                     if (okBtn) okBtn.disabled = false;
                 }
             };
@@ -2062,7 +2305,7 @@ async function addQuizQuestionToQuiz(quizId) {
         if (!text || options.length < 2) return alert('Preencha a pergunta e pelo menos 2 opções.');
 
         const okBtn = document.getElementById('sub-modal-ok');
-        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         okBtn.disabled = true;
 
         try {
@@ -2083,7 +2326,7 @@ async function addQuizQuestionToQuiz(quizId) {
 }
 
 async function deleteQuestion(id) {
-    if (!confirm('Excluir pergunta?')) return;
+    if (!confirm('Delete pergunta?')) return;
     await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
     await loadModuleData(currentModuleId);
 }
@@ -2107,7 +2350,7 @@ async function loadModuleReports(id) {
             </div>
             <div class="stat-card">
                 <div class="stat-value">${overview.averageScore.toFixed(1)}%</div>
-                <div class="stat-label">Média Quiz</div>
+                <div class="stat-label">Average Quiz</div>
             </div>
         `;
 
@@ -2251,7 +2494,7 @@ if (btnCropSave) {
         if (!profileCropper) return;
         
         btnCropSave.disabled = true;
-        btnCropSave.innerText = 'Salvando...';
+        btnCropSave.innerText = 'Saving...';
 
         profileCropper.getCroppedCanvas({
             width: 300,
@@ -2281,8 +2524,13 @@ if (btnCropSave) {
                 alert('Erro ao salvar foto de perfil: ' + err.message);
             } finally {
                 btnCropSave.disabled = false;
-                btnCropSave.innerText = 'Salvar Perfil';
+                btnCropSave.innerText = 'Save Profile';
             }
         }, 'image/png');
     });
+}
+
+const btnSaveUserRoles = document.getElementById('btn-save-user-roles');
+if (btnSaveUserRoles) {
+    btnSaveUserRoles.addEventListener('click', saveUserRolesFromModal);
 }
