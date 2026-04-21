@@ -4,7 +4,9 @@ let coursesState = {
     courses: [],
     selectedCourseId: null,
     selectedCourse: null,
-    enrollmentSearchResults: []
+    enrollmentSearchResults: [],
+    assignableModules: [],
+    selectedAssignableModuleId: null
 };
 
 function escapeCourseHtml(value) {
@@ -291,26 +293,108 @@ async function editCourse() {
     await loadCourseDetail(coursesState.selectedCourseId);
 }
 
+function renderAssignableModulesList(filterText = '') {
+    const options = document.getElementById('course-module-options');
+    const empty = document.getElementById('course-module-empty');
+    if (!options || !empty) return;
+
+    const normalizedFilter = String(filterText || '').trim().toLowerCase();
+    const modules = (coursesState.assignableModules || []).filter((module) => {
+        if (!normalizedFilter) return true;
+        return [module.title, module.status, module.description].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedFilter));
+    });
+
+    options.innerHTML = '';
+    empty.classList.toggle('hidden', modules.length > 0);
+    empty.textContent = modules.length ? '' : 'No modules matched your search.';
+
+    modules.forEach((module) => {
+        const selected = coursesState.selectedAssignableModuleId === module.id;
+        const article = document.createElement('button');
+        article.type = 'button';
+        article.className = 'glassmorphism';
+        article.style.cssText = `text-align:left; width:100%; padding:0.9rem 1rem; border-radius:16px; border:1px solid ${selected ? 'rgba(96,165,250,0.7)' : 'rgba(255,255,255,0.08)'}; background:${selected ? 'rgba(37,99,235,0.22)' : 'rgba(15,23,42,0.5)'}; color:white; cursor:pointer;`;
+        article.innerHTML = `
+            <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                <div>
+                    <strong style="display:block; margin-bottom:0.25rem;">${escapeCourseHtml(module.title)}</strong>
+                    <span style="font-size:0.82rem; color:var(--text-muted);">${escapeCourseHtml(module.description || 'No description.')}</span>
+                </div>
+                <span class="role-badge" style="font-size:0.68rem;">${escapeCourseHtml(module.status || 'DRAFT')}</span>
+            </div>
+        `;
+        article.addEventListener('click', () => {
+            coursesState.selectedAssignableModuleId = module.id;
+            const roomLabelInput = document.getElementById('course-module-room-label');
+            if (roomLabelInput && !roomLabelInput.value.trim()) {
+                roomLabelInput.value = module.title;
+            }
+            renderAssignableModulesList(document.getElementById('course-module-search')?.value || '');
+        });
+        options.appendChild(article);
+    });
+}
+
+function closeCourseModuleModal() {
+    document.getElementById('course-module-modal')?.classList.add('hidden');
+    coursesState.selectedAssignableModuleId = null;
+}
+window.closeCourseModuleModal = closeCourseModuleModal;
+
 async function attachExistingModule() {
     if (!coursesState.selectedCourse) return;
     const modules = await window.apiCall('/modules/my/assignable');
-    if (!modules.length) {
-        alert('You do not have any modules available yet. Create one in the modules workbench first, then add it to this course trail.');
-        return;
+    coursesState.assignableModules = modules || [];
+    coursesState.selectedAssignableModuleId = coursesState.assignableModules[0]?.id || null;
+
+    const modal = document.getElementById('course-module-modal');
+    const searchInput = document.getElementById('course-module-search');
+    const roomLabelInput = document.getElementById('course-module-room-label');
+    const requiredInput = document.getElementById('course-module-required');
+    const empty = document.getElementById('course-module-empty');
+    if (!modal || !searchInput || !roomLabelInput || !requiredInput || !empty) return;
+
+    searchInput.value = '';
+    roomLabelInput.value = coursesState.assignableModules[0]?.title || '';
+    requiredInput.checked = true;
+
+    if (!coursesState.assignableModules.length) {
+        empty.classList.remove('hidden');
+        empty.textContent = 'You do not have any modules available yet. Create one in the modules workbench first, then add it to this course trail.';
+        document.getElementById('course-module-options').innerHTML = '';
+    } else {
+        renderAssignableModulesList();
     }
-    const moduleList = modules.map((module, index) => `${index + 1}. ${module.title} (${module.status})`).join('\n');
-    const choice = prompt(`Choose a module to add to this course trail:\n\n${moduleList}\n\nType the number:`);
-    const selected = modules[Number(choice) - 1];
-    if (!selected) return;
-    const roomLabel = prompt('Room label shown in the course world (optional)', selected.title);
-    const isRequired = confirm('Should this module be required before learners can continue to the next trail step?');
-    await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules`, 'POST', {
-        moduleId: selected.id,
-        roomLabel,
-        isRequired
-    });
-    await refreshCoursesPanel();
-    await loadCourseDetail(coursesState.selectedCourseId);
+
+    searchInput.oninput = () => renderAssignableModulesList(searchInput.value);
+
+    const confirmButton = document.getElementById('btn-confirm-course-module');
+    if (confirmButton) {
+        confirmButton.onclick = async () => {
+            const selected = coursesState.assignableModules.find((module) => module.id === coursesState.selectedAssignableModuleId);
+            if (!selected) {
+                alert('Choose a module first.');
+                return;
+            }
+            try {
+                confirmButton.disabled = true;
+                await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules`, 'POST', {
+                    moduleId: selected.id,
+                    roomLabel: roomLabelInput.value.trim() || selected.title,
+                    isRequired: requiredInput.checked
+                });
+                closeCourseModuleModal();
+                await refreshCoursesPanel();
+                await loadCourseDetail(coursesState.selectedCourseId);
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                confirmButton.disabled = false;
+            }
+        };
+    }
+
+    modal.classList.remove('hidden');
 }
 
 async function enrollUser(userId) {

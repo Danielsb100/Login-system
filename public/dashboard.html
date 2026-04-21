@@ -542,6 +542,36 @@
 
     </div>
 
+    <!-- Add Module To Trail Modal -->
+    <div id="course-module-modal" class="modal hidden">
+        <div class="modal-content glassmorphism" style="max-width: 680px;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="margin:0;">Add Module to Course Trail</h2>
+                    <p id="course-module-modal-subtitle" style="margin:0.35rem 0 0; color: var(--text-muted);">Choose one of your modules and define how it appears in this course world.</p>
+                </div>
+                <span class="close" onclick="window.closeCourseModuleModal?.()">&times;</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+                <div class="input-group">
+                    <label for="course-module-search">Search your modules</label>
+                    <input type="text" id="course-module-search" placeholder="Search by title or status">
+                </div>
+                <div id="course-module-empty" class="empty-state-inline">Loading modules...</div>
+                <div id="course-module-options" style="display:flex; flex-direction:column; gap:0.75rem; max-height:280px; overflow:auto;"></div>
+                <div class="input-group">
+                    <label for="course-module-room-label">Room label in the 3D world</label>
+                    <input type="text" id="course-module-room-label" placeholder="Intro Room">
+                </div>
+                <label class="identity-toggle"><input type="checkbox" id="course-module-required" checked> <span>Required before learners can continue to the next room</span></label>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="window.closeCourseModuleModal?.()">Cancel</button>
+                    <button type="button" id="btn-confirm-course-module" class="btn btn-primary">Add to Trail</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Module Editor Modal -->
     <div id="module-editor-modal" class="modal hidden">
         <div class="modal-content glassmorphism" style="max-width: 900px;">
