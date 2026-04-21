@@ -147,7 +147,7 @@ window.deleteLandingPage = async function(id) {
     try {
         const res = await fetch(`/api/landing-pages/${id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${getToken()}` }
         });
         if (res.ok) {
             loadLandingPages();
@@ -201,7 +201,7 @@ window.saveLandingPage = async function() {
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getToken()}`
             },
             body: JSON.stringify(payload)
         });

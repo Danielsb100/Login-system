@@ -175,13 +175,13 @@ nav h2 {
 /* =================================================================
    🔥 ESTILOS DE MODO DE EDIÇÃO (COMBINA COM AS CORES DA IMAGEM) 🔥
    ================================================================= */
-body.edit-mode .module-section {
+.edit-mode .module-section {
     /* Linha Azul para mostrar a limitação das "divs" como pediu */
     border: 4px solid var(--diagram-blue);
     box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
 }
 
-body.edit-mode .module-section::after {
+.edit-mode .module-section::after {
     content: "DIV";
     position: absolute;
     top: -24px;
@@ -194,7 +194,7 @@ body.edit-mode .module-section::after {
     font-weight: bold;
 }
 
-body.edit-mode .bg-edit-btn {
+.edit-mode .bg-edit-btn {
     position: absolute;
     top: 15px;
     right: 15px;
@@ -215,12 +215,12 @@ body.edit-mode .bg-edit-btn {
     outline: none;
 }
 
-body.edit-mode .bg-edit-btn:hover {
+.edit-mode .bg-edit-btn:hover {
     background: #b91c1c;
     transform: scale(1.05);
 }
 
-body.edit-mode .editable-image-wrapper {
+.edit-mode .editable-image-wrapper {
     /* Bordas vermelhas para arquivos que podem ser alterados nas divs (ex: logo, imagem representativa) */
     outline: 4px solid var(--diagram-red);
     outline-offset: 4px;
@@ -229,7 +229,7 @@ body.edit-mode .editable-image-wrapper {
     transition: 0.2s;
 }
 
-body.edit-mode .editable-image-wrapper::before {
+.edit-mode .editable-image-wrapper::before {
     content: "Trocar Imagem \f030";
     font-family: 'Inter', 'FontAwesome', sans-serif;
     position: absolute;
@@ -247,11 +247,11 @@ body.edit-mode .editable-image-wrapper::before {
     border-radius: inherit;
 }
 
-body.edit-mode .editable-image-wrapper:hover::before {
+.edit-mode .editable-image-wrapper:hover::before {
     opacity: 1;
 }
 
-body.edit-mode .editable-image-wrapper::after {
+.edit-mode .editable-image-wrapper::after {
     content: "IMAGEM";
     position: absolute;
     top: -22px;
@@ -263,7 +263,7 @@ body.edit-mode .editable-image-wrapper::after {
     font-weight: bold;
 }
 
-body.edit-mode .editable-text {
+.edit-mode .editable-text {
     /* Texto envolto em preto limitando Titulos e Paragrafos */
     outline: 2px dashed var(--diagram-black);
     outline-offset: 2px;
@@ -275,12 +275,12 @@ body.edit-mode .editable-text {
     background: rgba(0, 0, 0, 0.05);
 }
 
-body.edit-mode .editable-text:hover {
+.edit-mode .editable-text:hover {
     background: rgba(255, 255, 255, 0.2);
     outline-style: solid;
 }
 
-body.edit-mode .editable-text:focus {
+.edit-mode .editable-text:focus {
     background: rgba(255, 255, 255, 0.9);
     color: var(--diagram-black);
     text-shadow: none;
@@ -500,7 +500,7 @@ body.edit-mode .editable-text:focus {
 }
 
 /* Reserve space for panel but stay centered */
-body.edit-mode.panel-open #template-container {
+.edit-mode.panel-open #template-container {
     margin: 0 auto;
     padding-right: 320px;
     box-sizing: content-box;
@@ -534,7 +534,7 @@ body.edit-mode.panel-open #template-container {
         width: 100%;
     }
 
-    body.edit-mode.panel-open #template-container {
+    .edit-mode.panel-open #template-container {
         margin-right: auto;
     }
 }
