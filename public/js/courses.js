@@ -420,7 +420,7 @@ async function openLinkLandingPageModal() {
     if (!modal || !listContainer || !emptyMsg) return;
 
     try {
-        const pages = await window.apiCall('/landing-pages');
+        const pages = await window.apiCall('/api/landing-pages');
         if (!modal.classList.contains('hidden') && __selectedLandingPageId) {
             // keep selection across re-renders
         } else {
@@ -463,7 +463,7 @@ async function openLinkLandingPageModal() {
                 try {
                     confirmBtn.disabled = true;
                     // First fetch the old landing page to unlink if it exists? No needed, Prisma handles 1-1 reassignment
-                    await window.apiCall(`/landing-pages/${__selectedLandingPageId}`, 'PUT', { courseId: coursesState.selectedCourseId });
+                    await window.apiCall(`/api/landing-pages/${__selectedLandingPageId}`, 'PUT', { courseId: coursesState.selectedCourseId });
                     modal.classList.add('hidden');
                     await refreshCoursesPanel();
                     await loadCourseDetail(coursesState.selectedCourseId);
@@ -483,7 +483,7 @@ async function openLinkLandingPageModal() {
                 if (!coursesState.selectedCourse.landingPage) return;
                 try {
                     unlinkBtn.disabled = true;
-                    await window.apiCall(`/landing-pages/${coursesState.selectedCourse.landingPage.id}`, 'PUT', { courseId: null });
+                    await window.apiCall(`/api/landing-pages/${coursesState.selectedCourse.landingPage.id}`, 'PUT', { courseId: null });
                     modal.classList.add('hidden');
                     await refreshCoursesPanel();
                     await loadCourseDetail(coursesState.selectedCourseId);
