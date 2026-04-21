@@ -15,7 +15,13 @@
     font-family: 'Inter', sans-serif;
 }
 
-body.view-mode {
+.module-section, .module-section * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#landing-page-builder-section.view-mode {
     background-color: var(--bg-light);
     color: #333;
     overflow-x: hidden;
@@ -287,30 +293,30 @@ body.edit-mode .editable-text:focus {
 /* =================================================================
    😎 MODO DE VISUALIZAÇÃO PÚBLICA (PUBLISH MODE) 😎
    ================================================================= */
-body.view-mode {
+#landing-page-builder-section.view-mode {
     padding-top: 0;
 }
 
-body.view-mode #editor-navbar {
+#landing-page-builder-section.view-mode #editor-navbar {
     display: none;
 }
 
-body.view-mode #template-container {
+#landing-page-builder-section.view-mode #template-container {
     padding-top: 0;
     max-width: 100%;
 }
 
-body.view-mode .module-section {
+#landing-page-builder-section.view-mode .module-section {
     border-radius: 0;
     margin-bottom: 0;
 }
 
-body.view-mode .bg-edit-btn {
+#landing-page-builder-section.view-mode .bg-edit-btn {
     display: none;
 }
 
 /* Deixa a centralização correta quando alarga tudo 100% da viewport */
-body.view-mode .module-content {
+#landing-page-builder-section.view-mode .module-content {
     max-width: 1200px;
     margin: 0 auto;
 }

@@ -366,7 +366,16 @@ function setActiveElement(element, type) {
     }
 }
 
-function deselectElement() {
+function deselectElement(e) {
+    if (e && e.target && (
+        e.target.closest('.bg-edit-btn') || 
+        e.target.closest('.editable-image-wrapper') || 
+        e.target.closest('.editable-text') ||
+        e.target.closest('.properties-panel-area')
+    )) {
+        return;
+    }
+    
     if (activeElement) {
         activeElement.classList.remove('selected-element');
         activeElement = null;
@@ -514,12 +523,15 @@ window.addEventListener('load', () => {
             isEditMode = !isEditMode;
             const container = document.getElementById('template-container');
             const propertiesPanel = document.getElementById('properties-panel');
+            const builderSection = document.getElementById('landing-page-builder-section');
             
             if (isEditMode) {
                 container.className = 'edit-mode';
                 toggleBtn.innerHTML = '<i class="fas fa-eye"></i> Visualizar';
                 toggleBtn.classList.remove('publish-mode');
-                openSidePanel();
+                propertiesPanel.classList.remove('hidden');
+                builderSection.classList.remove('view-mode');
+                builderSection.classList.add('edit-mode');
                 container.querySelectorAll('.editable-text').forEach(el => el.setAttribute('contenteditable', 'true'));
             } else {
                 container.className = 'view-mode';
@@ -527,6 +539,8 @@ window.addEventListener('load', () => {
                 if(propertiesPanel) propertiesPanel.classList.add('hidden');
                 toggleBtn.innerHTML = '<i class="fas fa-edit"></i> Editar';
                 toggleBtn.classList.add('publish-mode');
+                builderSection.classList.remove('edit-mode');
+                builderSection.classList.add('view-mode');
                 container.querySelectorAll('.editable-text').forEach(el => el.removeAttribute('contenteditable'));
             }
         });
