@@ -50,7 +50,7 @@ const corsOptions = env.cors.origins.length
   : undefined;
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');

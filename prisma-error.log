@@ -1,0 +1,8 @@
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma\schema.prisma.
+Datasource "db": PostgreSQL database "railway", schema "public" at "centerbeam.proxy.rlwy.net:16753"
+
+Error: P1001: Can't reach database server at `centerbeam.proxy.rlwy.net:16753`
+
+Please make sure your database server is running at `centerbeam.proxy.rlwy.net:16753`.

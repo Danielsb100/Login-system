@@ -66,7 +66,7 @@ function createNewLandingPage() {
     document.getElementById('template-container').innerHTML = `
         <section class="module-section" id="header-section" style="background-image: url('https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=2000');">
             <div class="bg-overlay"></div>
-            <button class="bg-edit-btn" onclick="triggerImageUpload('header-section', 'bg')"><i class="fas fa-image"></i> Alterar Cabeçalho BG</button>
+            <button class="bg-edit-btn" onclick="triggerImageUpload('header-section', 'bg')" title="Alterar Cabeçalho BG"><i class="fas fa-cog"></i></button>
             <div class="module-content">
                 <div class="logo-container editable-image-wrapper" onclick="triggerImageUpload('logo-img', 'src')">
                     <img src="https://placehold.co/200x100/ffffff/111111?text=LOGO" alt="Logo" class="logo-img" id="logo-img">
@@ -79,7 +79,7 @@ function createNewLandingPage() {
         </section>
         <section class="module-section" id="body1-section" style="background-image: url('https://images.unsplash.com/photo-1557682250-33bd709cbe85?auto=format&fit=crop&q=80&w=2000');">
             <div class="bg-overlay"></div>
-            <button class="bg-edit-btn" onclick="triggerImageUpload('body1-section', 'bg')"><i class="fas fa-image"></i> Alterar Corpo 1 BG</button>
+            <button class="bg-edit-btn" onclick="triggerImageUpload('body1-section', 'bg')" title="Alterar Corpo 1 BG"><i class="fas fa-cog"></i></button>
             <div class="module-content">
                 <div class="body-img-container editable-image-wrapper" onclick="triggerImageUpload('body1-img', 'src')">
                     <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800" alt="Imagem Representativa" class="body-img" id="body1-img">
@@ -92,7 +92,7 @@ function createNewLandingPage() {
         </section>
         <section class="module-section" id="body2-section" style="background-image: url('https://images.unsplash.com/photo-1557682224-5b8590cd9ec5?auto=format&fit=crop&q=80&w=2000');">
             <div class="bg-overlay"></div>
-            <button class="bg-edit-btn" onclick="triggerImageUpload('body2-section', 'bg')"><i class="fas fa-image"></i> Alterar Corpo 2 BG</button>
+            <button class="bg-edit-btn" onclick="triggerImageUpload('body2-section', 'bg')" title="Alterar Corpo 2 BG"><i class="fas fa-cog"></i></button>
             <div class="module-content" style="justify-content: center; text-align: center;">
                 <div class="text-block text-white" style="max-width: 800px;">
                     <p class="editable-text text-large" id="texto-corpo2">Este é o texto descritivo do bloco Corpo 2. Como definido na arquitetura visual, ele não possui um título específico, apenas um longo parágrafo (texto corpo 2) que serve de apoio, o qual você pode modificar de forma dinâmica.</p>
@@ -101,7 +101,7 @@ function createNewLandingPage() {
         </section>
         <footer class="module-section" id="footer-section" style="background-image: url('https://images.unsplash.com/photo-1557683304-673a23048d34?auto=format&fit=crop&q=80&w=2000'); margin-bottom: 0;">
             <div class="bg-overlay" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);"></div>
-            <button class="bg-edit-btn" onclick="triggerImageUpload('footer-section', 'bg')"><i class="fas fa-image"></i> Alterar Rodapé BG</button>
+            <button class="bg-edit-btn" onclick="triggerImageUpload('footer-section', 'bg')" title="Alterar Rodapé BG"><i class="fas fa-cog"></i></button>
             <div class="module-content" style="padding: 20px; flex-direction: column; justify-content: center; align-items: center; gap: 20px;">
                 <p class="editable-text text-white" id="rodape-texto" style="font-size: 0.9rem; margin: 0; text-align: center;">© 2026 Template Modular de Design. Todos os direitos reservados. Você pode visualizar como o público acessará na aba Publicação.</p>
                 <div class="body-img-container editable-image-wrapper" onclick="triggerImageUpload('footer-img', 'src')">
@@ -247,6 +247,12 @@ function initBuilderElements() {
     isEditMode = true;
     activeElement = null;
     activeElementType = null;
+    
+    // Backward compatibility patch for existing pages loaded with raw HTML
+    document.querySelectorAll('.bg-edit-btn').forEach(btn => {
+        btn.innerHTML = '<i class="fas fa-cog"></i>';
+        btn.setAttribute('title', 'Alterar Background');
+    });
     
     const bodyStyles = window.getComputedStyle(document.body);
     

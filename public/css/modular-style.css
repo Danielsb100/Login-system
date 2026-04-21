@@ -11,7 +11,7 @@
 }
 
 /* Scoped Base Styles */
-#landing-page-builder-section * {
+#landing-page-builder-section *:not(i) {
     font-family: 'Inter', sans-serif;
 }
 
@@ -192,16 +192,21 @@ body.edit-mode .bg-edit-btn {
     position: absolute;
     top: 15px;
     right: 15px;
-    background: var(--diagram-red);
+    background: var(--diagram-dark);
     color: white;
-    border: 2px solid white;
-    padding: 8px 16px;
-    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
     cursor: pointer;
-    font-weight: 600;
+    font-size: 1rem;
     z-index: 10;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
     transition: 0.2s;
+    outline: none;
 }
 
 body.edit-mode .bg-edit-btn:hover {
