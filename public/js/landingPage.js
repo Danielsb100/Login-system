@@ -10,7 +10,7 @@ let landingPagesList = [];
 async function loadLandingPages() {
     try {
         const res = await fetch('/api/landing-pages', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${getToken()}` }
         });
         if (res.ok) {
             landingPagesList = await res.json();
@@ -118,7 +118,9 @@ function createNewLandingPage() {
 
 window.openLandingPageBuilder = async function(id) {
     try {
-        const res = await fetch(`/api/landing-pages/${id}`);
+        const res = await fetch(`/api/landing-pages/${id}`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
         if (res.ok) {
             const data = await res.json();
             currentLandingPageId = data.id;
