@@ -86,10 +86,11 @@ function renderCourseModules(course) {
                     <div class="operation-meta-row">
                         <span class="operation-tag">${module.isRequired ? 'Required' : 'Optional'}</span>
                         <span class="operation-tag">${escapeCourseHtml(module.roomLabel || 'Module room')}</span>
+                        <span class="operation-tag">Step ${index + 1} in trail</span>
                         <span class="operation-tag">${escapeCourseHtml(module.moduleStatus || 'DRAFT')}</span>
                     </div>
                     <div class="operation-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                        ${module.unlocked ? `<button type="button" class="btn btn-secondary btn-sm" data-open-world-course="${coursesState.selectedCourseId}">Open in 3D</button>` : ''}
+                        ${module.unlocked ? `<button type="button" class="btn btn-secondary btn-sm" data-open-world-course="${coursesState.selectedCourseId}">Enter this course world</button>` : ''}
                         ${!coursesState.selectedCourse?.canManage && module.unlocked && !module.completed ? `<button type="button" class="btn btn-secondary btn-sm" data-complete-module="${module.moduleId}">Mark complete</button>` : ''}
                         ${coursesState.selectedCourse?.canManage ? `
                             <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="up" data-course-module-id="${module.courseModuleId}">↑</button>
@@ -247,6 +248,10 @@ function renderCourseDetail(course) {
     document.getElementById('course-title').textContent = course.title;
     document.getElementById('course-description').textContent = course.description || 'No description yet.';
     document.getElementById('course-progress-pill').textContent = `${course.progressPercent || 0}% progress`;
+    const openCourseWorldButton = document.getElementById('btn-open-course-world');
+    if (openCourseWorldButton) {
+        openCourseWorldButton.textContent = 'Enter this course world';
+    }
 
     renderCourseModules(course);
     renderCourseEnrollments(course);
@@ -290,15 +295,15 @@ async function attachExistingModule() {
     if (!coursesState.selectedCourse) return;
     const modules = await window.apiCall('/modules/my/assignable');
     if (!modules.length) {
-        alert('You do not have any modules available. Create one in the Modules workbench first.');
+        alert('You do not have any modules available yet. Create one in the modules workbench first, then add it to this course trail.');
         return;
     }
     const moduleList = modules.map((module, index) => `${index + 1}. ${module.title} (${module.status})`).join('\n');
-    const choice = prompt(`Choose the module to attach:\n\n${moduleList}\n\nType the number:`);
+    const choice = prompt(`Choose a module to add to this course trail:\n\n${moduleList}\n\nType the number:`);
     const selected = modules[Number(choice) - 1];
     if (!selected) return;
-    const roomLabel = prompt('Room label (optional)', selected.title);
-    const isRequired = confirm('Should this module be required in the course path?');
+    const roomLabel = prompt('Room label shown in the course world (optional)', selected.title);
+    const isRequired = confirm('Should this module be required before learners can continue to the next trail step?');
     await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules`, 'POST', {
         moduleId: selected.id,
         roomLabel,

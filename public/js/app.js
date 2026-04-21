@@ -826,7 +826,8 @@ async function loadDashboard() {
         await loadNotificationsSummary();
         const user = identity.user;
         const isAdmin = hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN']) || user.role === 'ADMIN';
-        const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
+        const canManageModules = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'TUTOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
+        const canManageCourses = hasAnyRole(user, ['TEACHER', 'COORDINATOR', 'TUTOR', 'ADMIN', 'SUPER_ADMIN']) || user.role === 'MASTER';
 
         if (isAdmin || canManageModules) {
             await loadAdminPanel();
@@ -842,7 +843,7 @@ async function loadDashboard() {
         if (window.loadCoursesPanel) {
             await window.loadCoursesPanel({
                 user,
-                canManageCourses: canManageModules || isAdmin
+                canManageCourses
             });
         }
 

@@ -52,8 +52,8 @@
                             <p id="profile-headline-display" style="margin-top: 0.5rem; max-width: 420px; color: var(--text-muted);">Add a headline to contextualize your role in the ecosystem.</p>
                         </div>
                     </div>
-                    <button onclick="goToMultiplayer()" class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Enter the 3D World
+                    <button onclick="switchSection('courses')" class="btn btn-secondary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; font-weight: 600; border-radius: 12px;">
+                        Open Course Worlds
                     </button>
                 </div>
                 
@@ -387,7 +387,7 @@
                 <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
                     <div>
                         <h2>Courses & Learning Worlds</h2>
-                        <p>Organize ordered module trails and open a dedicated 3D world per course.</p>
+                        <p>Each course has its own 3D world. Build the trail by attaching modules to the course and ordering them from first to last.</p>
                     </div>
                     <button id="btn-create-course" class="btn btn-primary btn-sm hidden">+ Create Course</button>
                 </div>
@@ -419,14 +419,19 @@
 
                             <div id="course-manager-actions" class="hidden" style="margin-bottom:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
                                 <button id="btn-edit-course" class="btn btn-secondary btn-sm">Edit Course</button>
-                                <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Attach Existing Module</button>
-                                <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Go to Modules Workbench</button>
+                                <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Add Module to Trail</button>
+                                <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Create / Edit Modules</button>
+                            </div>
+
+                            <div class="glassmorphism" style="margin-bottom:1rem; padding:1rem; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(15,23,42,0.45);">
+                                <strong style="display:block; margin-bottom:0.45rem;">How to build this course trail</strong>
+                                <p style="margin:0; color:var(--text-muted); line-height:1.6;">1. Create or edit modules in the modules workbench. 2. Add modules to this course trail. 3. Use ↑ and ↓ to define the exact learning order. 4. Open this course's 3D world — one room is created per module in the same order.</p>
                             </div>
 
                             <div class="operations-grid" style="margin-top:1rem;">
                                 <section class="operations-card operations-card-wide">
                                     <div class="operations-card-header">
-                                        <h4>Ordered module trail</h4>
+                                        <h4>Course trail order</h4>
                                         <span id="course-modules-meta" class="operations-meta">0 modules</span>
                                     </div>
                                     <div id="course-modules-list" class="operations-list empty-state-list">
