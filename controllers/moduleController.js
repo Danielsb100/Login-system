@@ -258,10 +258,20 @@ const getMyAssignableModules = async (req, res) => {
             select: {
                 id: true,
                 title: true,
-                status: true
+                description: true,
+                status: true,
+                _count: {
+                    select: { quizzes: true }
+                }
             }
         });
-        res.json(modules);
+        res.json(modules.map((module) => ({
+            id: module.id,
+            title: module.title,
+            description: module.description,
+            status: module.status,
+            quizCount: module._count?.quizzes || 0
+        })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch assignable modules' });
     }

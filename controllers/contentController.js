@@ -339,28 +339,6 @@ const submitQuiz = async (req, res) => {
                 }
             });
 
-            if (parsedCourseId) {
-                await tx.moduleCompletion.upsert({
-                    where: {
-                        courseId_moduleId_userId: {
-                            courseId: parsedCourseId,
-                            moduleId,
-                            userId
-                        }
-                    },
-                    update: {
-                        source: req.body.source || 'MULTIPLAYER_WORLD',
-                        completedAt: new Date()
-                    },
-                    create: {
-                        courseId: parsedCourseId,
-                        moduleId,
-                        userId,
-                        source: req.body.source || 'MULTIPLAYER_WORLD'
-                    }
-                });
-            }
-
             await notifyQuizSubmitted({
                 module,
                 submission: createdSubmission,
@@ -374,7 +352,8 @@ const submitQuiz = async (req, res) => {
             message: 'Quiz submitted successfully',
             submissionId: submission.id,
             score,
-            attemptNumber
+            attemptNumber,
+            courseId: parsedCourseId
         });
     } catch (error) {
         console.error(error);

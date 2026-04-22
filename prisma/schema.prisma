@@ -359,6 +359,8 @@ model CourseModule {
   module          TrainingModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   orderIndex      Int
   isRequired      Boolean                @default(true)
+  requireQuizPass Boolean                @default(false)
+  minimumQuizScore Float?
   roomLabel       String?
   placement       WorldModulePlacement?
   createdAt       DateTime               @default(now())
