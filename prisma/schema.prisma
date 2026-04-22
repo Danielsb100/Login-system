@@ -100,6 +100,7 @@ model User {
   ownedCourses Course[] @relation("CourseOwner")
   enrollments Enrollment[]
   moduleCompletions ModuleCompletion[]
+  landingPages  LandingPage[] @relation("MasterLandingPages")
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -344,9 +345,11 @@ model Course {
   enrollments     Enrollment[]
   completions     ModuleCompletion[]
   placements      WorldModulePlacement[]
+  landingPage     LandingPage? @relation("CourseLandingPage")
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 }
+
 
 model CourseModule {
   id              Int                    @id @default(autoincrement())
@@ -569,4 +572,18 @@ model AuditLog {
   entityId   Int?
   details    Json?
   createdAt  DateTime @default(now())
+}
+
+model LandingPage {
+  id              Int      @id @default(autoincrement())
+  ownerMasterId   Int
+  master          User     @relation("MasterLandingPages", fields: [ownerMasterId], references: [id], onDelete: Cascade)
+  title           String
+  content         Json     // Raw modular builder JSON
+  compiledHtml    String?  @db.Text
+  compiledCss     String?  @db.Text
+  courseId        Int?     @unique
+  course          Course?  @relation("CourseLandingPage", fields: [courseId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

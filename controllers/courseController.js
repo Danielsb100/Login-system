@@ -29,12 +29,10 @@ function buildSceneId(course) {
 }
 
 function buildRoomPosition(index) {
-  const lane = index % 2;
-  const row = Math.floor(index / 2);
   return {
-    x: row * 18,
+    x: index * 10,
     y: 0,
-    z: lane === 0 ? 0 : 10
+    z: 0
   };
 }
 
@@ -114,9 +112,10 @@ function buildCourseProgress(course, userId, isManagerView = false) {
   );
 
   let requiredGateOpen = true;
-  const modules = (course.courseModules || []).map((courseModule) => {
+  const modules = (course.courseModules || []).map((courseModule, index) => {
     const completed = completions.has(courseModule.moduleId);
     const unlocked = isManagerView || requiredGateOpen;
+    const roomPosition = buildRoomPosition(index);
 
     const payload = {
       courseModuleId: courseModule.id,
@@ -133,11 +132,7 @@ function buildCourseProgress(course, userId, isManagerView = false) {
         ? {
             id: courseModule.placement.id,
             label: courseModule.placement.label,
-            position: {
-              x: courseModule.placement.positionX,
-              y: courseModule.placement.positionY,
-              z: courseModule.placement.positionZ
-            },
+            position: roomPosition,
             rotation: {
               x: courseModule.placement.rotationX,
               y: courseModule.placement.rotationY,
@@ -182,6 +177,9 @@ async function assertCourseAccess(courseId, user) {
           placement: true
         },
         orderBy: { orderIndex: 'asc' }
+      },
+      landingPage: {
+        select: { id: true, title: true, compiledHtml: true, compiledCss: true }
       }
     }
   });
@@ -294,7 +292,10 @@ async function getAccessibleCourses(req, res) {
           orderBy: { orderIndex: 'asc' }
         },
         enrollments: true,
-        completions: true
+        completions: true,
+        landingPage: {
+          select: { id: true, title: true }
+        }
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -313,7 +314,8 @@ async function getAccessibleCourses(req, res) {
         progressPercent: progress.progressPercent,
         completedCount: progress.completedCount,
         modules: progress.modules,
-        canManage: managerView
+        canManage: managerView,
+        landingPage: course.landingPage
       };
     });
 
@@ -342,6 +344,7 @@ async function getCourseDetail(req, res) {
       progressPercent: progress.progressPercent,
       completedCount: progress.completedCount,
       modules: progress.modules,
+      landingPage: course.landingPage,
       enrollments: managerView
         ? course.enrollments.map((item) => ({
             id: item.id,
@@ -583,7 +586,8 @@ async function getCourseRuntime(req, res) {
       enrollment,
       progressPercent: progress.progressPercent,
       completedCount: progress.completedCount,
-      modules: progress.modules
+      modules: progress.modules,
+      landingPage: course.landingPage
     });
   } catch (error) {
     if (error.message === 'COURSE_NOT_FOUND') {

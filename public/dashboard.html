@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css?v=1.4">
     <link rel="stylesheet" href="/css/modules.css?v=1.4">
+    <link rel="stylesheet" href="/css/modular-style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
 </head>
@@ -33,6 +34,7 @@
             <button class="dash-tab active" onclick="switchSection('profile')">General</button>
             <button class="dash-tab" id="tab-courses" onclick="switchSection('courses')">Courses</button>
             <button class="dash-tab hidden" id="tab-modules" onclick="switchSection('modules')">Modules</button>
+            <button class="dash-tab hidden" id="tab-landingPages" onclick="switchSection('landingPages')">Landing Pages</button>
         </div>
         
         <!-- PROFILE GROUP -->
@@ -413,6 +415,7 @@
                                 </div>
                                 <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
                                     <span id="course-progress-pill" class="operations-pill">0% progress</span>
+                                    <span id="course-landing-page-pill" class="operations-pill">No Landing Page</span>
                                     <button id="btn-open-course-world" class="btn btn-primary btn-sm">Open 3D course world</button>
                                 </div>
                             </div>
@@ -421,6 +424,7 @@
                                 <button id="btn-edit-course" class="btn btn-secondary btn-sm">Edit Course</button>
                                 <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Add Module to Trail</button>
                                 <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Create / Edit Modules</button>
+                                <button id="btn-link-landing-page" class="btn btn-secondary btn-sm">Link Landing Page</button>
                             </div>
 
                             <div class="glassmorphism" style="margin-bottom:1rem; padding:1rem; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(15,23,42,0.45);">
@@ -537,6 +541,109 @@
                         <div id="preview-reports-summary">Select a module to view statistics.</div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- LANDING PAGES GROUP -->
+        <div id="group-landingPages" class="section-group hidden">
+            <section class="card glassmorphism section-admin slide-up" id="landing-pages-panel" style="display: block !important;">
+                <div class="section-header" style="justify-content: space-between;">
+                    <div>
+                        <h2>Landing Pages</h2>
+                        <p>Create visual descriptions for your courses</p>
+                    </div>
+                    <button id="btn-create-landing-page" onclick="createNewLandingPage()" class="btn btn-primary btn-sm" style="position: relative; z-index: 100; cursor: pointer !important;">
+                    + Create Landing Page
+                    </button>
+                </div>
+                
+                <div id="landing-pages-list" class="modules-grid">
+                    <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+                        Loading landing pages...
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Builder Container -->
+            <div id="landing-page-builder-section" class="module-preview-pane hidden" style="position: relative; overflow: hidden; padding: 0; min-height: 80vh; background: #0f172a; border-radius: 12px; margin-top: 20px;">
+               <div style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: #1e293b;">
+                   <input type="text" id="builder-title" class="glassmorphism" placeholder="My Landing Page Title" value="New Landing Page" style="font-size: 1.2rem; font-weight: bold; background: rgba(0,0,0,0.3); border: none; padding: 5px 10px; color: white; border-radius: 6px;">
+                   <div style="display: flex; gap: 10px;">
+                       <button id="toggle-lp-mode-btn" class="toggle-btn" style="padding: 8px 16px; border-radius: 8px; background: rgba(255,255,255,0.1); color: white; cursor: pointer; border: none; display: flex; align-items: center; gap: 6px;"><i class="fas fa-eye"></i> Visualizar</button>
+                       <button id="save-lp-btn" onclick="saveLandingPage()" class="btn btn-primary btn-sm">Save Landing Page</button>
+                       <button onclick="closeLandingPageBuilder()" class="btn btn-secondary btn-sm">Close</button>
+                   </div>
+               </div>
+               
+               <div style="display: flex; height: calc(100% - 60px); position: relative;">
+                   <!-- Editor Content Area -->
+                   <div id="builder-canvas" style="flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; padding-bottom: 50vh;">
+                       <main id="template-container" class="edit-mode" style="min-height: 500px;">
+                           <!-- Injected by landingPage.js -->
+                       </main>
+                   </div>
+                   
+                   <!-- Properties Sidebar -->
+                   <aside id="properties-panel" class="hidden">
+                       <div class="panel-header">
+                           <h3>Propriedades</h3>
+                           <button id="close-panel-btn"><i class="fas fa-times"></i></button>
+                       </div>
+               
+                       <div class="panel-content">
+                           <div id="no-selection-msg" class="property-group" style="background: transparent; box-shadow: none; text-align: center; color: #94a3b8; border: 1px dashed #334155; pointer-events: none;">
+                               <p style="font-size: 0.9rem; margin: 0;">Selecione algum elemento na página (Texto, Imagem, Botão de Fundo) para ativar o painel de propriedades respectivo.</p>
+                           </div>
+               
+                           <div id="text-options" class="property-group hidden">
+                               <h4>Texto</h4>
+                               <div class="prop-row"><label>Fonte</label><select id="font-family-select"><option value="'Inter', sans-serif">Inter</option><option value="'Roboto', sans-serif">Roboto</option><option value="'Outfit', sans-serif">Outfit</option><option value="'Courier New', monospace">Courier</option><option value="'Times New Roman', serif">Times New Roman</option></select></div>
+                               <div class="prop-row"><label>Tamanho (px)</label><input type="text" id="font-size-input" value="16px"></div>
+                               <div class="prop-row btn-group"><button class="style-btn" data-style="fontWeight" data-value="bold"><i class="fas fa-bold"></i></button><button class="style-btn" data-style="fontStyle" data-value="italic"><i class="fas fa-italic"></i></button></div>
+                               <div class="prop-row btn-group"><button class="align-btn" data-align="left"><i class="fas fa-align-left"></i></button><button class="align-btn" data-align="center"><i class="fas fa-align-center"></i></button><button class="align-btn" data-align="right"><i class="fas fa-align-right"></i></button></div>
+                               <div class="prop-row"><label>Cor do Texto</label><input type="color" id="text-color-input" value="#000000"></div>
+                           </div>
+               
+                           <div id="position-options" class="property-group hidden">
+                               <h4>Ajuste Livre (Offset)</h4>
+                               <div class="prop-row"><label>Eixo X (px)</label><div style="display:flex; gap: 5px;"><input type="range" id="pos-x-range" min="-500" max="500" value="0" style="flex:2;"><input type="number" id="pos-x-input" value="0" style="flex:1;"></div></div>
+                               <div class="prop-row"><label>Eixo Y (px)</label><div style="display:flex; gap: 5px;"><input type="range" id="pos-y-range" min="-500" max="500" value="0" style="flex:2;"><input type="number" id="pos-y-input" value="0" style="flex:1;"></div></div>
+                           </div>
+               
+                           <div id="image-options" class="property-group hidden">
+                               <h4>Imagem</h4>
+                               <div class="prop-row"><button id="upload-img-panel-btn" class="prop-action-btn"><i class="fas fa-upload"></i> Escolher Nova Imagem</button></div>
+                               <div class="prop-row"><label>Escala Atual (%)</label><input type="range" id="image-scale-range" min="10" max="200" value="100"></div>
+                               <div class="prop-row btn-group"><button class="img-align-btn" data-align="flex-start"><i class="fas fa-align-left"></i></button><button class="img-align-btn" data-align="center"><i class="fas fa-align-center"></i></button><button class="img-align-btn" data-align="flex-end"><i class="fas fa-align-right"></i></button></div>
+                           </div>
+               
+                           <div id="bg-options" class="property-group hidden">
+                               <h4>Fundo da Seção</h4>
+                               <div class="prop-row"><label>Tipo</label><select id="bg-type-select"><option value="image">Imagem Upload</option><option value="color">Côr Sólida</option><option value="gradient">Gradiente Linear</option><option value="radial">Gradiente Radial</option></select></div>
+                               <div id="bg-image-controls"><button id="upload-panel-btn" class="prop-action-btn"><i class="fas fa-upload"></i> Escolher Imagem</button></div>
+                               <div id="bg-color-controls" class="hidden"><div class="prop-row"><label>Cor Sólida</label><input type="color" id="bg-color-input" value="#ffffff"></div></div>
+                               <div id="bg-grad-controls" class="hidden"><div class="prop-row"><label>Cor Esq/Centro</label><input type="color" id="bg-grad1" value="#0ea5e9"></div><div class="prop-row"><label>Cor Dir/Margem</label><input type="color" id="bg-grad2" value="#ef4444"></div></div>
+                               <hr class="panel-hr">
+                               <div class="prop-row" id="blur-row"><label>Blur (px)</label><input type="range" id="bg-blur-range" min="0" max="20" value="0"></div>
+                               <div class="prop-row" id="opacity-row"><label>Opacidade (%)</label><input type="range" id="bg-opacity-range" min="0" max="100" value="100"></div>
+                           </div>
+               
+                           <div id="box-options" class="property-group hidden">
+                               <h4>Bordas e Margens <small>(Global)</small></h4>
+                               <div class="prop-row"><label>Estilo Borda</label><select id="border-style-select"><option value="none">Nenhuma</option><option value="solid">Sólida</option><option value="dashed">Tracejada</option></select></div>
+                               <div class="prop-row"><label>Espessura (px)</label><input type="number" id="border-width-input" value="2" min="0"></div>
+                               <div class="prop-row"><label>Tipo da Borda</label><select id="border-color-type" class="prop-select"><option value="solid-color">Cor Sólida</option><option value="gradient">Gradiente</option></select></div>
+                               <div class="prop-row" id="border-solid-controls"><label>Cor</label><input type="color" id="border-color-input" value="#000000"></div>
+                               <div class="prop-row hidden" id="border-grad-controls"><label>Gradiente</label><div style="display:flex;"><input type="color" id="border-grad1" value="#00a8ff" style="flex:1;"><input type="color" id="border-grad2" value="#e84118" style="flex:1;"></div></div>
+                               <div class="prop-row"><label>Arredondamento (px)</label><input type="number" id="border-radius-input" value="0" min="0"></div>
+                               <div class="prop-row"><label>Margem Externa (px)</label><input type="number" id="margin-input" value="0" min="0"></div>
+                               <div class="prop-row"><label>Espaçamento (px)</label><input type="number" id="padding-input" value="0" min="0"></div>
+                           </div>
+                       </div>
+                   </aside>
+               </div>
+               
+               <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
             </div>
         </div>
 
@@ -709,12 +816,33 @@
         </div>
     </div>
 
+    <!-- Link Landing Page Modal -->
+    <div id="course-landing-page-modal" class="modal hidden" style="z-index: 340;">
+        <div class="modal-content glassmorphism" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 style="margin:0;">Link Landing Page</h3>
+                <span class="close" onclick="document.getElementById('course-landing-page-modal').classList.add('hidden')">&times;</span>
+            </div>
+            <p style="color:var(--text-muted); margin-bottom:1rem;">Select the landing page to act as the visual description for this course.</p>
+
+            <div style="margin-top:1.5rem; max-height:45vh; overflow-y:auto; padding-right:0.5rem;">
+                <div id="course-landing-page-empty" class="hidden" style="text-align:center; color:var(--text-muted); padding:2rem 1rem;">No landing pages available.</div>
+                <div id="course-landing-page-options" style="display:flex; flex-direction:column; gap:0.75rem;"></div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content:flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('course-landing-page-modal').classList.add('hidden')">Cancel</button>
+                <button type="button" class="btn btn-secondary" id="btn-unlink-landing-page" style="color:var(--error); border-color:rgba(239,68,68,0.3);">Unlink</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-landing-page">Assign Landing Page</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="/app-config.js?v=1"></script>
     <script src="/js/app.js?v=2.1"></script>
     <script src="/js/courses.js?v=1"></script>
+    <script src="/js/landingPage.js?v=1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             loadDashboard();

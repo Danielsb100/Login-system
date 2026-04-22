@@ -1,0 +1,540 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+:root {
+    /* Cores que representam o seu diagrama (Azul, Vermelho e Preto) */
+    --diagram-blue: #0ea5e9;
+    --diagram-red: #ef4444;
+    --diagram-dark: #1e293b;
+    --diagram-black: #000000;
+
+    --bg-light: #f8f9fa;
+}
+
+/* Scoped Base Styles */
+#landing-page-builder-section *:not(i) {
+    font-family: 'Inter', sans-serif;
+}
+
+.module-section, .module-section * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#landing-page-builder-section.view-mode {
+    background-color: var(--bg-light);
+    color: #333;
+    overflow-x: hidden;
+}
+
+/* Base Styles */
+.text-white .editable-text {
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#landing-page-builder-section h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 15px;
+    line-height: 1.2;
+}
+
+#landing-page-builder-section p {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+#landing-page-builder-section p.text-large {
+    font-size: 1.5rem;
+    font-weight: 400;
+}
+
+/* Navbar de Edição */
+.editor-navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--diagram-dark);
+    color: white;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+nav h2 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.toggle-btn {
+    background: var(--diagram-blue);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggle-btn:hover {
+    background: #0284c7;
+    transform: translateY(-1px);
+}
+
+.toggle-btn.publish-mode {
+    background: #10b981;
+}
+
+.toggle-btn.publish-mode:hover {
+    background: #059669;
+}
+
+/* Container de Módulos (Divs) */
+#template-container {
+    padding-top: 100px;
+    padding-bottom: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.module-section {
+    position: relative;
+    width: 100%;
+    min-height: 250px;
+    margin-bottom: 40px;
+    background-size: cover;
+    background-position: center;
+    background-color: #ddd;
+    border-radius: 12px;
+    overflow: visible;
+    /* Permits badges to display accurately */
+    display: flex;
+    transition: all 0.3s ease;
+}
+
+.bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    backdrop-filter: none;
+    z-index: 1;
+    border-radius: 8px;
+}
+
+.module-content {
+    position: relative;
+    z-index: 5;
+    padding: 50px;
+    width: 100%;
+    display: flex;
+    gap: 40px;
+    align-items: center;
+}
+
+/* Construtores Específicos */
+.logo-container {
+    width: 150px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.logo-img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
+
+.body-img-container {
+    width: 350px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.body-img {
+    width: 100%;
+    height: 350px;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    display: block;
+}
+
+
+/* =================================================================
+   🔥 ESTILOS DE MODO DE EDIÇÃO (COMBINA COM AS CORES DA IMAGEM) 🔥
+   ================================================================= */
+.edit-mode .module-section {
+    /* Linha Azul para mostrar a limitação das "divs" como pediu */
+    border: 4px solid var(--diagram-blue);
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
+}
+
+.edit-mode .module-section::after {
+    content: "DIV";
+    position: absolute;
+    top: -24px;
+    left: 10px;
+    background: var(--diagram-blue);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px 4px 0 0;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.edit-mode .bg-edit-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: var(--diagram-dark);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    transition: 0.2s;
+    outline: none;
+}
+
+.edit-mode .bg-edit-btn:hover {
+    background: #b91c1c;
+    transform: scale(1.05);
+}
+
+.edit-mode .editable-image-wrapper {
+    /* Bordas vermelhas para arquivos que podem ser alterados nas divs (ex: logo, imagem representativa) */
+    outline: 4px solid var(--diagram-red);
+    outline-offset: 4px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.1);
+    transition: 0.2s;
+}
+
+.edit-mode .editable-image-wrapper::before {
+    content: "Trocar Imagem \f030";
+    font-family: 'Inter', 'FontAwesome', sans-serif;
+    position: absolute;
+    inset: 0;
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+    border-radius: inherit;
+}
+
+.edit-mode .editable-image-wrapper:hover::before {
+    opacity: 1;
+}
+
+.edit-mode .editable-image-wrapper::after {
+    content: "IMAGEM";
+    position: absolute;
+    top: -22px;
+    left: -4px;
+    background: var(--diagram-red);
+    color: white;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.edit-mode .editable-text {
+    /* Texto envolto em preto limitando Titulos e Paragrafos */
+    outline: 2px dashed var(--diagram-black);
+    outline-offset: 2px;
+    padding: 8px;
+    cursor: text;
+    transition: 0.2s;
+    border-radius: 4px;
+    position: relative;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.edit-mode .editable-text:hover {
+    background: rgba(255, 255, 255, 0.2);
+    outline-style: solid;
+}
+
+.edit-mode .editable-text:focus {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--diagram-black);
+    text-shadow: none;
+    /* remove o efeito shadow da tela de visão */
+    outline: 2px solid var(--diagram-black);
+    outline-offset: 2px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* =================================================================
+   😎 MODO DE VISUALIZAÇÃO PÚBLICA (PUBLISH MODE) 😎
+   ================================================================= */
+#landing-page-builder-section.view-mode {
+    padding-top: 0;
+}
+
+#landing-page-builder-section.view-mode #editor-navbar {
+    display: none;
+}
+
+#landing-page-builder-section.view-mode #template-container {
+    padding-top: 0;
+    max-width: 100%;
+}
+
+#landing-page-builder-section.view-mode .module-section {
+    border-radius: 0;
+    margin-bottom: 0;
+}
+
+#landing-page-builder-section.view-mode .bg-edit-btn {
+    display: none;
+}
+
+/* Deixa a centralização correta quando alarga tudo 100% da viewport */
+#landing-page-builder-section.view-mode .module-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* =================================================================
+   🎨 PROPERTIES SIDEBAR PANEL (CANVA STYLE) 🎨
+   ================================================================= */
+
+#properties-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100vh;
+    background-color: var(--diagram-dark);
+    color: #fff;
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    transform: translateX(0);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+#properties-panel.hidden {
+    transform: translateX(100%);
+    pointer-events: none;
+}
+
+.panel-header {
+    background: #0f172a;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #334155;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--diagram-blue);
+}
+
+#close-panel-btn {
+    background: transparent;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: color 0.2s;
+}
+
+#close-panel-btn:hover {
+    color: var(--diagram-red);
+}
+
+.panel-content {
+    padding: 20px;
+    flex: 1;
+}
+
+.property-group {
+    background: #1e293b;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: inset 0 0 0 1px #334155;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.property-group h4 {
+    margin-bottom: 15px;
+    font-size: 0.95rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.prop-row {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.prop-row label {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.prop-row input[type="text"],
+.prop-row input[type="number"],
+.prop-row select {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    outline: none;
+    font-size: 0.9rem;
+}
+
+.prop-row input[type="text"]:focus,
+.prop-row input[type="number"]:focus,
+.prop-row select:focus {
+    border-color: var(--diagram-blue);
+}
+
+.prop-row input[type="color"] {
+    width: 100%;
+    height: 40px;
+    padding: 2px;
+    border: none;
+    border-radius: 4px;
+    background: #0f172a;
+    cursor: pointer;
+}
+
+.prop-row.btn-group {
+    flex-direction: row;
+    gap: 5px;
+}
+
+.prop-row.btn-group button {
+    flex: 1;
+    background: #334155;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.prop-row.btn-group button:hover {
+    background: #475569;
+}
+
+.prop-row.btn-group button.active {
+    background: var(--diagram-blue);
+}
+
+.panel-hr {
+    margin: 20px 0;
+    border: 0;
+    border-top: 1px solid #334155;
+}
+
+.prop-action-btn {
+    width: 100%;
+    background: var(--diagram-blue);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.prop-action-btn:hover {
+    background: #0284c7;
+}
+
+/* Reserve space for panel but stay centered */
+.edit-mode.panel-open #template-container {
+    margin: 0 auto;
+    padding-right: 320px;
+    box-sizing: content-box;
+}
+
+/* Active Highlight Element */
+.selected-element {
+    outline: 3px solid #fbbf24 !important;
+    /* Orange/Yellow highlight */
+    outline-offset: 4px;
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.5) !important;
+    position: relative;
+    z-index: 100;
+}
+
+/* Responsividade Mobile para ficar bonito quando testado em telas menores */
+@media (max-width: 768px) {
+    .module-content {
+        flex-direction: column !important;
+        text-align: center;
+        padding: 30px 15px;
+    }
+
+    .body-img-container,
+    .logo-container {
+        width: 100%;
+        max-width: 300px;
+    }
+
+    #properties-panel {
+        width: 100%;
+    }
+
+    .edit-mode.panel-open #template-container {
+        margin-right: auto;
+    }
+}
