@@ -29,12 +29,10 @@ function buildSceneId(course) {
 }
 
 function buildRoomPosition(index) {
-  const lane = index % 2;
-  const row = Math.floor(index / 2);
   return {
-    x: row * 18,
+    x: index * 10,
     y: 0,
-    z: lane === 0 ? 0 : 10
+    z: 0
   };
 }
 
@@ -114,9 +112,10 @@ function buildCourseProgress(course, userId, isManagerView = false) {
   );
 
   let requiredGateOpen = true;
-  const modules = (course.courseModules || []).map((courseModule) => {
+  const modules = (course.courseModules || []).map((courseModule, index) => {
     const completed = completions.has(courseModule.moduleId);
     const unlocked = isManagerView || requiredGateOpen;
+    const roomPosition = buildRoomPosition(index);
 
     const payload = {
       courseModuleId: courseModule.id,
@@ -133,11 +132,7 @@ function buildCourseProgress(course, userId, isManagerView = false) {
         ? {
             id: courseModule.placement.id,
             label: courseModule.placement.label,
-            position: {
-              x: courseModule.placement.positionX,
-              y: courseModule.placement.positionY,
-              z: courseModule.placement.positionZ
-            },
+            position: roomPosition,
             rotation: {
               x: courseModule.placement.rotationX,
               y: courseModule.placement.rotationY,
