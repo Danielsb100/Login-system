@@ -28,11 +28,109 @@ function buildSceneId(course) {
   return course.sceneId || `course-${course.id}-${slugify(course.title)}`;
 }
 
+const COURSE_ROOM_SPACING = 14;
+const DEFAULT_MINIMUM_QUIZ_SCORE = 70;
+
 function buildRoomPosition(index) {
   return {
-    x: index * 10,
+    x: index * COURSE_ROOM_SPACING,
     y: 0,
     z: 0
+  };
+}
+
+function normalizeMinimumQuizScore(value, fallback = DEFAULT_MINIMUM_QUIZ_SCORE) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(100, Math.max(0, parsed));
+}
+
+function buildProgressModuleInclude(userId) {
+  return {
+    placement: true,
+    module: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        quizzes: {
+          select: { id: true }
+        },
+        submissions: {
+          where: { userId },
+          select: {
+            id: true,
+            userId: true,
+            score: true,
+            attemptNumber: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    }
+  };
+}
+
+function buildCourseInclude(userId, { includeEnrollmentUsers = false, includeLandingPage = false } = {}) {
+  return {
+    enrollments: includeEnrollmentUsers
+      ? {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                profile: { select: { displayName: true } }
+              }
+            }
+          }
+        }
+      : true,
+    completions: true,
+    courseModules: {
+      include: buildProgressModuleInclude(userId),
+      orderBy: { orderIndex: 'asc' }
+    },
+    ...(includeLandingPage
+      ? {
+          landingPage: {
+            select: { id: true, title: true, compiledHtml: true, compiledCss: true }
+          }
+        }
+      : {})
+  };
+}
+
+function getCourseModuleQuizState(courseModule, userId) {
+  const hasQuiz = Boolean(courseModule.module?.quizzes?.length);
+  const submissions = (courseModule.module?.submissions || [])
+    .filter((entry) => entry.userId === userId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const latestSubmission = submissions[0] || null;
+  const bestQuizScore = submissions.length
+    ? submissions.reduce((best, entry) => Math.max(best, Number(entry.score) || 0), 0)
+    : null;
+  const latestQuizScore = latestSubmission ? Number(latestSubmission.score) || 0 : null;
+  const quizRequirementActive = Boolean(hasQuiz && courseModule.requireQuizPass);
+  const minimumQuizScore = quizRequirementActive
+    ? normalizeMinimumQuizScore(courseModule.minimumQuizScore)
+    : null;
+  const quizPassed = !quizRequirementActive || (bestQuizScore !== null && bestQuizScore >= minimumQuizScore);
+
+  return {
+    hasQuiz,
+    quizRequirementActive,
+    minimumQuizScore,
+    bestQuizScore,
+    latestQuizScore,
+    latestAttemptNumber: latestSubmission?.attemptNumber || null,
+    quizAttemptCount: submissions.length,
+    quizPassed
   };
 }
 
@@ -116,6 +214,8 @@ function buildCourseProgress(course, userId, isManagerView = false) {
     const completed = completions.has(courseModule.moduleId);
     const unlocked = isManagerView || requiredGateOpen;
     const roomPosition = buildRoomPosition(index);
+    const quizState = getCourseModuleQuizState(courseModule, userId);
+    const completionBlockedByQuiz = !isManagerView && quizState.quizRequirementActive && !quizState.quizPassed;
 
     const payload = {
       courseModuleId: courseModule.id,
@@ -125,6 +225,19 @@ function buildCourseProgress(course, userId, isManagerView = false) {
       moduleStatus: courseModule.module?.status || 'DRAFT',
       orderIndex: courseModule.orderIndex,
       isRequired: courseModule.isRequired,
+      requireQuizPass: Boolean(courseModule.requireQuizPass),
+      minimumQuizScore: quizState.minimumQuizScore,
+      hasQuiz: quizState.hasQuiz,
+      quizRequirementActive: quizState.quizRequirementActive,
+      quizPassed: quizState.quizPassed,
+      bestQuizScore: quizState.bestQuizScore,
+      latestQuizScore: quizState.latestQuizScore,
+      quizAttemptCount: quizState.quizAttemptCount,
+      latestQuizAttemptNumber: quizState.latestAttemptNumber,
+      canMarkComplete: isManagerView || !completionBlockedByQuiz,
+      completionBlockedReason: completionBlockedByQuiz
+        ? `Pass the module quiz with at least ${quizState.minimumQuizScore}% before marking this room as done.`
+        : null,
       roomLabel: courseModule.roomLabel || courseModule.placement?.label || `Module Room ${courseModule.orderIndex + 1}`,
       completed,
       unlocked,
@@ -142,7 +255,8 @@ function buildCourseProgress(course, userId, isManagerView = false) {
         : null
     };
 
-    if (courseModule.isRequired && !completed) {
+    const requiredGateSatisfied = completed && (!quizState.quizRequirementActive || quizState.quizPassed);
+    if (courseModule.isRequired && !requiredGateSatisfied) {
       requiredGateOpen = false;
     }
 
@@ -157,31 +271,7 @@ function buildCourseProgress(course, userId, isManagerView = false) {
 async function assertCourseAccess(courseId, user) {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    include: {
-      enrollments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              email: true,
-              profile: { select: { displayName: true } }
-            }
-          }
-        }
-      },
-      completions: true,
-      courseModules: {
-        include: {
-          module: true,
-          placement: true
-        },
-        orderBy: { orderIndex: 'asc' }
-      },
-      landingPage: {
-        select: { id: true, title: true, compiledHtml: true, compiledCss: true }
-      }
-    }
+    include: buildCourseInclude(user.id, { includeEnrollmentUsers: true, includeLandingPage: true })
   });
 
   if (!course) {
@@ -243,14 +333,7 @@ async function getMyCourses(req, res) {
   try {
     const courses = await prisma.course.findMany({
       where: { ownerMasterId: req.user.id },
-      include: {
-        courseModules: {
-          include: { module: { select: { id: true, title: true, status: true } } },
-          orderBy: { orderIndex: 'asc' }
-        },
-        enrollments: true,
-        completions: true
-      },
+      include: buildCourseInclude(req.user.id),
       orderBy: { updatedAt: 'desc' }
     });
 
@@ -287,12 +370,7 @@ async function getAccessibleCourses(req, res) {
           }
         : { enrollments: { some: { userId: req.user.id, status: { not: 'CANCELLED' } } } },
       include: {
-        courseModules: {
-          include: { module: { select: { id: true, title: true, status: true } }, placement: true },
-          orderBy: { orderIndex: 'asc' }
-        },
-        enrollments: true,
-        completions: true,
+        ...buildCourseInclude(req.user.id),
         landingPage: {
           select: { id: true, title: true }
         }
@@ -402,6 +480,8 @@ async function addModuleToCourse(req, res) {
   try {
     const courseId = Number(req.params.id);
     const moduleId = Number(req.body.moduleId);
+    const requireQuizPass = Boolean(req.body.requireQuizPass);
+    const minimumQuizScore = requireQuizPass ? normalizeMinimumQuizScore(req.body.minimumQuizScore) : null;
     const course = await prisma.course.findUnique({ where: { id: courseId } });
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
@@ -410,12 +490,22 @@ async function addModuleToCourse(req, res) {
       return res.status(403).json({ error: 'Not authorized to manage this course.' });
     }
 
-    const module = await prisma.trainingModule.findUnique({ where: { id: moduleId } });
+    const module = await prisma.trainingModule.findUnique({
+      where: { id: moduleId },
+      include: {
+        _count: {
+          select: { quizzes: true }
+        }
+      }
+    });
     if (!module) {
       return res.status(404).json({ error: 'Module not found.' });
     }
     if (module.ownerMasterId !== req.user.id && !getEffectiveUserRoles(req.user).has('ADMIN') && !getEffectiveUserRoles(req.user).has('SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Only the module owner can attach this module to the course.' });
+    }
+    if (requireQuizPass && module._count.quizzes === 0) {
+      return res.status(400).json({ error: 'This module does not have a quiz to require for course progression.' });
     }
 
     const lastModule = await prisma.courseModule.findFirst({
@@ -430,6 +520,8 @@ async function addModuleToCourse(req, res) {
           moduleId,
           orderIndex: typeof req.body.orderIndex === 'number' ? req.body.orderIndex : (lastModule?.orderIndex || 0) + 1,
           isRequired: req.body.isRequired !== false,
+          requireQuizPass,
+          minimumQuizScore,
           roomLabel: req.body.roomLabel || null
         }
       });
@@ -453,7 +545,16 @@ async function updateCourseModule(req, res) {
     const courseModuleId = Number(req.params.courseModuleId);
     const current = await prisma.courseModule.findUnique({
       where: { id: courseModuleId },
-      include: { course: true }
+      include: {
+        course: true,
+        module: {
+          include: {
+            _count: {
+              select: { quizzes: true }
+            }
+          }
+        }
+      }
     });
     if (!current) {
       return res.status(404).json({ error: 'Course module not found.' });
@@ -462,11 +563,31 @@ async function updateCourseModule(req, res) {
       return res.status(403).json({ error: 'Not authorized to update this course module.' });
     }
 
+    const nextRequireQuizPass = req.body.requireQuizPass === undefined
+      ? current.requireQuizPass
+      : Boolean(req.body.requireQuizPass);
+    if (nextRequireQuizPass && current.module?._count?.quizzes === 0) {
+      return res.status(400).json({ error: 'This module does not have a quiz to require for course progression.' });
+    }
+
+    let nextMinimumQuizScore = current.minimumQuizScore;
+    if (nextRequireQuizPass) {
+      if (req.body.minimumQuizScore !== undefined || req.body.requireQuizPass !== undefined || nextMinimumQuizScore == null) {
+        nextMinimumQuizScore = normalizeMinimumQuizScore(
+          req.body.minimumQuizScore === undefined ? nextMinimumQuizScore : req.body.minimumQuizScore
+        );
+      }
+    } else if (req.body.requireQuizPass !== undefined || req.body.minimumQuizScore !== undefined) {
+      nextMinimumQuizScore = null;
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       const entity = await tx.courseModule.update({
         where: { id: courseModuleId },
         data: {
           isRequired: req.body.isRequired === undefined ? current.isRequired : Boolean(req.body.isRequired),
+          requireQuizPass: nextRequireQuizPass,
+          minimumQuizScore: nextMinimumQuizScore,
           roomLabel: req.body.roomLabel === undefined ? current.roomLabel : req.body.roomLabel
         }
       });
@@ -616,6 +737,9 @@ async function completeCourseModule(req, res) {
     if (!target.unlocked && !managerView) {
       return res.status(403).json({ error: 'This module is still locked by the course path.' });
     }
+    if (!target.canMarkComplete && !managerView) {
+      return res.status(403).json({ error: target.completionBlockedReason || 'Pass the required quiz before marking this module as done.' });
+    }
 
     await prisma.moduleCompletion.upsert({
       where: { courseId_moduleId_userId: { courseId, moduleId, userId: req.user.id } },
@@ -625,11 +749,7 @@ async function completeCourseModule(req, res) {
 
     const refreshed = await prisma.course.findUnique({
       where: { id: courseId },
-      include: {
-        completions: true,
-        courseModules: { include: { module: true, placement: true }, orderBy: { orderIndex: 'asc' } },
-        enrollments: true
-      }
+      include: buildCourseInclude(req.user.id)
     });
     const refreshedProgress = buildCourseProgress(refreshed, req.user.id, managerView);
 

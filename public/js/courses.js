@@ -9,6 +9,8 @@ let coursesState = {
     selectedAssignableModuleId: null
 };
 
+const DEFAULT_QUIZ_GATE_SCORE = 70;
+
 function escapeCourseHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -514,6 +516,329 @@ async function enrollUser(userId) {
     const queryField = document.getElementById('course-enrollment-query');
     if (queryField) queryField.value = '';
     await loadCourseDetail(coursesState.selectedCourseId);
+}
+
+function renderCourseModules(course) {
+    const container = document.getElementById('course-modules-list');
+    const meta = document.getElementById('course-modules-meta');
+    if (!container || !meta) return;
+
+    meta.textContent = `${(course.modules || []).length} modules`;
+
+    if (!course.modules?.length) {
+        container.innerHTML = '<div class="empty-state-inline">No modules attached yet.</div>';
+        return;
+    }
+
+    container.innerHTML = course.modules.map((module, index) => {
+        const statusLabel = module.completed ? 'Completed' : (module.unlocked ? 'Available' : 'Locked');
+        const statusColor = module.completed ? 'priority-low' : (module.unlocked ? 'priority-medium' : 'priority-critical');
+        const quizRuleLabel = module.quizRequirementActive
+            ? `Quiz gate ${Math.round(module.minimumQuizScore || DEFAULT_QUIZ_GATE_SCORE)}%`
+            : (module.hasQuiz ? 'Quiz optional' : 'No quiz');
+        const quizScoreLabel = module.bestQuizScore === null || module.bestQuizScore === undefined
+            ? 'No attempts yet'
+            : `Best ${Math.round(module.bestQuizScore)}%`;
+
+        return `
+            <article class="operation-item ${module.completed ? '' : (module.unlocked ? '' : 'is-urgent')}" data-course-module-id="${module.courseModuleId}">
+                <div class="operation-item-head">
+                    <div>
+                        <h5>${index + 1}. ${escapeCourseHtml(module.title)}</h5>
+                        <p>${escapeCourseHtml(module.description || module.roomLabel || 'Module trail room')}</p>
+                    </div>
+                    <span class="operation-tag ${statusColor}">${statusLabel}</span>
+                </div>
+                <div class="operation-item-footer" style="align-items:flex-start; gap:0.75rem; flex-wrap:wrap;">
+                    <div class="operation-meta-row">
+                        <span class="operation-tag">${module.isRequired ? 'Required' : 'Optional'}</span>
+                        <span class="operation-tag">${escapeCourseHtml(module.roomLabel || 'Module room')}</span>
+                        <span class="operation-tag">Step ${index + 1} in trail</span>
+                        <span class="operation-tag">${escapeCourseHtml(module.moduleStatus || 'DRAFT')}</span>
+                        <span class="operation-tag">${escapeCourseHtml(quizRuleLabel)}</span>
+                        ${module.hasQuiz ? `<span class="operation-tag">${escapeCourseHtml(quizScoreLabel)}</span>` : ''}
+                    </div>
+                    <div class="operation-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        ${module.unlocked ? `<button type="button" class="btn btn-secondary btn-sm" data-open-world-course="${coursesState.selectedCourseId}">Enter this course world</button>` : ''}
+                        ${!coursesState.selectedCourse?.canManage && module.unlocked && !module.completed ? `<button type="button" class="btn btn-secondary btn-sm" data-complete-module="${module.moduleId}">Mark complete</button>` : ''}
+                        ${coursesState.selectedCourse?.canManage ? `
+                            <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="up" data-course-module-id="${module.courseModuleId}">↑</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="down" data-course-module-id="${module.courseModuleId}">↓</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-toggle-required="${module.courseModuleId}">${module.isRequired ? 'Make optional' : 'Make required'}</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-edit-quiz-gate="${module.courseModuleId}" ${module.hasQuiz ? '' : 'disabled'}>${module.quizRequirementActive ? 'Edit quiz gate' : 'Quiz rule'}</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-remove-course-module="${module.courseModuleId}" style="color:var(--error); border-color:rgba(239,68,68,0.3);">Remove</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    container.querySelectorAll('[data-open-world-course]').forEach((button) => {
+        button.addEventListener('click', () => window.goToMultiplayer?.(Number(button.dataset.openWorldCourse)));
+    });
+
+    container.querySelectorAll('[data-complete-module]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            try {
+                button.disabled = true;
+                await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${button.dataset.completeModule}/complete`, 'POST', { source: 'DASHBOARD' });
+                await refreshCoursesPanel();
+                await loadCourseDetail(coursesState.selectedCourseId);
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+
+    if (coursesState.selectedCourse?.canManage) {
+        container.querySelectorAll('[data-toggle-required]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const target = coursesState.selectedCourse.modules.find((module) => module.courseModuleId === Number(button.dataset.toggleRequired));
+                if (!target) return;
+                try {
+                    await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${target.courseModuleId}`, 'PATCH', { isRequired: !target.isRequired });
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+        });
+
+        container.querySelectorAll('[data-edit-quiz-gate]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const target = coursesState.selectedCourse.modules.find((module) => module.courseModuleId === Number(button.dataset.editQuizGate));
+                if (!target) return;
+                if (!target.hasQuiz) {
+                    alert('This module does not have a quiz yet.');
+                    return;
+                }
+
+                try {
+                    if (target.quizRequirementActive) {
+                        const keepEnabled = confirm('Quiz pass is currently required for this room. Click OK to change the minimum score, or Cancel to disable the quiz gate.');
+                        if (!keepEnabled) {
+                            await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${target.courseModuleId}`, 'PATCH', {
+                                requireQuizPass: false,
+                                minimumQuizScore: null
+                            });
+                        } else {
+                            const nextScore = prompt('Minimum quiz score required to unlock the next room (%)', String(Math.round(target.minimumQuizScore || DEFAULT_QUIZ_GATE_SCORE)));
+                            if (nextScore === null) return;
+                            const parsedScore = Number(nextScore);
+                            if (!Number.isFinite(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+                                alert('Enter a score between 0 and 100.');
+                                return;
+                            }
+                            await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${target.courseModuleId}`, 'PATCH', {
+                                requireQuizPass: true,
+                                minimumQuizScore: parsedScore
+                            });
+                        }
+                    } else {
+                        const enableGate = confirm('Require learners to pass this module quiz before the next room unlocks?');
+                        if (!enableGate) return;
+                        const nextScore = prompt('Minimum quiz score required to unlock the next room (%)', String(Math.round(target.minimumQuizScore || DEFAULT_QUIZ_GATE_SCORE)));
+                        if (nextScore === null) return;
+                        const parsedScore = Number(nextScore);
+                        if (!Number.isFinite(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+                            alert('Enter a score between 0 and 100.');
+                            return;
+                        }
+                        await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${target.courseModuleId}`, 'PATCH', {
+                            requireQuizPass: true,
+                            minimumQuizScore: parsedScore
+                        });
+                    }
+
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+        });
+
+        container.querySelectorAll('[data-remove-course-module]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                if (!confirm('Remove this module from the course trail?')) return;
+                try {
+                    await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/${button.dataset.removeCourseModule}`, 'DELETE');
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+        });
+
+        container.querySelectorAll('[data-move-course-module]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const ordered = [...coursesState.selectedCourse.modules].sort((a, b) => a.orderIndex - b.orderIndex);
+                const idx = ordered.findIndex((item) => item.courseModuleId === Number(button.dataset.courseModuleId));
+                if (idx === -1) return;
+                const nextIndex = button.dataset.moveCourseModule === 'up' ? idx - 1 : idx + 1;
+                if (nextIndex < 0 || nextIndex >= ordered.length) return;
+                const [item] = ordered.splice(idx, 1);
+                ordered.splice(nextIndex, 0, item);
+                try {
+                    await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules/reorder`, 'PATCH', {
+                        orderedCourseModuleIds: ordered.map((entry) => entry.courseModuleId)
+                    });
+                    await refreshCoursesPanel();
+                    await loadCourseDetail(coursesState.selectedCourseId);
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+        });
+    }
+}
+
+function renderAssignableModulesList(filterText = '') {
+    const options = document.getElementById('course-module-options');
+    const empty = document.getElementById('course-module-empty');
+    if (!options || !empty) return;
+
+    const normalizedFilter = String(filterText || '').trim().toLowerCase();
+    const modules = (coursesState.assignableModules || []).filter((module) => {
+        if (!normalizedFilter) return true;
+        return [module.title, module.status, module.description]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedFilter));
+    });
+
+    options.innerHTML = '';
+    empty.classList.toggle('hidden', modules.length > 0);
+    empty.textContent = modules.length ? '' : 'No modules matched your search.';
+
+    modules.forEach((module) => {
+        const selected = coursesState.selectedAssignableModuleId === module.id;
+        const article = document.createElement('button');
+        article.type = 'button';
+        article.className = 'glassmorphism';
+        article.style.cssText = `text-align:left; width:100%; padding:0.9rem 1rem; border-radius:16px; border:1px solid ${selected ? 'rgba(96,165,250,0.7)' : 'rgba(255,255,255,0.08)'}; background:${selected ? 'rgba(37,99,235,0.22)' : 'rgba(15,23,42,0.5)'}; color:white; cursor:pointer;`;
+        article.innerHTML = `
+            <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                <div>
+                    <strong style="display:block; margin-bottom:0.25rem;">${escapeCourseHtml(module.title)}</strong>
+                    <span style="font-size:0.82rem; color:var(--text-muted);">${escapeCourseHtml(module.description || 'No description.')}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.35rem;">
+                    <span class="role-badge" style="font-size:0.68rem;">${escapeCourseHtml(module.status || 'DRAFT')}</span>
+                    <span class="role-badge" style="font-size:0.68rem; border-color:${module.quizCount ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.1)'}; color:${module.quizCount ? '#93c5fd' : 'var(--text-muted)'};">${module.quizCount ? `${module.quizCount} quiz${module.quizCount > 1 ? 'zes' : ''}` : 'No quiz'}</span>
+                </div>
+            </div>
+        `;
+        article.addEventListener('click', () => {
+            coursesState.selectedAssignableModuleId = module.id;
+            const roomLabelInput = document.getElementById('course-module-room-label');
+            if (roomLabelInput && !roomLabelInput.value.trim()) {
+                roomLabelInput.value = module.title;
+            }
+            updateCourseModuleQuizGateFields(module);
+            renderAssignableModulesList(document.getElementById('course-module-search')?.value || '');
+        });
+        options.appendChild(article);
+    });
+}
+
+function updateCourseModuleQuizGateFields(selectedModule = null) {
+    const quizToggle = document.getElementById('course-module-require-quiz-pass');
+    const quizScoreInput = document.getElementById('course-module-minimum-quiz-score');
+    const quizHelp = document.getElementById('course-module-quiz-help');
+    if (!quizToggle || !quizScoreInput || !quizHelp) return;
+
+    const module = selectedModule || coursesState.assignableModules.find((entry) => entry.id === coursesState.selectedAssignableModuleId) || null;
+    const hasQuiz = Boolean(module?.quizCount);
+
+    if (!hasQuiz) {
+        quizToggle.checked = false;
+        quizToggle.disabled = true;
+        quizScoreInput.disabled = true;
+        quizScoreInput.value = String(DEFAULT_QUIZ_GATE_SCORE);
+        quizHelp.textContent = 'This module has no quiz yet. Add a quiz first if you want to gate the next room by score.';
+        return;
+    }
+
+    quizToggle.disabled = false;
+    quizScoreInput.disabled = !quizToggle.checked;
+    if (!quizScoreInput.value) {
+        quizScoreInput.value = String(DEFAULT_QUIZ_GATE_SCORE);
+    }
+    quizHelp.textContent = quizToggle.checked
+        ? 'Learners will only unlock the next room after marking this module done and reaching this score.'
+        : 'This module has a quiz. Turn this on if passing it should be mandatory for the next room.';
+}
+
+async function attachExistingModule() {
+    if (!coursesState.selectedCourse) return;
+    const modules = await window.apiCall('/modules/my/assignable');
+    coursesState.assignableModules = modules || [];
+    coursesState.selectedAssignableModuleId = coursesState.assignableModules[0]?.id || null;
+
+    const modal = document.getElementById('course-module-modal');
+    const searchInput = document.getElementById('course-module-search');
+    const roomLabelInput = document.getElementById('course-module-room-label');
+    const requiredInput = document.getElementById('course-module-required');
+    const quizGateInput = document.getElementById('course-module-require-quiz-pass');
+    const quizScoreInput = document.getElementById('course-module-minimum-quiz-score');
+    const empty = document.getElementById('course-module-empty');
+    if (!modal || !searchInput || !roomLabelInput || !requiredInput || !quizGateInput || !quizScoreInput || !empty) return;
+
+    searchInput.value = '';
+    roomLabelInput.value = coursesState.assignableModules[0]?.title || '';
+    requiredInput.checked = true;
+    quizGateInput.checked = false;
+    quizScoreInput.value = String(DEFAULT_QUIZ_GATE_SCORE);
+
+    if (!coursesState.assignableModules.length) {
+        empty.classList.remove('hidden');
+        empty.textContent = 'You do not have any modules available yet. Create one in the modules workbench first, then add it to this course trail.';
+        document.getElementById('course-module-options').innerHTML = '';
+        updateCourseModuleQuizGateFields(null);
+    } else {
+        renderAssignableModulesList();
+        updateCourseModuleQuizGateFields(coursesState.assignableModules[0]);
+    }
+
+    searchInput.oninput = () => renderAssignableModulesList(searchInput.value);
+    quizGateInput.onchange = () => updateCourseModuleQuizGateFields();
+
+    const confirmButton = document.getElementById('btn-confirm-course-module');
+    if (confirmButton) {
+        confirmButton.onclick = async () => {
+            const selected = coursesState.assignableModules.find((module) => module.id === coursesState.selectedAssignableModuleId);
+            if (!selected) {
+                alert('Choose a module first.');
+                return;
+            }
+            try {
+                confirmButton.disabled = true;
+                await window.apiCall(`/courses/${coursesState.selectedCourseId}/modules`, 'POST', {
+                    moduleId: selected.id,
+                    roomLabel: roomLabelInput.value.trim() || selected.title,
+                    isRequired: requiredInput.checked,
+                    requireQuizPass: quizGateInput.checked && Boolean(selected.quizCount),
+                    minimumQuizScore: quizGateInput.checked && Boolean(selected.quizCount)
+                        ? Number(quizScoreInput.value || DEFAULT_QUIZ_GATE_SCORE)
+                        : null
+                });
+                closeCourseModuleModal();
+                await refreshCoursesPanel();
+                await loadCourseDetail(coursesState.selectedCourseId);
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                confirmButton.disabled = false;
+            }
+        };
+    }
+
+    modal.classList.remove('hidden');
 }
 
 window.loadCoursesPanel = async function loadCoursesPanel({ user, canManageCourses }) {

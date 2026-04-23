@@ -1,0 +1,6 @@
+[config] EMAIL_USER/EMAIL_PASS are not configured. Verification emails are currently disabled.
+[config] MASTER_PASSWORD is using the default seed credential.
+(node:26256) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[mail] Verification email skipped for student.quizgate2@example.com. EMAIL_USER/EMAIL_PASS are not configured.
+[mail] Verification email skipped for student.quizgate3@example.com. EMAIL_USER/EMAIL_PASS are not configured.
