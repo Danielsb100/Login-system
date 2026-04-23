@@ -16,6 +16,10 @@ const { sendSuccess, sendError } = require('../utils/http');
 
 const MIN_PASSWORD_LENGTH = 6;
 
+function isEmailVerificationRequired() {
+  return env.auth.requireEmailVerification;
+}
+
 function buildResetBaseUrl(req) {
   const configuredUrl = env.public.loginUrl?.trim();
   if (configuredUrl) {
@@ -107,6 +111,7 @@ const register = async (req, res) => {
       });
     }
 
+    const shouldRequireEmailVerification = isEmailVerificationRequired();
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -132,15 +137,19 @@ const register = async (req, res) => {
       });
     });
 
-    await sendVerificationEmail(email, username, verificationCode);
+    if (shouldRequireEmailVerification) {
+      await sendVerificationEmail(email, username, verificationCode);
+    }
 
     return sendSuccess(res, {
       status: 201,
-      message: 'User registered successfully. Please check your email for the verification code.',
+      message: shouldRequireEmailVerification
+        ? 'User registered successfully. Please check your email for the verification code.'
+        : 'User registered successfully. Email verification is temporarily disabled. You can log in now.',
       data: {
-        needsVerification: true,
+        needsVerification: shouldRequireEmailVerification,
         user: buildPublicUser(createdUser),
-        ...(env.nodeEnv !== 'production' && !env.mail.enabled
+        ...(shouldRequireEmailVerification && env.nodeEnv !== 'production' && !env.mail.enabled
           ? { debugVerificationCode: verificationCode }
           : {})
       }
@@ -189,7 +198,7 @@ const login = async (req, res) => {
       });
     }
 
-    if (!user.isVerified) {
+    if (isEmailVerificationRequired() && !user.isVerified) {
       return sendError(res, {
         status: 403,
         code: 'AUTH_ACCOUNT_NOT_VERIFIED',
@@ -246,7 +255,7 @@ const verify = async (req, res) => {
       });
     }
 
-    if (!user.isVerified) {
+    if (isEmailVerificationRequired() && !user.isVerified) {
       return sendError(res, {
         status: 403,
         code: 'AUTH_ACCOUNT_NOT_VERIFIED',

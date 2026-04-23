@@ -14,3 +14,22 @@ The database is already in sync with the Prisma schema.
 [config] MASTER_PASSWORD is using the default seed credential.
 Server is running on port 3000
 [DEBUG] Formatted module 2: v=0, d=0, q=0
+[DEBUG] Formatted module 3: v=0, d=0, q=0
+[DEBUG] Formatted module 1: v=0, d=0, q=0
+[DEBUG] Adding video to module 3: {
+  title: 'General Tab Test Video',
+  url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  order: 1
+}
+[DEBUG] Video created: 1
+[DEBUG] Linking document null to module 3 as "General Tab Test Image"
+[DEBUG] Creating quiz for module 3: "General Tab Test Quiz"
+[DEBUG] Quiz created: 1
+[DEBUG] Adding question to quiz 1: "Is the General tab listing assets?" - options count: 2
+[DEBUG] Formatted module 3: v=1, d=0, q=1
+[DEBUG] Linking document 1 to module 3 as "General Tab Test Image"
+[DEBUG] ModuleDocument created: 1
+[DEBUG] Adding question to quiz 1: "Is the General tab listing assets?" - options count: 2
+[DEBUG] Question created: 1
+[DEBUG] Formatted module 3: v=1, d=1, q=1
+[DEBUG] Formatted module 3: v=1, d=1, q=1
