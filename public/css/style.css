@@ -525,6 +525,10 @@ p {
 }
 
 .role-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 100%;
     background: rgba(236, 72, 153, 0.2);
     color: var(--secondary);
     padding: 0.25rem 0.75rem;
@@ -533,6 +537,7 @@ p {
     font-weight: 700;
     letter-spacing: 1px;
     border: 1px solid rgba(236, 72, 153, 0.3);
+    white-space: nowrap;
 }
 
 .role-badge[data-role="ADMIN"],
