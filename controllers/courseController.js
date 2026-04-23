@@ -784,6 +784,11 @@ async function completeCourseModule(req, res) {
 }
 
 module.exports = {
+  getEffectiveUserRoles,
+  isCourseManager,
+  buildCourseInclude,
+  buildCourseProgress,
+  assertCourseAccess,
   createCourse,
   getMyCourses,
   getAccessibleCourses,
