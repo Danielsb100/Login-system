@@ -52,7 +52,8 @@ const env = {
   auth: {
     jwtSecret: process.env.JWT_SECRET || LEGACY_DEFAULT_JWT_SECRET,
     tokenExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    passwordResetTokenTtlMinutes: parsePositiveInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES, 30)
+    passwordResetTokenTtlMinutes: parsePositiveInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES, 30),
+    requireEmailVerification: parseBoolean(process.env.REQUIRE_EMAIL_VERIFICATION, true)
   },
   mail: {
     user: process.env.EMAIL_USER || '',
@@ -94,6 +95,10 @@ if (env.auth.jwtSecret === LEGACY_DEFAULT_JWT_SECRET) {
 
 if (!env.mail.enabled) {
   warnings.push('EMAIL_USER/EMAIL_PASS are not configured. Verification emails are currently disabled.');
+}
+
+if (!env.auth.requireEmailVerification) {
+  warnings.push('REQUIRE_EMAIL_VERIFICATION is disabled. Unverified users can access the platform.');
 }
 
 if (env.seed.autoSeedMaster && env.seed.masterUser.password === LEGACY_DEFAULT_MASTER_PASSWORD) {
