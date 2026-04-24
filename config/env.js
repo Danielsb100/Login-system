@@ -73,6 +73,11 @@ const env = {
     maxFileSizeMb,
     maxFileSizeBytes: maxFileSizeMb * 1024 * 1024
   },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    quizModel: process.env.OPENAI_QUIZ_MODEL || 'gpt-5.4',
+    reasoningEffort: process.env.OPENAI_REASONING_EFFORT || 'low'
+  },
   seed: {
     autoSeedMaster: parseBoolean(process.env.ENABLE_AUTO_SEED_MASTER, true),
     masterUser: {

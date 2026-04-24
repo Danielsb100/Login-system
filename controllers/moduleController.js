@@ -61,14 +61,6 @@ const createModule = async (req, res) => {
         const { title, description, coverImage } = req.body;
         const ownerMasterId = req.user.id;
 
-        // Check limit of 5 modules
-        const moduleCount = await prisma.trainingModule.count({
-            where: { ownerMasterId }
-        });
-
-        if (moduleCount >= 5) {
-            return res.status(400).json({ error: 'Limit reached: Each MASTER can create at most 5 modules.' });
-        }
 
         const newModule = await prisma.trainingModule.create({
             data: {

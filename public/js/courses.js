@@ -566,6 +566,7 @@ function renderCourseModules(course) {
                             <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="down" data-course-module-id="${module.courseModuleId}">↓</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-toggle-required="${module.courseModuleId}">${module.isRequired ? 'Make optional' : 'Make required'}</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-edit-quiz-gate="${module.courseModuleId}" ${module.hasQuiz ? '' : 'disabled'}>${module.quizRequirementActive ? 'Edit quiz gate' : 'Quiz rule'}</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-generate-ai-quiz="${module.moduleId}">AI Quiz</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-remove-course-module="${module.courseModuleId}" style="color:var(--error); border-color:rgba(239,68,68,0.3);">Remove</button>
                         ` : ''}
                     </div>
@@ -605,6 +606,17 @@ function renderCourseModules(course) {
                 } catch (error) {
                     alert(error.message);
                 }
+            });
+        });
+
+        container.querySelectorAll('[data-generate-ai-quiz]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const moduleId = Number(button.dataset.generateAiQuiz);
+                if (window.showGenerateAiQuizForm) {
+                    window.showGenerateAiQuizForm(moduleId);
+                    return;
+                }
+                alert('AI quiz generator is not available on this page.');
             });
         });
 

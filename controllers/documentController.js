@@ -16,7 +16,13 @@ exports.uploadDocument = async (req, res) => {
             }
         });
 
-        res.status(201).json({ message: 'Document uploaded successfully', id: document.id });
+        res.status(201).json({
+            message: 'Document uploaded successfully',
+            id: document.id,
+            name: document.name,
+            type: document.type,
+            downloadUrl: `/api/documents/download/${document.id}`
+        });
     } catch (err) {
         console.error('Upload error:', err);
         res.status(500).json({ error: 'Internal server error' });
