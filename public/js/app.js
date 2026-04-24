@@ -1459,10 +1459,10 @@ async function loadModulesPanel() {
 
     try {
         const modules = await apiCall('/modules/my');
-        counter.textContent = `Limit: ${modules.length}/5 modules created`;
+        counter.textContent = `${modules.length} modules created`;
         
         const btnCreate = document.getElementById('btn-create-module');
-        if (btnCreate) btnCreate.disabled = modules.length >= 5;
+        if (btnCreate) btnCreate.disabled = false;
 
         if (modules.length === 0) {
             modulesList.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">You have not created any modules yet.</div>';
@@ -1716,7 +1716,15 @@ async function selectModuleForPreview(moduleId) {
         const btnAddQuiz = document.getElementById('btn-add-quiz-direct');
         if (btnAddQuiz) btnAddQuiz.onclick = () => {
             currentModuleId = moduleId;
+            switchPreviewTab('quiz');
             showCreateQuizForm();
+        };
+
+        const btnAiQuiz = document.getElementById('btn-generate-ai-quiz-direct');
+        if (btnAiQuiz) btnAiQuiz.onclick = () => {
+            currentModuleId = moduleId;
+            switchPreviewTab('quiz');
+            showGenerateAiQuizForm(moduleId);
         };
         
         // Start on Videos tab by default
@@ -1834,6 +1842,27 @@ document.querySelectorAll('#editor-tabs .inner-tab-btn').forEach(btn => {
 
 // --- Content Handlers (Videos, Docs, Quiz) ---
 
+async function uploadAssetFile(file, progressLabel = 'Uploading...') {
+    const formData = new FormData();
+    formData.append('document', file);
+
+    const res = await fetch(`${API_URL}/api/documents/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+    });
+
+    let data = null;
+    try {
+        data = await res.json();
+    } catch (err) {
+        throw new Error(`${progressLabel} failed: server returned an invalid response.`);
+    }
+
+    if (!res.ok) throw new Error(data.error || `${progressLabel} failed`);
+    return data;
+}
+
 function renderVideoList() {
     const list = document.getElementById('v-list');
     list.innerHTML = '';
@@ -1880,21 +1909,13 @@ async function showAddVideoForm() {
             okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
             okBtn.disabled = true;
             try {
-                const formData = new FormData();
-                formData.append('document', fileInput);
                 console.log('Finalizing video upload...');
-                const res = await fetch(`${API_URL}/api/documents/upload`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${getToken()}` },
-                    body: formData
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Upload failed');
-                finalUrl = `/api/documents/download/${data.id}`;
+                const data = await uploadAssetFile(fileInput, 'Video upload');
+                finalUrl = data.downloadUrl || `/api/documents/download/${data.id}`;
             } catch (err) {
                 console.error('Upload Error:', err);
                 alert('Error uploading video: ' + err.message);
-                okBtn.textContent = 'Confirmar';
+                okBtn.textContent = 'Confirm';
                 okBtn.disabled = false;
                 return;
             }
@@ -2019,7 +2040,7 @@ async function showAddDocForm() {
         <div class="doc-selector-container">
             <div class="input-group">
                 <label>Display Title</label>
-                <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
+                <input type="text" id="d-title-in" placeholder="Example: Study Guide PDF">
             </div>
 
             <div class="modal-tabs" style="margin-bottom: 1rem;">
@@ -2028,11 +2049,11 @@ async function showAddDocForm() {
             </div>
 
             <div id="mode-doc-upload" class="selector-mode-pane">
-                <div class="upload-dropzone" onclick="document.getElementById('d-file-hidden').click()">
+                <label class="upload-dropzone" for="d-file-hidden" style="display:block; position:relative; overflow:hidden;">
                     <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 10px;"></i>
                     <p id="upload-status-text">Click to select a file</p>
-                    <input type="file" id="d-file-hidden" class="hidden">
-                </div>
+                    <input type="file" id="d-file-hidden" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+                </label>
             </div>
 
             <div id="mode-doc-library" class="selector-mode-pane hidden">
@@ -2073,7 +2094,7 @@ async function showAddDocForm() {
         } catch (err) {
             console.error('Save Doc Error:', err);
             alert('Erro ao vincular documento: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
     });
@@ -2101,16 +2122,7 @@ async function showAddDocForm() {
                 if (okBtn) okBtn.disabled = true;
 
                 try {
-                    const formData = new FormData();
-                    formData.append('document', file);
-                    const res = await fetch(`${API_URL}/api/documents/upload`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${getToken()}` },
-                        body: formData
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'Upload failed');
-                    
+                    const data = await uploadAssetFile(file, 'File upload');
                     selectedDocId = data.id;
                     statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} (Pronto)`;
                     if (okBtn) okBtn.disabled = false;
@@ -2273,7 +2285,56 @@ async function showCreateQuizForm() {
         } catch (err) {
             console.error('Quiz Create Error:', err);
             alert('Erro ao criar quiz: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
+}
+
+async function showGenerateAiQuizForm(moduleId = currentModuleId) {
+    if (!moduleId) return alert('Select a module first.');
+
+    showSubModal('Generate Quiz with AI', `
+        <div class="input-group">
+            <label>Quiz Title</label>
+            <input type="text" id="ai-qz-title-in" placeholder="AI-generated quiz">
+        </div>
+        <div class="input-group">
+            <label>Number of questions</label>
+            <input type="number" id="ai-qz-question-count" min="1" max="30" value="5">
+        </div>
+        <div class="input-group">
+            <label>Options per question</label>
+            <input type="number" id="ai-qz-options-count" min="2" max="8" value="4">
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
+            AI will use the module title, description, videos, and attached files. Very large files are skipped by the backend to avoid timeouts.
+        </p>
+    `, async () => {
+        const title = document.getElementById('ai-qz-title-in').value.trim();
+        const questionCount = parseInt(document.getElementById('ai-qz-question-count').value, 10) || 5;
+        const optionsPerQuestion = parseInt(document.getElementById('ai-qz-options-count').value, 10) || 4;
+        const okBtn = document.getElementById('sub-modal-ok');
+
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating with AI...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/modules/${moduleId}/quizzes/ai-generate`, 'POST', {
+                title,
+                questionCount,
+                optionsPerQuestion
+            });
+
+            if (currentModuleId === moduleId) {
+                await loadModuleData(moduleId);
+            }
+            closeSubModal();
+            alert('Quiz generated successfully. Review the questions before publishing or using this module.');
+        } catch (err) {
+            console.error('AI Quiz Generate Error:', err);
+            alert('Error generating quiz with AI: ' + err.message);
+            okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
     });
@@ -2321,7 +2382,7 @@ async function addQuizQuestionToQuiz(quizId) {
         } catch (err) {
             console.error('Question Add Error:', err);
             alert('Erro ao salvar pergunta: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
     });
@@ -2401,7 +2462,7 @@ function showSubModal(title, bodyHtml, onOk) {
     document.getElementById('sub-modal-body').innerHTML = bodyHtml;
     
     // Reset button state
-    okBtn.textContent = 'Confirmar';
+    okBtn.textContent = 'Confirm';
     okBtn.disabled = false;
     
     // Clear previous listeners by replacing the element
@@ -2441,6 +2502,7 @@ window.addQuizQuestionToQuiz = addQuizQuestionToQuiz;
 window.deleteQuestion = deleteQuestion;
 window.viewUserDetail = viewUserDetail;
 window.showCreateQuizForm = showCreateQuizForm;
+window.showGenerateAiQuizForm = showGenerateAiQuizForm;
 window.switchPreviewTab = switchPreviewTab;
 window.closeSubModal = closeSubModal;
 window.selectModuleForPreview = selectModuleForPreview;

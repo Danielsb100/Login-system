@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { notifyQuizSubmitted } = require('../services/notificationService');
+const { generateQuizFromModule, getModuleAssetUrl } = require('../services/openaiQuizService');
 
 // --- Video Management ---
 
@@ -197,6 +198,70 @@ const deleteQuiz = async (req, res) => {
     }
 };
 
+const createAiGeneratedQuiz = async (req, res) => {
+    try {
+        const moduleId = parseInt(req.params.id, 10);
+        const { questionCount, optionsPerQuestion, title } = req.body || {};
+
+        const module = await prisma.trainingModule.findUnique({
+            where: { id: moduleId },
+            include: {
+                videos: true,
+                documents: { include: { document: true } }
+            }
+        });
+
+        if (!module) return res.status(404).json({ error: 'Module not found' });
+        if (module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const videoAssetIds = [...new Set((module.videos || [])
+            .map((video) => getModuleAssetUrl(video.url))
+            .filter(Boolean))];
+
+        const videoAssetDocuments = videoAssetIds.length
+            ? await prisma.document.findMany({ where: { id: { in: videoAssetIds } } })
+            : [];
+
+        const generated = await generateQuizFromModule({ ...module, videoAssetDocuments }, {
+            questionCount,
+            optionsPerQuestion
+        });
+
+        if (!generated.questions.length) {
+            return res.status(502).json({ error: 'AI did not return enough valid quiz questions.' });
+        }
+
+        const order = await prisma.quiz.count({ where: { moduleId } });
+        const quiz = await prisma.quiz.create({
+            data: {
+                moduleId,
+                title: title || generated.title || 'AI Generated Quiz',
+                order,
+                questions: {
+                    create: generated.questions.map((question, questionIndex) => ({
+                        text: question.text,
+                        order: questionIndex,
+                        options: {
+                            create: question.options.map((option) => ({
+                                text: option.text,
+                                isCorrect: option.isCorrect
+                            }))
+                        }
+                    }))
+                }
+            },
+            include: { questions: { include: { options: true } } }
+        });
+
+        res.status(201).json(quiz);
+    } catch (error) {
+        console.error('AI quiz generation failed:', error);
+        res.status(error.statusCode || 500).json({ error: error.message || 'Failed to generate AI quiz' });
+    }
+};
+
 const addQuizQuestion = async (req, res) => {
     try {
         const { quizId } = req.params;
@@ -234,11 +299,11 @@ const updateQuizQuestion = async (req, res) => {
 
         const question = await prisma.quizQuestion.findUnique({ 
             where: { id: parseInt(questionId) },
-            include: { module: true }
+            include: { quiz: { include: { module: true } } }
         });
 
         if (!question) return res.status(404).json({ error: 'Question not found' });
-        if (question.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (question.quiz.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -264,11 +329,11 @@ const deleteQuizQuestion = async (req, res) => {
         const { questionId } = req.params;
         const question = await prisma.quizQuestion.findUnique({ 
             where: { id: parseInt(questionId) },
-            include: { module: true }
+            include: { quiz: { include: { module: true } } }
         });
 
         if (!question) return res.status(404).json({ error: 'Question not found' });
-        if (question.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (question.quiz.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -378,6 +443,6 @@ const getQuizzesSubmissions = async (req, res) => {
 module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
-    createQuiz, deleteQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
+    createQuiz, deleteQuiz, createAiGeneratedQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
     submitQuiz, getQuizzesSubmissions
 };

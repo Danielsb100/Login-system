@@ -471,7 +471,7 @@
                 <div class="section-header">
                     <div>
                         <h2>My Teaching Modules</h2>
-                        <p id="module-counter">Limit: 0/5 modules created</p>
+                        <p id="module-counter">0 modules created</p>
                     </div>
                     <button id="btn-create-module" class="btn btn-primary btn-sm" style="position: relative; z-index: 100; cursor: pointer !important;">
                     + Create Module
@@ -494,6 +494,7 @@
                         <button id="btn-add-video-direct" class="btn btn-secondary btn-sm"><i class="fas fa-video"></i> + Video</button>
                         <button id="btn-add-doc-direct" class="btn btn-secondary btn-sm"><i class="fas fa-file-alt"></i> + Doc</button>
                         <button id="btn-add-quiz-direct" class="btn btn-secondary btn-sm"><i class="fas fa-question-circle"></i> + Quiz</button>
+                        <button id="btn-generate-ai-quiz-direct" class="btn btn-secondary btn-sm"><i class="fas fa-robot"></i> AI Quiz</button>
                         <button id="btn-edit-preview" class="btn btn-primary btn-sm">Edit Module</button>
                     </div>
                 </div>
@@ -747,7 +748,8 @@
                     <!-- Quiz Pane -->
                     <div class="tab-pane" id="pane-quiz">
                         <div class="header-actions" style="margin-bottom: 1.5rem;">
-                            <button onclick="showCreateQuizForm()" class="btn btn-secondary btn-sm">+ Novo Quiz</button>
+                            <button onclick="showCreateQuizForm()" class="btn btn-secondary btn-sm">+ New Quiz</button>
+                        <button onclick="showGenerateAiQuizForm()" class="btn btn-secondary btn-sm"><i class="fas fa-robot"></i> Generate with AI</button>
                         </div>
                         <div id="q-list" class="quiz-editor"></div>
                     </div>
@@ -788,7 +790,7 @@
             <div id="sub-modal-body"></div>
             <div class="modal-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
                 <button id="sub-modal-ok" class="btn btn-primary">Confirmar</button>
-                <button onclick="closeSubModal()" class="btn btn-secondary">Cancelar</button>
+                <button onclick="closeSubModal()" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>

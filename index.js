@@ -34,6 +34,20 @@ const upload = multer({
   limits: { fileSize: env.upload.maxFileSizeBytes }
 });
 
+const handleUploadError = (fieldName) => (req, res, next) => {
+  upload.single(fieldName)(req, res, (error) => {
+    if (!error) return next();
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: `File is too large. Maximum allowed size is ${env.upload.maxFileSizeMb} MB.`
+      });
+    }
+
+    return res.status(400).json({ error: error.message || 'File upload failed.' });
+  });
+};
+
 const app = express();
 const PORT = env.port;
 
@@ -86,7 +100,7 @@ app.delete('/api/users/:id', authenticateToken, roleMiddleware(['MASTER']), user
 app.post(
   '/api/users/profile-picture',
   authenticateToken,
-  upload.single('profilePicture'),
+  handleUploadError('profilePicture'),
   userController.uploadProfilePicture
 );
 app.get('/api/users/:id/profile-card', authenticateToken, profileController.getUserProfileCard);
@@ -172,8 +186,10 @@ app.delete(
   contentController.deleteDocument
 );
 app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createQuiz);
+app.post('/modules/:id/quizzes/ai-generate', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createAiGeneratedQuiz);
 app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuiz);
 app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addQuizQuestion);
+app.delete('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuizQuestion);
 app.put(
   '/quizzes/:quizId/questions/:questionId',
   authenticateToken,
@@ -231,7 +247,7 @@ app.get(
   reportController.getUserDetailedReport
 );
 
-app.post('/api/documents/upload', authenticateToken, upload.single('document'), documentController.uploadDocument);
+app.post('/api/documents/upload', authenticateToken, handleUploadError('document'), documentController.uploadDocument);
 app.get('/api/documents', authenticateToken, (req, res) => {
   req.params.username = req.user.username;
   documentController.getUserDocuments(req, res);
