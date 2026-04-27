@@ -1485,7 +1485,7 @@ async function loadModulesPanel() {
                 <div class="module-meta">
                     <span><i class="fas fa-video"></i> ${m._count.videos}</span>
                     <span><i class="fas fa-file-alt"></i> ${m._count.documents}</span>
-                    <span><i class="fas fa-question-circle"></i> ${m._count.questions}</span>
+                    <span><i class="fas fa-question-circle"></i> ${m._count.quizzes || 0}</span>
                 </div>
             `;
             card.onclick = () => selectModuleForPreview(m.id);
@@ -2156,109 +2156,135 @@ window.toggleDocSelectorMode = (mode) => {
     });
 };
 
+// Quiz Management Logic
+async function refreshQuizContext(moduleId = currentModuleId) {
+    if (moduleId) await loadModuleData(moduleId);
+    switchEditorTab('quiz');
+    switchPreviewTab('quiz');
+}
+
+function getQuizById(quizId) {
+    return (currentModuleData?.quizzes || []).find(quiz => Number(quiz.id) === Number(quizId));
+}
+
+function getQuestionById(quiz, questionId) {
+    return (quiz?.questions || []).find(question => Number(question.id) === Number(questionId));
+}
+
+function collectQuestionOptions() {
+    const selected = document.querySelector('input[name="correct-opt"]:checked');
+    const correctIndex = selected ? parseInt(selected.value, 10) : -1;
+    return Array.from(document.querySelectorAll('.opt-text-in-field'))
+        .map((el, index) => ({ text: el.value.trim(), isCorrect: index === correctIndex }))
+        .filter(option => option.text !== '');
+}
+
+function validateQuestionPayload(text, options) {
+    if (!text.trim()) return 'Preencha o texto da pergunta.';
+    if (options.length < 2) return 'Informe pelo menos 2 opções.';
+    if (options.filter(option => option.isCorrect).length !== 1) return 'Selecione exatamente uma opção correta preenchida.';
+    return '';
+}
+
+function renderQuizQuestions(quiz, { editable = true } = {}) {
+    const questions = quiz.questions || [];
+    if (!questions.length) return '<small style="color:var(--text-muted)">Sem perguntas cadastradas.</small>';
+
+    return questions.map((q, idx) => {
+        const options = q.options || [];
+        return `
+            <div class="question-mini-item" style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 0.8rem; margin-bottom: 0.65rem; display:block;">
+                <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                    <span><strong>${idx + 1}.</strong> ${escapeHtml(q.text)}</span>
+                    ${editable ? `<div style="display:flex; gap:0.35rem; flex-shrink:0;">
+                        <button onclick="showEditQuizQuestionForm(${quiz.id}, ${q.id})" class="btn btn-secondary btn-sm">Edit</button>
+                        <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
+                    </div>` : ''}
+                </div>
+                <div style="margin-top:0.55rem; padding-left:1.25rem; font-size:0.86rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">
+                    ${options.length ? options.map(opt => `
+                        <div style="${opt.isCorrect ? 'color: var(--secondary); font-weight: 700;' : ''}">
+                            ${opt.isCorrect ? '<i class="fas fa-check-circle"></i> Correct: ' : '<i class="far fa-circle"></i> '}${escapeHtml(opt.text)}
+                        </div>
+                    `).join('') : '<span>No options configured.</span>'}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderQuizCard(quiz, context) {
+    const questions = quiz.questions || [];
+    const isPreview = context === 'preview';
+    const cardId = `${isPreview ? 'quiz-prev' : 'quiz-edit'}-${quiz.id}`;
+    const paneId = `${isPreview ? 'quiz-structure' : 'quiz-editor-structure'}-${quiz.id}`;
+    return `
+        <div class="${isPreview ? 'quiz-preview-item' : 'quiz-group-card'} glassmorphism" id="${cardId}" style="margin-bottom:1rem;">
+            <div class="quiz-group-header" style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+                <div>
+                    <h4 style="margin:0 0 0.35rem 0;"><i class="fas fa-tasks"></i> ${escapeHtml(quiz.title || 'Untitled quiz')}</h4>
+                    <span class="badge-sm">${questions.length} ${questions.length === 1 ? 'question' : 'questions'}</span>
+                </div>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleQuizPreviewStructure(${quiz.id}, '${context}')">Review / edit</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showEditQuizTitleForm(${quiz.id})">Edit title</button>
+                    <button class="btn btn-primary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Question</button>
+        <button class="btn btn-secondary btn-sm" onclick="showGenerateAiQuizForm(currentModuleId)">Generate with AI</button>
+                    <button onclick="deleteQuiz(${quiz.id})" class="btn btn-icon-del" title="Delete quiz"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            <div id="${paneId}" class="quiz-structure-pane hidden" style="margin-top:1rem; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.1);">
+                ${renderQuizQuestions(quiz, { editable: true })}
+            </div>
+        </div>
+    `;
+}
+
+function renderQuizList() {
+    const editorList = document.getElementById('q-list');
+    const previewList = document.getElementById('preview-quiz-summary');
+    const quizzes = currentModuleData?.quizzes || [];
+    const empty = '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado para este módulo.</div>';
+
+    if (editorList) {
+        editorList.innerHTML = quizzes.length ? quizzes.map(quiz => renderQuizCard(quiz, 'editor')).join('') : empty;
+    }
+
+    if (previewList) {
+        previewList.innerHTML = quizzes.length ? quizzes.map(quiz => renderQuizCard(quiz, 'preview')).join('') : empty;
+    }
+}
+
+window.toggleQuizPreviewStructure = (quizId, context = 'preview') => {
+    const paneId = `${context === 'editor' ? 'quiz-editor-structure' : 'quiz-structure'}-${quizId}`;
+    const cardId = `${context === 'editor' ? 'quiz-edit' : 'quiz-prev'}-${quizId}`;
+    const pane = document.getElementById(paneId);
+    if (!pane) return;
+    pane.classList.toggle('hidden');
+
+    const btn = document.querySelector(`#${cardId} button[onclick*="toggleQuizPreviewStructure"]`);
+    if (btn) btn.textContent = pane.classList.contains('hidden') ? 'Review / edit' : 'Hide details';
+};
+
 window.deleteQuiz = async (quizId) => {
     if (!confirm('Tem certeza que deseja excluir este quiz?')) return;
     try {
         await apiCall(`/modules/${currentModuleId}/quizzes/${quizId}`, 'DELETE');
-        await loadModuleData(currentModuleId);
+        await refreshQuizContext();
     } catch (err) {
         alert('Erro ao excluir quiz: ' + err.message);
     }
 };
 
-window.deleteQuestion = async (questionId) => {
-    if (!confirm('Tem certeza que deseja excluir esta pergunta?')) return;
+async function deleteQuestion(id) {
+    if (!confirm('Delete pergunta?')) return;
     try {
-        await apiCall(`/modules/${currentModuleId}/quiz/questions/${questionId}`, 'DELETE');
-        await loadModuleData(currentModuleId);
+        await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
+        await refreshQuizContext();
     } catch (err) {
         alert('Erro ao excluir pergunta: ' + err.message);
     }
-};
-
-
-// Quiz Management Logic
-function renderQuizList() {
-    const editorList = document.getElementById('q-list');
-    const previewList = document.getElementById('preview-quiz-summary');
-    
-    const quizzes = currentModuleData.quizzes || [];
-
-    if (editorList) {
-        editorList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado.</div>';
-        quizzes.forEach(quiz => {
-            const div = document.createElement('div');
-            div.className = 'quiz-group-card glassmorphism';
-            div.innerHTML = `
-                <div class="quiz-group-header">
-                    <h4><i class="fas fa-tasks"></i> ${quiz.title}</h4>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="addQuizQuestionToQuiz(${quiz.id})" class="btn btn-primary btn-sm">+ Pergunta</button>
-                        <button onclick="deleteQuiz(${quiz.id})" class="btn btn-icon-del"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>
-                <div class="questions-mini-list">
-                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
-                        <div class="question-mini-item">
-                            <span>${idx + 1}. ${q.text}</span>
-                            <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
-                        </div>
-                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas.</small>'}
-                </div>
-            `;
-            editorList.appendChild(div);
-        });
-    }
-
-    if (previewList) {
-        previewList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado para este módulo.</div>';
-        quizzes.forEach(quiz => {
-            const card = document.createElement('div');
-            card.className = 'quiz-preview-item glassmorphism';
-            card.style.marginBottom = '1rem';
-            card.id = `quiz-prev-${quiz.id}`;
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <strong>${quiz.title}</strong>
-                    <span class="badge-sm">${quiz.questions.length} questões</span>
-                </div>
-                <div class="preview-actions" style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary btn-sm" onclick="toggleQuizPreviewStructure(${quiz.id})">Ver Estrutura</button>
-                    <button class="btn btn-secondary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Add Pergunta</button>
-                </div>
-                <div id="quiz-structure-${quiz.id}" class="quiz-structure-pane hidden" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
-                        <div class="question-mini-item" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 0.8rem; margin-bottom: 0.5rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <span><strong>${idx + 1}.</strong> ${q.text}</span>
-                                <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <div style="margin-top: 0.5rem; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
-                                ${q.options.map(opt => `
-                                    <div style="${opt.isCorrect ? 'color: var(--secondary); font-weight: bold;' : ''}">
-                                        ${opt.isCorrect ? '<i class="fas fa-check"></i> ' : '<i class="far fa-circle"></i> '} ${opt.text}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas cadastradas.</small>'}
-                </div>
-            `;
-            previewList.appendChild(card);
-        });
-    }
 }
-
-window.toggleQuizPreviewStructure = (quizId) => {
-    const pane = document.getElementById(`quiz-structure-${quizId}`);
-    if (pane) pane.classList.toggle('hidden');
-    
-    // Toggle button text if needed
-    const btn = document.querySelector(`#quiz-prev-${quizId} button[onclick*="toggleQuizPreviewStructure"]`);
-    if (btn) {
-        btn.textContent = pane.classList.contains('hidden') ? 'Ver Estrutura' : 'Ocultar Estrutura';
-    }
-};
 
 async function showCreateQuizForm() {
     showSubModal('Novo Quiz', `
@@ -2267,7 +2293,7 @@ async function showCreateQuizForm() {
             <input type="text" id="qz-title-in" placeholder="Ex: Avaliação Final">
         </div>
     `, async () => {
-        const title = document.getElementById('qz-title-in').value;
+        const title = document.getElementById('qz-title-in').value.trim();
         if (!title) return alert('Título obrigatório');
 
         const okBtn = document.getElementById('sub-modal-ok');
@@ -2275,16 +2301,40 @@ async function showCreateQuizForm() {
         okBtn.disabled = true;
 
         try {
-            const order = (currentModuleData && currentModuleData.quizzes) ? currentModuleData.quizzes.length : 0;
-            await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
-                title, 
-                order
-            });
-            await loadModuleData(currentModuleId);
+            const order = (currentModuleData?.quizzes || []).length;
+            await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { title, order });
+            await refreshQuizContext();
             closeSubModal();
         } catch (err) {
             console.error('Quiz Create Error:', err);
             alert('Erro ao criar quiz: ' + err.message);
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
+}
+
+async function showEditQuizTitleForm(quizId) {
+    const quiz = getQuizById(quizId);
+    if (!quiz) return alert('Quiz not found.');
+
+    showSubModal('Edit Quiz Title', `
+        <div class="input-group">
+            <label>Quiz Title</label>
+            <input type="text" id="qz-title-edit-in" value="${escapeHtml(quiz.title || '')}" placeholder="Quiz title">
+        </div>
+    `, async () => {
+        const title = document.getElementById('qz-title-edit-in').value.trim();
+        if (!title) return alert('Título obrigatório');
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        okBtn.disabled = true;
+        try {
+            await apiCall(`/modules/${currentModuleId}/quizzes/${quizId}`, 'PUT', { title, order: quiz.order ?? 0 });
+            await refreshQuizContext();
+            closeSubModal();
+        } catch (err) {
+            alert('Erro ao atualizar quiz: ' + err.message);
             okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
@@ -2320,15 +2370,8 @@ async function showGenerateAiQuizForm(moduleId = currentModuleId) {
         okBtn.disabled = true;
 
         try {
-            await apiCall(`/modules/${moduleId}/quizzes/ai-generate`, 'POST', {
-                title,
-                questionCount,
-                optionsPerQuestion
-            });
-
-            if (currentModuleId === moduleId) {
-                await loadModuleData(moduleId);
-            }
+            await apiCall(`/modules/${moduleId}/quizzes/ai-generate`, 'POST', { title, questionCount, optionsPerQuestion });
+            if (currentModuleId === moduleId) await refreshQuizContext(moduleId);
             closeSubModal();
             alert('Quiz generated successfully. Review the questions before publishing or using this module.');
         } catch (err) {
@@ -2340,44 +2383,44 @@ async function showGenerateAiQuizForm(moduleId = currentModuleId) {
     });
 }
 
-async function addQuizQuestionToQuiz(quizId) {
-    showSubModal('Nova Pergunta', `
+function buildQuestionForm(question = null) {
+    const existingOptions = question?.options?.length ? question.options : [{ text: '', isCorrect: true }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }];
+    const padded = [...existingOptions];
+    while (padded.length < 4) padded.push({ text: '', isCorrect: false });
+    const correctIndex = Math.max(0, padded.findIndex(option => option.isCorrect));
+
+    return `
         <div class="input-group">
-            <label>Texto da Pergunta</label>
-            <textarea id="q-text-in" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 0.8rem; color: white; background: rgba(0,0,0,0.2);"></textarea>
+            <label>Question text</label>
+            <textarea id="q-text-in" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 0.8rem; color: white; background: rgba(0,0,0,0.2);">${escapeHtml(question?.text || '')}</textarea>
         </div>
         <div id="options-in-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
-            <label>Opções (Marque a correta):</label>
-            ${[0,1,2,3].map(i => `
+            <label>Options (mark exactly one correct):</label>
+            ${padded.map((option, i) => `
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <input type="radio" name="correct-opt" value="${i}" ${i === 0 ? 'checked' : ''}>
-                    <input type="text" class="opt-text-in-field" style="flex: 1; padding: 0.5rem;" placeholder="Opção ${i + 1}">
+                    <input type="radio" name="correct-opt" value="${i}" ${i === correctIndex ? 'checked' : ''}>
+                    <input type="text" class="opt-text-in-field" style="flex: 1; padding: 0.5rem;" value="${escapeHtml(option.text || '')}" placeholder="Opção ${i + 1}">
                 </div>
             `).join('')}
         </div>
-    `, async () => {
-        const text = document.getElementById('q-text-in').value;
-        const optElements = document.querySelectorAll('.opt-text-in-field');
-        const correctIndex = parseInt(document.querySelector('input[name="correct-opt"]:checked').value);
-        
-        const options = Array.from(optElements).map((el, index) => ({
-            text: el.value,
-            isCorrect: index === correctIndex
-        })).filter(o => o.text.trim() !== '');
+    `;
+}
 
-        if (!text || options.length < 2) return alert('Preencha a pergunta e pelo menos 2 opções.');
+async function addQuizQuestionToQuiz(quizId) {
+        showSubModal('New Question', buildQuestionForm(), async () => {
+        const text = document.getElementById('q-text-in').value.trim();
+        const options = collectQuestionOptions();
+        const validation = validateQuestionPayload(text, options);
+        if (validation) return alert(validation);
 
         const okBtn = document.getElementById('sub-modal-ok');
         okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         okBtn.disabled = true;
 
         try {
-            await apiCall(`/quizzes/${quizId}/questions`, 'POST', { 
-                text, 
-                options,
-                order: 0 // Will handle order later if needed
-            });
-            await loadModuleData(currentModuleId);
+            const quiz = getQuizById(quizId);
+            await apiCall(`/quizzes/${quizId}/questions`, 'POST', { text, options, order: (quiz?.questions || []).length });
+            await refreshQuizContext();
             closeSubModal();
         } catch (err) {
             console.error('Question Add Error:', err);
@@ -2388,10 +2431,32 @@ async function addQuizQuestionToQuiz(quizId) {
     });
 }
 
-async function deleteQuestion(id) {
-    if (!confirm('Delete pergunta?')) return;
-    await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
-    await loadModuleData(currentModuleId);
+async function showEditQuizQuestionForm(quizId, questionId) {
+    const quiz = getQuizById(quizId);
+    const question = getQuestionById(quiz, questionId);
+    if (!question) return alert('Question not found.');
+
+    showSubModal('Edit Question', buildQuestionForm(question), async () => {
+        const text = document.getElementById('q-text-in').value.trim();
+        const options = collectQuestionOptions();
+        const validation = validateQuestionPayload(text, options);
+        if (validation) return alert(validation);
+
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/quizzes/${quizId}/questions/${questionId}`, 'PUT', { text, options, order: question.order ?? 0 });
+            await refreshQuizContext();
+            closeSubModal();
+        } catch (err) {
+            console.error('Question Edit Error:', err);
+            alert('Erro ao atualizar pergunta: ' + err.message);
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
 }
 
 // Analytics and Reports
@@ -2499,6 +2564,8 @@ window.deleteVideo = deleteVideo;
 window.deleteModuleDoc = deleteModuleDoc;
 window.showAddDocForm = showAddDocForm;
 window.addQuizQuestionToQuiz = addQuizQuestionToQuiz;
+window.showEditQuizTitleForm = showEditQuizTitleForm;
+window.showEditQuizQuestionForm = showEditQuizQuestionForm;
 window.deleteQuestion = deleteQuestion;
 window.viewUserDetail = viewUserDetail;
 window.showCreateQuizForm = showCreateQuizForm;

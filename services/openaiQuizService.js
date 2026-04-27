@@ -102,19 +102,15 @@ const extractResponseText = (responsePayload) => {
   return message?.text || '';
 };
 
-const buildModuleInputContent = (module, options = {}) => {
-  const questionCount = clampInt(options.questionCount, DEFAULT_QUESTION_COUNT, 1, 30);
-  const optionsPerQuestion = clampInt(options.optionsPerQuestion, DEFAULT_OPTIONS_PER_QUESTION, 2, 8);
+const buildModuleContextContent = (module, options = {}) => {
+  const instructionLines = Array.isArray(options.instructionLines) ? options.instructionLines : [];
   const content = [];
 
   content.push({
     type: 'input_text',
     text: [
-      `Create a ${questionCount}-question test/quiz for this training module.`,
-      'Write the quiz title, questions, and answer options in English.',
-      `Each question must have exactly ${optionsPerQuestion} options and exactly one correct option.`,
-      'Use the module title, description, videos, linked documents/files, and any supplied file contents as source material.',
-      'Avoid questions that depend on external knowledge not present in the module materials.',
+      ...instructionLines,
+      instructionLines.length ? '' : null,
       '',
       `Module title: ${module.title || 'Untitled module'}`,
       `Module description: ${module.description || 'No description provided.'}`,
@@ -126,8 +122,19 @@ const buildModuleInputContent = (module, options = {}) => {
       ...(module.documents || []).map((moduleDocument, index) => {
         const doc = moduleDocument.document;
         return `${index + 1}. ${moduleDocument.title || doc?.name || 'Untitled file'} (${doc?.type || 'unknown type'})`;
-      })
-    ].join('\n')
+      }),
+      '',
+      ...(module.quizzes || []).length ? ['Quiz questions (correct answers intentionally omitted):'] : [],
+      ...(module.quizzes || []).flatMap((quiz, quizIndex) => [
+        `${quizIndex + 1}. ${quiz.title || 'Untitled quiz'}`,
+        ...(quiz.questions || []).map((question, questionIndex) => {
+          const optionsText = (question.options || [])
+            .map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option.text || ''}`)
+            .join(' | ');
+          return `   Q${questionIndex + 1}. ${question.text || ''}${optionsText ? ` Options: ${optionsText}` : ''}`;
+        })
+      ])
+    ].filter((line) => line !== null).join('\n')
   });
 
   let totalBytes = 0;
@@ -175,6 +182,22 @@ const buildModuleInputContent = (module, options = {}) => {
       file_data: `data:${doc.type};base64,${buffer.toString('base64')}`
     });
   }
+
+  return content;
+};
+
+const buildModuleInputContent = (module, options = {}) => {
+  const questionCount = clampInt(options.questionCount, DEFAULT_QUESTION_COUNT, 1, 30);
+  const optionsPerQuestion = clampInt(options.optionsPerQuestion, DEFAULT_OPTIONS_PER_QUESTION, 2, 8);
+  const content = buildModuleContextContent(module, {
+    instructionLines: [
+      `Create a ${questionCount}-question test/quiz for this training module.`,
+      'Write the quiz title, questions, and answer options in English.',
+      `Each question must have exactly ${optionsPerQuestion} options and exactly one correct option.`,
+      'Use the module title, description, videos, linked documents/files, and any supplied file contents as source material.',
+      'Avoid questions that depend on external knowledge not present in the module materials.'
+    ]
+  });
 
   return { content, questionCount, optionsPerQuestion };
 };
@@ -240,6 +263,7 @@ const generateQuizFromModule = async (module, options = {}) => {
 module.exports = {
   DEFAULT_QUESTION_COUNT,
   DEFAULT_OPTIONS_PER_QUESTION,
+  buildModuleContextContent,
   buildModuleInputContent,
   buildQuizJsonSchema,
   clampInt,
