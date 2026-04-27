@@ -264,12 +264,15 @@ model TaskQueueItem {
 }
 
 model Document {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  type      String   // e.g., 'application/pdf'
-  data      Bytes    // Binary storage
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  type            String   // e.g., 'application/pdf'
+  data            Bytes?   // Legacy inline binary storage; new uploads use external asset storage.
+  storageProvider String   @default("database")
+  storageKey      String?
+  sizeBytes       Int?
   
   // New relation
   moduleDocs ModuleDocument[]
