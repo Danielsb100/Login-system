@@ -58,13 +58,17 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
 
 const createModule = async (req, res) => {
     try {
-        const { title, description, coverImage } = req.body;
-        const ownerMasterId = req.user.id;
+        const { title, description, coverImage } = req.body || {};
+        const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+        if (!normalizedTitle) {
+            return res.status(400).json({ error: 'Module title is required.' });
+        }
 
+        const ownerMasterId = req.user.id;
 
         const newModule = await prisma.trainingModule.create({
             data: {
-                title,
+                title: normalizedTitle,
                 description,
                 coverImage,
                 ownerMasterId
@@ -160,7 +164,10 @@ const getModuleById = async (req, res) => {
 const updateModule = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, description, coverImage } = req.body;
+        const { title, description, coverImage } = req.body || {};
+        if (!req.body) {
+            return res.status(400).json({ error: 'Request body is required.' });
+        }
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
