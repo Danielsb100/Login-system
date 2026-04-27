@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
@@ -30,8 +31,13 @@ const moduleAiController = require('./controllers/moduleAiController');
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 
+fs.mkdirSync(env.upload.tempDir, { recursive: true });
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (req, file, callback) => callback(null, env.upload.tempDir),
+    filename: (req, file, callback) => callback(null, `${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`)
+  }),
   limits: { fileSize: env.upload.maxFileSizeBytes }
 });
 

@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 
 const DEFAULT_UPLOAD_MAX_FILE_SIZE_MB = 500;
 const LEGACY_DEFAULT_JWT_SECRET = 'supersecretkey';
@@ -71,7 +72,10 @@ const env = {
   },
   upload: {
     maxFileSizeMb,
-    maxFileSizeBytes: maxFileSizeMb * 1024 * 1024
+    maxFileSizeBytes: maxFileSizeMb * 1024 * 1024,
+    storageProvider: process.env.UPLOAD_STORAGE_PROVIDER || 'local',
+    storageDir: process.env.UPLOAD_STORAGE_DIR || path.join(__dirname, '..', 'var', 'storage', 'uploads'),
+    tempDir: process.env.UPLOAD_TEMP_DIR || path.join(__dirname, '..', 'var', 'storage', 'tmp')
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
