@@ -1059,7 +1059,13 @@ async function openUserRolesModal(id) {
         </label>
     `).join('');
 
+    modal.style.zIndex = '1600';
     modal.classList.remove('hidden');
+
+    setTimeout(() => {
+        const firstInput = modal.querySelector('input, textarea, select');
+        if (firstInput) firstInput.focus();
+    }, 50);
 }
 window.openUserRolesModal = openUserRolesModal;
 
@@ -1502,6 +1508,52 @@ function switchPreviewTab(pane) {
     document.querySelectorAll('.prev-pane').forEach(p => p.classList.toggle('active', p.id === `prev-pane-${pane}`));
 }
 
+function showModulePreviewNotice(message, isError = false) {
+    const section = document.getElementById('module-preview-section');
+    if (!section || section.classList.contains('hidden')) return;
+
+    let notice = document.getElementById('module-preview-notice');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'module-preview-notice';
+        notice.style.cssText = 'margin: 0.75rem 0; padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.9rem; transition: opacity 0.2s ease;';
+        const title = document.getElementById('preview-title');
+        if (title && title.parentNode) {
+            title.parentNode.insertBefore(notice, title.nextSibling);
+        } else {
+            section.prepend(notice);
+        }
+    }
+
+    notice.textContent = message;
+    notice.style.display = 'block';
+    notice.style.opacity = '1';
+    notice.style.color = isError ? 'var(--error)' : 'var(--success, #5be49b)';
+    notice.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(91, 228, 155, 0.12)';
+    notice.style.border = isError ? '1px solid rgba(255, 80, 80, 0.35)' : '1px solid rgba(91, 228, 155, 0.35)';
+
+    if (!isError) {
+        setTimeout(() => {
+            if (notice.textContent === message) {
+                notice.style.opacity = '0';
+                setTimeout(() => {
+                    if (notice.textContent === message) notice.style.display = 'none';
+                }, 250);
+            }
+        }, 5000);
+    }
+}
+
+async function refreshCurrentModuleContent({ previewPane = 'videos', notice } = {}) {
+    if (!currentModuleId) return;
+    const moduleId = currentModuleId;
+    await loadModuleData(moduleId);
+    await loadModulesPanel();
+    await selectModuleForPreview(moduleId);
+    if (previewPane) switchPreviewTab(previewPane);
+    if (notice) showModulePreviewNotice(notice, false);
+}
+
 function switchModuleDocTab(type) {
     // Reset all tabs
     document.querySelectorAll('.doc-sub-tab').forEach(btn => {
@@ -1897,42 +1949,65 @@ async function showAddVideoForm() {
             <label>Video File Upload</label>
             <input type="file" id="v-file-in" accept="video/*" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
         </div>
+        <div id="video-upload-status" style="display:none; margin-top: 0.85rem; padding: 0.75rem; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 0.9rem; line-height: 1.4;"></div>
     `, async () => {
-        const title = document.getElementById('v-title-in').value;
-        const urlInput = document.getElementById('v-url-in').value;
+        const title = document.getElementById('v-title-in').value.trim();
+        const urlInput = document.getElementById('v-url-in').value.trim();
         const fileInput = document.getElementById('v-file-in').files[0];
         const okBtn = document.getElementById('sub-modal-ok');
+        const statusEl = document.getElementById('video-upload-status');
+        const setStatus = (message, isError = false) => {
+            if (!statusEl) return;
+            statusEl.style.display = 'block';
+            statusEl.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+            statusEl.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+            statusEl.innerHTML = message;
+        };
+        const setBusy = (message) => {
+            okBtn.disabled = true;
+            okBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+            setStatus(`<i class="fas fa-spinner fa-spin"></i> ${message}. Keep this window open; large videos can take a moment.`);
+        };
         
         let finalUrl = urlInput;
 
-        if (fileInput) {
-            okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-            okBtn.disabled = true;
-            try {
-                console.log('Finalizing video upload...');
-                const data = await uploadAssetFile(fileInput, 'Video upload');
-                finalUrl = data.downloadUrl || `/api/documents/download/${data.id}`;
-            } catch (err) {
-                console.error('Upload Error:', err);
-                alert('Error uploading video: ' + err.message);
-                okBtn.textContent = 'Confirm';
-                okBtn.disabled = false;
-                return;
-            }
+        if (!title) {
+            setStatus('Please enter a video title.', true);
+            return;
         }
 
-        if (!finalUrl || !title) {
-            alert('Please enter a title and a URL or select a file.');
+        if (!finalUrl && !fileInput) {
+            setStatus('Please enter a video URL or select a video file.', true);
             return;
         }
 
         try {
+            if (fileInput) {
+                const sizeMb = fileInput.size ? (fileInput.size / 1024 / 1024).toFixed(1) : null;
+                setBusy(sizeMb ? `Uploading ${sizeMb} MB video...` : 'Uploading video...');
+                console.log('Uploading video asset...', { name: fileInput.name, size: fileInput.size });
+                const data = await uploadAssetFile(fileInput, 'Video upload');
+                finalUrl = data.downloadUrl || `/api/documents/download/${data.id}`;
+                setBusy('Upload complete. Saving video to module...');
+            } else {
+                setBusy('Saving video to module...');
+            }
+
             const order = (currentModuleData && currentModuleData.videos) ? currentModuleData.videos.length : 0;
             await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order });
-            await loadModuleData(currentModuleId);
-            closeSubModal();
+
+            setBusy('Video saved. Refreshing module preview...');
+            await refreshCurrentModuleContent({ previewPane: 'videos', notice: `Video "${title}" was added to this module.` });
+
+            setStatus('<i class="fas fa-check-circle"></i> Video added. The module preview and counter are up to date.');
+            okBtn.innerHTML = '<i class="fas fa-check"></i> Added';
+            setTimeout(() => closeSubModal(), 650);
         } catch (err) {
-            alert('Error saving video: ' + err.message);
+            console.error('Video save/upload error:', err);
+            setStatus(`Error adding video: ${err.message}`, true);
+            showModulePreviewNotice(`Error adding video: ${err.message}`, true);
+            okBtn.textContent = 'Try Again';
+            okBtn.disabled = false;
         }
     });
 }
