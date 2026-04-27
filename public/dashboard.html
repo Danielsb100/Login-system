@@ -565,8 +565,15 @@
                 </div>
             </section>
             
-            <!-- Builder Container -->
             <div id="landing-page-builder-section" class="module-preview-pane hidden" style="position: relative; overflow: hidden; padding: 0; min-height: 80vh; background: #0f172a; border-radius: 12px; margin-top: 20px;">
+               <!-- Template Selector Modal -->
+               <div id="template-modal" class="hidden" style="position:absolute; inset:0; background:rgba(15,23,42,0.95); z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 20px;">
+                   <h2 style="color:white; margin-bottom: 30px; font-size: 2.5rem; text-align: center;">Escolha um Layout Inicial</h2>
+                   <div id="template-cards-container" style="display:flex; gap:30px; flex-wrap:wrap; max-width: 1200px; justify-content:center;">
+                       <!-- Rendered by JS -->
+                   </div>
+               </div>
+               
                <div style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: #1e293b;">
                    <input type="text" id="builder-title" class="glassmorphism" placeholder="My Landing Page Title" value="New Landing Page" style="font-size: 1.2rem; font-weight: bold; background: rgba(0,0,0,0.3); border: none; padding: 5px 10px; color: white; border-radius: 6px;">
                    <div style="display: flex; gap: 10px;">
@@ -587,7 +594,7 @@
                    <!-- Properties Sidebar -->
                    <aside id="properties-panel" class="hidden">
                        <div class="panel-header">
-                           <h3>Propriedades</h3>
+                           <h3>Properties</h3>
                            <button id="close-panel-btn"><i class="fas fa-times"></i></button>
                        </div>
                
@@ -599,10 +606,27 @@
                            <div id="text-options" class="property-group hidden">
                                <h4>Texto</h4>
                                <div class="prop-row"><label>Fonte</label><select id="font-family-select"><option value="'Inter', sans-serif">Inter</option><option value="'Roboto', sans-serif">Roboto</option><option value="'Outfit', sans-serif">Outfit</option><option value="'Courier New', monospace">Courier</option><option value="'Times New Roman', serif">Times New Roman</option></select></div>
-                               <div class="prop-row"><label>Tamanho (px)</label><input type="text" id="font-size-input" value="16px"></div>
-                               <div class="prop-row btn-group"><button class="style-btn" data-style="fontWeight" data-value="bold"><i class="fas fa-bold"></i></button><button class="style-btn" data-style="fontStyle" data-value="italic"><i class="fas fa-italic"></i></button></div>
-                               <div class="prop-row btn-group"><button class="align-btn" data-align="left"><i class="fas fa-align-left"></i></button><button class="align-btn" data-align="center"><i class="fas fa-align-center"></i></button><button class="align-btn" data-align="right"><i class="fas fa-align-right"></i></button></div>
+                               <div class="prop-row"><label>Tamanho (px/rem)</label><input type="text" id="font-size-input" value="16px"></div>
+                               <div class="prop-row btn-group"><button class="style-btn" data-style="fontWeight" data-value="bold" title="Bold"><i class="fas fa-bold"></i></button><button class="style-btn" data-style="fontStyle" data-value="italic" title="Italic"><i class="fas fa-italic"></i></button></div>
+                               <div class="prop-row btn-group"><button class="align-btn" data-align="left" title="Left Align"><i class="fas fa-align-left"></i></button><button class="align-btn" data-align="center" title="Center Align"><i class="fas fa-align-center"></i></button><button class="align-btn" data-align="right" title="Right Align"><i class="fas fa-align-right"></i></button></div>
                                <div class="prop-row"><label>Cor do Texto</label><input type="color" id="text-color-input" value="#000000"></div>
+                               <div class="prop-row">
+                                   <label>Link (Página URL)</label>
+                                   <div style="display:flex; gap: 5px;">
+                                       <input type="text" id="text-link-input" placeholder="https://..." style="flex:1">
+                                       <button id="apply-link-btn" class="style-btn" title="Aplicar/Criar Link"><i class="fas fa-link"></i></button>
+                                       <button id="remove-link-btn" class="style-btn" title="Remover Link"><i class="fas fa-unlink"></i></button>
+                                   </div>
+                               </div>
+                               <div class="prop-row">
+                                   <label>Sombras (Text Shadow)</label>
+                                   <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 5px;">
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Eixo X (px)</small><input type="number" id="ts-x" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Eixo Y (px)</small><input type="number" id="ts-y" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Blur (px)</small><input type="number" id="ts-blur" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Cor da Sombra</small><input type="color" id="ts-color" value="#000000" style="padding:0;height:24px;"></div>
+                                   </div>
+                               </div>
                            </div>
                
                            <div id="position-options" class="property-group hidden">
@@ -614,7 +638,7 @@
                            <div id="image-options" class="property-group hidden">
                                <h4>Imagem</h4>
                                <div class="prop-row"><button id="upload-img-panel-btn" class="prop-action-btn"><i class="fas fa-upload"></i> Escolher Nova Imagem</button></div>
-                               <div class="prop-row"><label>Escala Atual (%)</label><input type="range" id="image-scale-range" min="10" max="200" value="100"></div>
+                               <div class="prop-row"><label>Escala Atual (%)</label><div style="display:flex; gap:5px;"><input type="range" id="image-scale-range" min="1" max="500" value="100" style="flex:2"><input type="number" id="image-scale-input" value="100" style="flex:1"></div></div>
                                <div class="prop-row btn-group"><button class="img-align-btn" data-align="flex-start"><i class="fas fa-align-left"></i></button><button class="img-align-btn" data-align="center"><i class="fas fa-align-center"></i></button><button class="img-align-btn" data-align="flex-end"><i class="fas fa-align-right"></i></button></div>
                            </div>
                
@@ -629,16 +653,48 @@
                                <div class="prop-row" id="opacity-row"><label>Opacidade (%)</label><input type="range" id="bg-opacity-range" min="0" max="100" value="100"></div>
                            </div>
                
+                           <hr class="panel-hr" id="box-hr-sep">
+               
+                           <div id="fx-options" class="property-group hidden">
+                               <h4>Efeitos e Animações</h4>
+                               <div class="prop-row">
+                                   <label>Animação (CSS Class)</label>
+                                   <select id="anim-select">
+                                       <option value="">Nenhuma</option>
+                                       <option value="anim-float">Flutuar (Loop)</option>
+                                       <option value="anim-pulse">Pulsar (Loop)</option>
+                                       <option value="anim-fade-in">Fade In (Entrada)</option>
+                                       <option value="anim-slide-up">Slide Up (Entrada)</option>
+                                   </select>
+                               </div>
+                               <div class="prop-row" id="sticky-row">
+                                   <label style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input type="checkbox" id="sticky-checkbox"> Fixar no Topo da Página</label>
+                               </div>
+                           </div>
+               
                            <div id="box-options" class="property-group hidden">
                                <h4>Bordas e Margens <small>(Global)</small></h4>
-                               <div class="prop-row"><label>Estilo Borda</label><select id="border-style-select"><option value="none">Nenhuma</option><option value="solid">Sólida</option><option value="dashed">Tracejada</option></select></div>
+                               <div class="prop-row"><label>Estilo Borda</label><select id="border-style-select"><option value="none">Nenhuma</option><option value="solid">Sólida</option><option value="dashed">Tracejada</option><option value="dotted">Pontilhada</option></select></div>
                                <div class="prop-row"><label>Espessura (px)</label><input type="number" id="border-width-input" value="2" min="0"></div>
                                <div class="prop-row"><label>Tipo da Borda</label><select id="border-color-type" class="prop-select"><option value="solid-color">Cor Sólida</option><option value="gradient">Gradiente</option></select></div>
                                <div class="prop-row" id="border-solid-controls"><label>Cor</label><input type="color" id="border-color-input" value="#000000"></div>
                                <div class="prop-row hidden" id="border-grad-controls"><label>Gradiente</label><div style="display:flex;"><input type="color" id="border-grad1" value="#00a8ff" style="flex:1;"><input type="color" id="border-grad2" value="#e84118" style="flex:1;"></div></div>
                                <div class="prop-row"><label>Arredondamento (px)</label><input type="number" id="border-radius-input" value="0" min="0"></div>
-                               <div class="prop-row"><label>Margem Externa (px)</label><input type="number" id="margin-input" value="0" min="0"></div>
-                               <div class="prop-row"><label>Espaçamento (px)</label><input type="number" id="padding-input" value="0" min="0"></div>
+                               <div class="prop-row"><label>Margem Externa (Margin) px</label><input type="number" id="margin-input" value="0" min="0"></div>
+                               <div class="prop-row"><label>Margem Interna (Padding) px</label><input type="number" id="padding-input" value="0" min="0"></div>
+                               <div class="prop-row">
+                                   <label>Sombras da Caixa (Box Shadow)</label>
+                                   <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 5px;">
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Eixo X (px)</small><input type="number" id="bs-x" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Eixo Y (px)</small><input type="number" id="bs-y" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Blur (px)</small><input type="number" id="bs-blur" value="0"></div>
+                                       <div><small style="font-size:0.7rem;color:#94a3b8;">Spread (Tam)</small><input type="number" id="bs-spread" value="0"></div>
+                                   </div>
+                                   <div style="display:flex; gap: 10px; align-items: center; margin-top: 5px;">
+                                       <input type="color" id="bs-color" value="#000000" style="flex:1; padding:0; height:30px;">
+                                       <label style="flex:1; display:flex; align-items:center; gap:5px; font-size: 0.85rem; cursor:pointer;"><input type="checkbox" id="bs-inset"> Interna (Inset)</label>
+                                   </div>
+                               </div>
                            </div>
                        </div>
                    </aside>
@@ -848,6 +904,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="/app-config.js?v=1"></script>
+    <script src="/js/templates.js"></script>
     <script src="/js/app.js?v=2.1"></script>
     <script src="/js/courses.js?v=1"></script>
     <script src="/js/landingPage.js?v=1"></script>

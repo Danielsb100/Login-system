@@ -538,3 +538,57 @@ nav h2 {
         margin-right: auto;
     }
 }
+
+/* =================================================================
+   🚀 ANIMAÇÕES & EFEITOS ESPECIAIS 🚀
+   ================================================================= */
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+    100% { transform: translateY(0px); }
+}
+.anim-float {
+    animation: float 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+.anim-pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+/* Re-triggers with scroll observer in view-mode */
+.view-mode .anim-fade-in {
+    opacity: 0;
+}
+.view-mode .anim-fade-in.is-visible {
+    animation: fadeIn 1.5s ease-in forwards;
+    opacity: 1;
+}
+/* Runs once instantly when applied in edit-mode */
+.edit-mode .anim-fade-in {
+    animation: fadeIn 1.5s ease-in forwards;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.view-mode .anim-slide-up {
+    opacity: 0;
+}
+.view-mode .anim-slide-up.is-visible {
+    animation: slideUp 1s ease-out forwards;
+    opacity: 1;
+}
+.edit-mode .anim-slide-up {
+    animation: slideUp 1s ease-out forwards;
+}
