@@ -25,6 +25,7 @@ const reportController = require('./controllers/reportController');
 const notificationController = require('./controllers/notificationController');
 const courseController = require('./controllers/courseController');
 const landingPageController = require('./controllers/landingPageController');
+const moduleAiController = require('./controllers/moduleAiController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
@@ -186,6 +187,7 @@ app.delete(
   contentController.deleteDocument
 );
 app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createQuiz);
+app.put('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.updateQuiz);
 app.post('/modules/:id/quizzes/ai-generate', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createAiGeneratedQuiz);
 app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuiz);
 app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addQuizQuestion);
@@ -199,6 +201,7 @@ app.put(
 
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
+app.post('/modules/:id/assistant/chat', authenticateToken, moduleAiController.chatWithModuleAssistant);
 
 app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
 app.get('/modules/:id/forum/threads', authenticateToken, forumController.getThreadsByModule);

@@ -533,9 +533,14 @@ function renderCourseModules(course) {
     container.innerHTML = course.modules.map((module, index) => {
         const statusLabel = module.completed ? 'Completed' : (module.unlocked ? 'Available' : 'Locked');
         const statusColor = module.completed ? 'priority-low' : (module.unlocked ? 'priority-medium' : 'priority-critical');
+        const quizCount = Number(module.quizCount ?? module._count?.quizzes ?? (Array.isArray(module.quizzes) ? module.quizzes.length : 0));
+        const hasQuiz = Boolean(module.hasQuiz ?? quizCount > 0);
+        const quizCountLabel = quizCount > 0
+            ? `${quizCount} quiz${quizCount === 1 ? '' : 'zes'}`
+            : (hasQuiz ? 'Quiz available' : 'No quiz');
         const quizRuleLabel = module.quizRequirementActive
-            ? `Quiz gate ${Math.round(module.minimumQuizScore || DEFAULT_QUIZ_GATE_SCORE)}%`
-            : (module.hasQuiz ? 'Quiz optional' : 'No quiz');
+            ? `Gate: ${Math.round(module.minimumQuizScore || DEFAULT_QUIZ_GATE_SCORE)}% required`
+            : (hasQuiz ? 'Gate off / optional' : 'No quiz gate');
         const quizScoreLabel = module.bestQuizScore === null || module.bestQuizScore === undefined
             ? 'No attempts yet'
             : `Best ${Math.round(module.bestQuizScore)}%`;
@@ -555,8 +560,9 @@ function renderCourseModules(course) {
                         <span class="operation-tag">${escapeCourseHtml(module.roomLabel || 'Module room')}</span>
                         <span class="operation-tag">Step ${index + 1} in trail</span>
                         <span class="operation-tag">${escapeCourseHtml(module.moduleStatus || 'DRAFT')}</span>
+                        <span class="operation-tag">${escapeCourseHtml(quizCountLabel)}</span>
                         <span class="operation-tag">${escapeCourseHtml(quizRuleLabel)}</span>
-                        ${module.hasQuiz ? `<span class="operation-tag">${escapeCourseHtml(quizScoreLabel)}</span>` : ''}
+                        ${hasQuiz ? `<span class="operation-tag">${escapeCourseHtml(quizScoreLabel)}</span>` : ''}
                     </div>
                     <div class="operation-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                         ${module.unlocked ? `<button type="button" class="btn btn-secondary btn-sm" data-open-world-course="${coursesState.selectedCourseId}">Enter this course world</button>` : ''}
@@ -565,8 +571,9 @@ function renderCourseModules(course) {
                             <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="up" data-course-module-id="${module.courseModuleId}">↑</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-move-course-module="down" data-course-module-id="${module.courseModuleId}">↓</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-toggle-required="${module.courseModuleId}">${module.isRequired ? 'Make optional' : 'Make required'}</button>
-                            <button type="button" class="btn btn-secondary btn-sm" data-edit-quiz-gate="${module.courseModuleId}" ${module.hasQuiz ? '' : 'disabled'}>${module.quizRequirementActive ? 'Edit quiz gate' : 'Quiz rule'}</button>
-                            <button type="button" class="btn btn-secondary btn-sm" data-generate-ai-quiz="${module.moduleId}">AI Quiz</button>
+                            <button type="button" class="btn btn-primary btn-sm" data-manage-module-quiz="${module.moduleId}">Manage quiz</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-edit-quiz-gate="${module.courseModuleId}" ${hasQuiz ? '' : 'disabled'}>${module.quizRequirementActive ? 'Edit quiz gate' : 'Quiz rule'}</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-generate-ai-quiz="${module.moduleId}">Generate with AI</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-remove-course-module="${module.courseModuleId}" style="color:var(--error); border-color:rgba(239,68,68,0.3);">Remove</button>
                         ` : ''}
                     </div>
@@ -609,10 +616,33 @@ function renderCourseModules(course) {
             });
         });
 
+        container.querySelectorAll('[data-manage-module-quiz]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const moduleId = Number(button.dataset.manageModuleQuiz);
+                if (!window.openModuleEditor) {
+                    alert('Module editor is not available on this page.');
+                    return;
+                }
+                try {
+                    button.disabled = true;
+                    await window.openModuleEditor(moduleId);
+                    window.switchEditorTab?.('quiz');
+                } catch (error) {
+                    alert(error.message || 'Could not open quiz manager.');
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+
         container.querySelectorAll('[data-generate-ai-quiz]').forEach((button) => {
             button.addEventListener('click', async () => {
                 const moduleId = Number(button.dataset.generateAiQuiz);
                 if (window.showGenerateAiQuizForm) {
+                    if (window.openModuleEditor) {
+                        await window.openModuleEditor(moduleId);
+                        window.switchEditorTab?.('quiz');
+                    }
                     window.showGenerateAiQuizForm(moduleId);
                     return;
                 }
@@ -624,8 +654,9 @@ function renderCourseModules(course) {
             button.addEventListener('click', async () => {
                 const target = coursesState.selectedCourse.modules.find((module) => module.courseModuleId === Number(button.dataset.editQuizGate));
                 if (!target) return;
-                if (!target.hasQuiz) {
-                    alert('This module does not have a quiz yet.');
+                const targetHasQuiz = Boolean(target.hasQuiz ?? Number(target.quizCount || 0) > 0);
+                if (!targetHasQuiz) {
+                    alert('This module does not have a quiz yet. Use Manage quiz to add one first.');
                     return;
                 }
 
