@@ -138,7 +138,13 @@ window.saveLandingPage = async function() {
         el.removeAttribute('onclick'); // Important to remove manual inline triggers
     });
     
-    const compiledHtml = clone.innerHTML;
+    // Wrap into the view-mode element structure so the CSS overrides apply correctly!
+    const compiledHtml = `
+<div id="landing-page-builder-section" class="view-mode" style="width: 100%; overflow-x: hidden; background-color: var(--bg-light);">
+    <div id="template-container" style="padding-top: 0; max-width: 100%;">
+        ${clone.innerHTML}
+    </div>
+</div>`;
     // For CSS, we rely on modular-style.css being served by the static viewer
 
     const payload = {
