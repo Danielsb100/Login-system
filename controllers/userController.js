@@ -178,18 +178,26 @@ const uploadProfilePicture = async (req, res) => {
     }
 
     const user = req.user;
-    const fileExt = path.extname(req.file.originalname) || '.png';
-    const filename = `profile_${user.id}_${Date.now()}${fileExt}`;
-    const uploadDir = path.join(__dirname, '../public/uploads/profiles');
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    // Since we are running on an ephemeral filesystem (like Railway/Heroku), 
+    // saving images to disk means they will be deleted on every new deploy.
+    // To fix this, we read the temp file, convert it to Base64, and save it directly in the database!
+    let fileBuffer;
+    if (req.file.path) {
+      fileBuffer = fs.readFileSync(req.file.path);
+      try {
+        fs.unlinkSync(req.file.path); // Limpa o arquivo temporário
+      } catch (e) {
+        console.warn('Failed to cleanup temp file:', e);
+      }
+    } else if (req.file.buffer) {
+      fileBuffer = req.file.buffer;
+    } else {
+      throw new Error('File data is missing from upload request.');
     }
 
-    const filePath = path.join(uploadDir, filename);
-    fs.writeFileSync(filePath, req.file.buffer);
-
-    const fileUrl = `/uploads/profiles/${filename}`;
+    const base64Data = fileBuffer.toString('base64');
+    // The cropper always sends a PNG blob
+    const fileUrl = `data:image/png;base64,${base64Data}`;
 
     await prisma.user.update({
       where: { id: user.id },

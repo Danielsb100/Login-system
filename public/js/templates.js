@@ -927,5 +927,132 @@ window.templatePresets = [
                 </div>
             </section>
         `
+    },
+    {
+        id: "training-sidebar",
+        name: "Training Module (Sidebar)",
+        thumb: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&q=80",
+        html: `
+            <style>
+                html { scroll-behavior: smooth; }
+                .sidebar-panel[style*="sticky"] { top: 100px !important; }
+                
+                /* Custom Edit-Mode Badge for generic Div blocks to avoid confusion with "Images" */
+                .edit-mode .custom-widget { outline-color: #0ea5e9 !important; }
+                .edit-mode .custom-widget::after { content: "BLOCO MÓVEL" !important; background: #0ea5e9 !important; }
+                .edit-mode .custom-widget::before { content: "Clique para editar o Offset ou Arraste livremente!" !important; background: rgba(14, 165, 233, 0.9) !important; }
+            </style>
+            
+            <section class="module-section" style="display:flex; flex-direction:row; justify-content:center; align-items:flex-start; gap:40px; padding:40px 20px; background-color:#ffffff; min-height:100vh;">
+                
+                <!-- MOVABLE / STICKY SIDEBAR -->
+                <div class="editable-image-wrapper custom-widget sidebar-panel" style="cursor:pointer; width:250px; flex-shrink:0;">
+                    <div style="background-color:#486c80; border-radius:8px; padding:15px; display:flex; flex-direction:column; box-shadow:0 10px 25px rgba(0,0,0,0.1);">
+                        <div class="module-content" style="flex-direction:column; gap:5px; align-items:stretch; width:100%; padding:0; margin:0;">
+                            <div class="editable-text" style="background:#77a3ba; color:white; padding:15px; text-align:center; font-weight:bold; font-family:'Arial', sans-serif; cursor:pointer; margin-bottom:5px; border-radius:4px;">HOME</div>
+                            <div class="editable-text" style="background:#133d54; color:white; padding:15px; text-align:center; font-weight:bold; font-family:'Arial', sans-serif; cursor:pointer; margin-bottom:5px; border-radius:4px;">Training Methodology</div>
+                            <div class="editable-text" style="background:#133d54; color:white; padding:15px; text-align:center; font-weight:bold; font-family:'Arial', sans-serif; cursor:pointer; margin-bottom:5px; border-radius:4px;">Training Modules</div>
+                            <div class="editable-text" style="background:#133d54; color:white; padding:15px; text-align:center; font-weight:bold; font-family:'Arial', sans-serif; cursor:pointer; margin-bottom:5px; border-radius:4px;">Training Resources</div>
+                            <div class="editable-text" style="background:#133d54; color:white; padding:15px; text-align:center; font-weight:bold; font-family:'Arial', sans-serif; cursor:pointer; border-radius:4px;">AI Assistant</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN CONTENT AREA -->
+                <div style="display:flex; flex-direction:column; gap:60px; max-width:900px; width:100%;">
+                    
+                    <!-- MODULE 1 -->
+                    <div style="display:flex; flex-direction:column; gap:20px;">
+                        <!-- Hero/Header Image -->
+                        <div class="editable-image-wrapper" style="width:100%;">
+                            <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200" class="body-img" style="width:100%; height:300px; object-fit:cover; border-radius:8px;">
+                        </div>
+                        
+                        <!-- Content Card 1 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    [Module 1] Traffickers' increasing use of the internet was documented as a key criminal trend not only as a "digital hunting field" for recruitment. Cases evidenced how the internet can support traffickers in advertising trafficked services, hosting the provision of services (such as sexual exploitation or forced criminality), and even by facilitating logistic and payment of services or laundering of proceeds.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Content Card 2 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <h2 class="editable-text" style="color:#133d54; font-family:'Arial', sans-serif; text-align:center; margin-bottom:20px;">Specialised Training for Judicial Practitioners</h2>
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    As part of the INTERCEPTED project, a set of dedicated training modules has been developed to address specific learning and professional development needs. These modules are designed in a flexible and progressive way and are combined into structured training courses, aimed at supporting the acquisition of both theoretical knowledge and practical skills.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MODULE 2 -->
+                    <div style="display:flex; flex-direction:column; gap:20px;">
+                        <!-- Hero/Header Image -->
+                        <div class="editable-image-wrapper" style="width:100%;">
+                            <img src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1200" class="body-img" style="width:100%; height:300px; object-fit:cover; border-radius:8px;">
+                        </div>
+                        
+                        <!-- Content Card 1 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    [Module 2] Expand this section with secondary information, detailed analysis or interactive content regarding the second phase of the training pathway.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Content Card 2 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <h2 class="editable-text" style="color:#133d54; font-family:'Arial', sans-serif; text-align:center; margin-bottom:20px;">Module 2 Advanced Topics</h2>
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    Continuing the curriculum, this module focuses on advanced topics and practical case studies. The structured approach ensures participants can directly apply these concepts.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MODULE 3 -->
+                    <div style="display:flex; flex-direction:column; gap:20px;">
+                        <!-- Hero/Header Image -->
+                        <div class="editable-image-wrapper" style="width:100%;">
+                            <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?w=1200" class="body-img" style="width:100%; height:300px; object-fit:cover; border-radius:8px;">
+                        </div>
+                        
+                        <!-- Content Card 1 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    [Module 3] Finalize the training track by summarizing the key outcomes and presenting the final assessments and certifications.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Content Card 2 -->
+                        <div class="editable-image-wrapper custom-widget" style="width:100%; cursor:pointer;">
+                            <div style="background-color:#93b2c4; border-radius:15px; padding:30px;">
+                                <h2 class="editable-text" style="color:#133d54; font-family:'Arial', sans-serif; text-align:center; margin-bottom:20px;">Assessment and Certification</h2>
+                                <p class="editable-text" style="color:#1e3a4c; font-family:'Arial', sans-serif; font-size:1.1rem; line-height:1.6; text-align:justify; margin:0;">
+                                    This final segment ensures that all learning objectives have been met. Participants who successfully complete the modules will be awarded an official certificate of specialization.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Logos Area -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:20px; border-top:1px solid #e2e8f0;">
+                        <div class="editable-image-wrapper"><img src="https://placehold.co/100x60/ffffff/133d54?text=EU+Logo" style="height:50px;"></div>
+                        <p class="editable-text" style="font-size:0.7rem; color:#64748b; max-width:500px; text-align:center; margin:0 15px;">This project is co-funded by the ISEC programme of the European Union. The content of this page represents the views of the authors only and is their sole responsibility.</p>
+                        <div style="display:flex; gap:10px;">
+                            <div class="editable-image-wrapper"><img src="https://placehold.co/80x40/ffffff/133d54?text=Partner+1" style="height:35px;"></div>
+                            <div class="editable-image-wrapper"><img src="https://placehold.co/80x40/ffffff/133d54?text=Partner+2" style="height:35px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `
     }
 ];
