@@ -221,30 +221,32 @@ nav h2 {
 }
 
 .edit-mode .editable-image-wrapper {
-    /* Bordas vermelhas para arquivos que podem ser alterados nas divs (ex: logo, imagem representativa) */
     outline: 4px solid var(--diagram-red);
     outline-offset: 4px;
     cursor: pointer;
     background: rgba(255, 255, 255, 0.1);
     transition: 0.2s;
+    /* Added back in relative positioning for pseudo-elements */
+    position: relative;
 }
 
 .edit-mode .editable-image-wrapper::before {
-    content: "Trocar Imagem \f030";
-    font-family: 'Inter', 'FontAwesome', sans-serif;
+    content: "Trocar Imagem - Clique para editar ou arraste!";
     position: absolute;
     inset: 0;
-    background: rgba(239, 68, 68, 0.8);
+    width: 100%;
+    height: 100%;
+    background: rgba(239, 68, 68, 0.9);
     color: white;
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     font-weight: bold;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 10;
-    border-radius: inherit;
+    transition: 0.2s;
+    z-index: 5;
+    pointer-events: none;
 }
 
 .edit-mode .editable-image-wrapper:hover::before {
@@ -297,26 +299,26 @@ nav h2 {
     padding-top: 0;
 }
 
-#landing-page-builder-section.view-mode #editor-navbar {
+.view-mode #landing-page-builder-section #editor-navbar {
     display: none;
 }
 
-#landing-page-builder-section.view-mode #template-container {
+.view-mode #landing-page-builder-section #template-container {
     padding-top: 0;
     max-width: 100%;
 }
 
-#landing-page-builder-section.view-mode .module-section {
+.view-mode #landing-page-builder-section .module-section {
     border-radius: 0;
     margin-bottom: 0;
 }
 
-#landing-page-builder-section.view-mode .bg-edit-btn {
+.view-mode #landing-page-builder-section .bg-edit-btn {
     display: none;
 }
 
 /* Deixa a centralização correta quando alarga tudo 100% da viewport */
-#landing-page-builder-section.view-mode .module-content {
+.view-mode #landing-page-builder-section .module-content {
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -502,8 +504,6 @@ nav h2 {
 /* Reserve space for panel but stay centered */
 .edit-mode.panel-open #template-container {
     margin: 0 auto;
-    padding-right: 320px;
-    box-sizing: content-box;
 }
 
 /* Active Highlight Element */
