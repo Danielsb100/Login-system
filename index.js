@@ -71,7 +71,8 @@ const corsOptions = env.cors.origins.length
   : undefined;
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');
@@ -337,7 +338,7 @@ app.use((err, req, res, next) => {
   return sendError(res, {
     status: 500,
     code: 'INTERNAL_SERVER_ERROR',
-    message: 'Internal server error.'
+    message: err.message || 'Internal server error.'
   });
 });
 
