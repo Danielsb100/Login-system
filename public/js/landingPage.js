@@ -83,7 +83,12 @@ window.openLandingPageBuilder = async function(id) {
             
             // Render raw saved content
             if (data.content && data.content.html) {
-                document.getElementById('template-container').innerHTML = data.content.html;
+                const tc = document.getElementById('template-container');
+                tc.innerHTML = data.content.html;
+                // Clean up state bugs from older saves
+                tc.querySelectorAll('.selected-element').forEach(el => el.classList.remove('selected-element'));
+                tc.querySelectorAll('[data-events-bound]').forEach(el => delete el.dataset.eventsBound);
+                tc.querySelectorAll('[data-events-bound-bg-main]').forEach(el => delete el.dataset.eventsBoundBgMain);
             }
             
             document.getElementById('landing-pages-panel').classList.add('hidden');
@@ -118,8 +123,12 @@ window.saveLandingPage = async function() {
     const title = document.getElementById('builder-title').value;
     const container = document.getElementById('template-container');
     
-    // Save raw content for editing
-    const rawContent = { html: container.innerHTML };
+    // Create a raw clone specifically for saving raw content safely without UI selections
+    const rawClone = container.cloneNode(true);
+    rawClone.querySelectorAll('.selected-element').forEach(el => el.classList.remove('selected-element'));
+    rawClone.querySelectorAll('[data-events-bound]').forEach(el => delete el.dataset.eventsBound);
+    rawClone.querySelectorAll('[data-events-bound-bg-main]').forEach(el => delete el.dataset.eventsBoundBgMain);
+    const rawContent = { html: rawClone.innerHTML };
     
     // Create optimized compiled clone
     const clone = container.cloneNode(true);
@@ -140,11 +149,23 @@ window.saveLandingPage = async function() {
     
     // Wrap into the view-mode element structure so the CSS overrides apply correctly!
     const compiledHtml = `
-<div id="landing-page-builder-section" class="view-mode" style="width: 100%; overflow-x: hidden; background-color: var(--bg-light);">
+<div id="landing-page-builder-section" class="view-mode" style="width: 100%; background-color: var(--bg-light);">
     <div id="template-container" style="padding-top: 0; max-width: 100%;">
         ${clone.innerHTML}
     </div>
-</div>`;
+</div>
+<!-- Intersection Observer Injector for animations in remote viewers -->
+<img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" style="display:none;" onload="(function(img){
+    if(window.lpAnimObserver) window.lpAnimObserver.disconnect();
+    window.lpAnimObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if(entry.isIntersecting) entry.target.classList.add('is-visible');
+            else entry.target.classList.remove('is-visible');
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.anim-fade-in, .anim-slide-up').forEach(el => window.lpAnimObserver.observe(el));
+    img.remove();
+})(this)">`;
     // For CSS, we rely on modular-style.css being served by the static viewer
 
     const payload = {
