@@ -158,7 +158,11 @@ const chatWithModuleAssistant = async (req, res) => {
 
     if (!hasAccess) return res.status(403).json({ error: 'Unauthorized' });
 
-    const answer = await generateModuleAssistantResponse(module, message);
+    const answer = await generateModuleAssistantResponse(module, message, {
+      courseId: parsedCourseId,
+      courseModuleId: parsedCourseModuleId,
+      conversationId: req.body?.conversationId || `training-module-${moduleId}`
+    });
     res.json({ answer });
   } catch (error) {
     console.error('Module assistant chat failed:', error);

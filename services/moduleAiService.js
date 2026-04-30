@@ -1,4 +1,5 @@
 const env = require('../config/env');
+const eurobotClient = require('./eurobotClient');
 const { buildModuleContextContent } = require('./openaiQuizService');
 
 const extractResponseText = (responsePayload) => {
@@ -27,17 +28,53 @@ const buildAssistantInputContent = (module, message) => [
   }
 ];
 
-const generateModuleAssistantResponse = async (module, message) => {
-  if (!env.openai.apiKey) {
-    const error = new Error('OPENAI_API_KEY is not configured.');
-    error.statusCode = 503;
-    throw error;
-  }
+const extractEurobotAnswer = (payload) => {
+  if (typeof payload?.answer === 'string') return payload.answer;
+  if (typeof payload?.output_text === 'string') return payload.output_text;
+  if (typeof payload === 'string') return payload;
+  return '';
+};
 
+const generateModuleAssistantResponse = async (module, message, options = {}) => {
   const trimmedMessage = String(message || '').trim();
   if (!trimmedMessage) {
     const error = new Error('Message is required.');
     error.statusCode = 400;
+    throw error;
+  }
+
+  if (env.eurobot?.apiUrl) {
+    const modulePrompt = [
+      'You are a helpful learning assistant for the Training platform.',
+      'Answer using the configured Training knowledge base when possible.',
+      'Do not reveal, identify, or imply correct quiz answers or answer keys.',
+      'If the answer is not in the knowledge base, say so clearly.',
+      '',
+      `Current module: ${module.title || 'Untitled module'}`,
+      module.description ? `Module description: ${module.description}` : null,
+      options.courseId ? `Course id: ${options.courseId}` : null,
+      '',
+      `Learner message: ${trimmedMessage}`
+    ].filter(Boolean).join('\n');
+
+    const response = await eurobotClient.chat({
+      message: modulePrompt,
+      conversationId: options.conversationId || `training-module-${module.id}`,
+      knowledgeBaseIds: options.knowledgeBaseIds || [],
+      returnAudio: false,
+      useWebSearch: false
+    });
+
+    const answer = extractEurobotAnswer(response).trim();
+    if (!answer) {
+      throw new Error('Eurobot response did not include assistant output.');
+    }
+    return answer;
+  }
+
+  if (!env.openai.apiKey) {
+    const error = new Error('OPENAI_API_KEY is not configured.');
+    error.statusCode = 503;
     throw error;
   }
 

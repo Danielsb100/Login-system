@@ -27,6 +27,7 @@ const notificationController = require('./controllers/notificationController');
 const courseController = require('./controllers/courseController');
 const landingPageController = require('./controllers/landingPageController');
 const moduleAiController = require('./controllers/moduleAiController');
+const aiVoiceController = require('./controllers/aiVoiceController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
@@ -209,6 +210,8 @@ app.put(
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
 app.post('/modules/:id/assistant/chat', authenticateToken, moduleAiController.chatWithModuleAssistant);
+app.post('/api/ai/transcribe', authenticateToken, handleUploadError('audio'), aiVoiceController.transcribeAudio);
+app.post('/api/ai/tts', authenticateToken, aiVoiceController.textToSpeech);
 
 app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
 app.get('/modules/:id/forum/threads', authenticateToken, forumController.getThreadsByModule);
