@@ -1,5 +1,5 @@
 const env = require('../config/env');
-const eurobotClient = require('./eurobotClient');
+const { chatWithTrainingAi } = require('./trainingAiService');
 const { buildModuleContextContent } = require('./openaiQuizService');
 
 const extractResponseText = (responsePayload) => {
@@ -44,32 +44,15 @@ const generateModuleAssistantResponse = async (module, message, options = {}) =>
   }
 
   if (env.eurobot?.apiUrl) {
-    const modulePrompt = [
-      'You are a helpful learning assistant for the Training platform.',
-      'Answer using the configured Training knowledge base when possible.',
-      'Do not reveal, identify, or imply correct quiz answers or answer keys.',
-      'If the answer is not in the knowledge base, say so clearly.',
-      '',
-      `Current module: ${module.title || 'Untitled module'}`,
-      module.description ? `Module description: ${module.description}` : null,
-      options.courseId ? `Course id: ${options.courseId}` : null,
-      '',
-      `Learner message: ${trimmedMessage}`
-    ].filter(Boolean).join('\n');
-
-    const response = await eurobotClient.chat({
-      message: modulePrompt,
+    const response = await chatWithTrainingAi({
+      message: trimmedMessage,
       conversationId: options.conversationId || `training-module-${module.id}`,
-      knowledgeBaseIds: options.knowledgeBaseIds || [],
-      returnAudio: false,
-      useWebSearch: false
+      knowledgeBaseId: options.knowledgeBaseId,
+      moduleContext: module,
+      courseContext: options.courseContext || null,
+      returnAudio: false
     });
-
-    const answer = extractEurobotAnswer(response).trim();
-    if (!answer) {
-      throw new Error('Eurobot response did not include assistant output.');
-    }
-    return answer;
+    return response.answer;
   }
 
   if (!env.openai.apiKey) {

@@ -850,6 +850,7 @@ async function loadDashboard() {
         }
 
         await loadUserDocuments();
+        await initializeTrainingAiPanel({ canManageAi: canManageModules || isAdmin });
     } catch (error) {
         console.error('Dashboard error:', error);
         if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
@@ -859,6 +860,173 @@ async function loadDashboard() {
             console.error('Critical Dashboard failure: ', error.message);
         }
     }
+}
+
+let trainingAiConversationId = localStorage.getItem('training_ai_conversation_id') || `training-ai-${Date.now()}`;
+let trainingAiLastAudio = null;
+let trainingAiRecorder = null;
+let trainingAiChunks = [];
+localStorage.setItem('training_ai_conversation_id', trainingAiConversationId);
+
+function setTrainingAiStatus(message, isError = false) {
+    const status = document.getElementById('ai-chat-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.className = `form-message ${isError ? 'message-error' : 'message-success'}`;
+}
+
+function appendTrainingAiMessage(role, content) {
+    const history = document.getElementById('ai-chat-history');
+    if (!history) return;
+    const item = document.createElement('div');
+    item.className = 'operations-item';
+    item.innerHTML = `<strong>${role === 'user' ? 'You' : 'AI'}</strong><p>${escapeHtml(content)}</p>`;
+    history.appendChild(item);
+    history.scrollTop = history.scrollHeight;
+}
+
+function renderTrainingAiKbConfig(payload, canManageAi) {
+    const status = document.getElementById('ai-kb-status');
+    const details = document.getElementById('ai-kb-details');
+    const ensureBtn = document.getElementById('btn-ai-ensure-kb');
+    const refreshBtn = document.getElementById('btn-ai-refresh-kb');
+    const connection = payload?.connection;
+    const summary = payload?.syncSummary || connection?.syncSummary || {};
+
+    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi);
+    if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !connection);
+
+    if (!connection) {
+        if (status) status.textContent = 'No KB configured';
+        if (details) details.textContent = canManageAi
+            ? 'Create the default Eurobot knowledge base before using Training-wide AI.'
+            : 'Training AI is not configured yet.';
+        return;
+    }
+
+    if (status) status.textContent = `${connection.status} · ${connection.displayName}`;
+    if (details) {
+        details.textContent = `Remote collection: ${connection.collectionName || connection.remoteId}. Sync: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.`;
+    }
+}
+
+async function loadTrainingAiKbConfig(canManageAi) {
+    try {
+        const payload = await apiCall('/api/ai/knowledge-base/config');
+        renderTrainingAiKbConfig(payload, canManageAi);
+    } catch (error) {
+        renderTrainingAiKbConfig({ connection: null }, canManageAi);
+        setTrainingAiStatus(error.message, true);
+    }
+}
+
+async function sendTrainingAiMessage(messageOverride = null) {
+    const input = document.getElementById('ai-chat-input');
+    const sendBtn = document.getElementById('btn-ai-chat-send');
+    const message = String(messageOverride ?? input?.value ?? '').trim();
+    if (!message) return;
+
+    appendTrainingAiMessage('user', message);
+    if (input) input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+    setTrainingAiStatus('Thinking...');
+
+    try {
+        const response = await apiCall('/api/ai/chat', 'POST', {
+            message,
+            conversationId: trainingAiConversationId,
+            returnAudio: false
+        });
+        appendTrainingAiMessage('assistant', response.answer || 'No answer returned.');
+        trainingAiLastAudio = response.audioBase64 ? response : null;
+        setTrainingAiStatus('Answer ready.');
+    } catch (error) {
+        appendTrainingAiMessage('assistant', error.message);
+        setTrainingAiStatus(error.message, true);
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+async function startTrainingAiVoiceRecording() {
+    const recordBtn = document.getElementById('btn-ai-chat-record');
+    if (trainingAiRecorder && trainingAiRecorder.state === 'recording') {
+        trainingAiRecorder.stop();
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setTrainingAiStatus('Voice recording is not available in this browser context.', true);
+        return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    trainingAiChunks = [];
+    trainingAiRecorder = new MediaRecorder(stream);
+    trainingAiRecorder.ondataavailable = (event) => {
+        if (event.data?.size) trainingAiChunks.push(event.data);
+    };
+    trainingAiRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (recordBtn) recordBtn.textContent = 'Record voice';
+        const audio = new Blob(trainingAiChunks, { type: trainingAiRecorder.mimeType || 'audio/webm' });
+        await transcribeAndSendTrainingAiAudio(audio);
+    };
+    trainingAiRecorder.start();
+    if (recordBtn) recordBtn.textContent = 'Stop recording';
+    setTrainingAiStatus('Recording... click again to stop.');
+}
+
+async function transcribeAndSendTrainingAiAudio(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'training-ai.webm');
+    setTrainingAiStatus('Transcribing...');
+    const response = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Failed to transcribe audio.');
+    const text = String(payload.text || '').trim();
+    if (!text) throw new Error('Could not transcribe audio.');
+    await sendTrainingAiMessage(text);
+}
+
+function playTrainingAiLastAnswer() {
+    if (!trainingAiLastAudio?.audioBase64) {
+        setTrainingAiStatus('No spoken answer is available yet.', true);
+        return;
+    }
+    const audio = new Audio(`data:audio/${trainingAiLastAudio.audioFormat || 'mp3'};base64,${trainingAiLastAudio.audioBase64}`);
+    audio.play().catch((error) => setTrainingAiStatus(error.message, true));
+}
+
+async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
+    if (!document.getElementById('ai-assistant-panel')) return;
+    await loadTrainingAiKbConfig(canManageAi);
+    document.getElementById('btn-ai-chat-send')?.addEventListener('click', () => sendTrainingAiMessage());
+    document.getElementById('ai-chat-input')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendTrainingAiMessage();
+        }
+    });
+    document.getElementById('btn-ai-chat-record')?.addEventListener('click', () => {
+        startTrainingAiVoiceRecording().catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('btn-ai-chat-speak')?.addEventListener('click', playTrainingAiLastAnswer);
+    document.getElementById('btn-ai-ensure-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Creating default knowledge base...');
+        await apiCall('/api/ai/knowledge-base/default', 'POST', {});
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Default knowledge base ready.');
+    });
+    document.getElementById('btn-ai-refresh-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Refreshing knowledge base materials...');
+        await apiCall('/api/ai/knowledge-base/refresh', 'POST', {});
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base refresh finished.');
+    });
 }
 
 async function loadAdminPanel() {
