@@ -4,7 +4,10 @@ async function run() {
   const calls = [];
   const fakePrisma = {
     aiKnowledgeBaseConnection: {
-      findFirst: async () => ({ id: 7, remoteId: 'kb-remote-1', remoteName: 'training-default', collectionName: 'training_default' })
+      findMany: async () => ([
+        { id: 7, remoteId: 'kb-remote-1', remoteName: 'training-default', collectionName: 'training_default', isDefault: true, status: 'ACTIVE' },
+        { id: 8, remoteId: 'kb-remote-2', remoteName: 'training-extra', collectionName: 'training_extra', isDefault: true, status: 'ACTIVE' }
+      ])
     }
   };
   const fakeEurobot = {
@@ -35,14 +38,14 @@ async function run() {
   });
   assert.strictEqual(calls.length, 1);
   assert.strictEqual(calls[0].conversationId, 'conv-1');
-  assert.deepStrictEqual(calls[0].knowledgeBaseIds, ['kb-remote-1']);
+  assert.deepStrictEqual(calls[0].knowledgeBaseIds, ['kb-remote-1', 'kb-remote-2']);
   assert.match(calls[0].message, /What should I study\?/);
   assert.match(calls[0].message, /Current module: Intro/);
   assert.match(calls[0].message, /Do not reveal/);
 
   await assert.rejects(
     () => chatWithTrainingAi({
-      prisma: { aiKnowledgeBaseConnection: { findFirst: async () => null } },
+      prisma: { aiKnowledgeBaseConnection: { findMany: async () => [] } },
       eurobotClient: fakeEurobot,
       message: 'hello'
     }),

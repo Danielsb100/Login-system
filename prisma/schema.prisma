@@ -611,6 +611,7 @@ model AiKnowledgeBaseSyncItem {
   sourceHash       String?
   remoteFileId     String?
   remoteDocumentId String?
+  excluded         Boolean                 @default(false)
   status           AiKnowledgeSyncStatus   @default(PENDING)
   lastSyncedAt     DateTime?
   lastError        String?                 @db.Text

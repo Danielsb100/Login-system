@@ -1,6 +1,6 @@
 const prismaDefault = require('../config/db');
 const eurobotClientDefault = require('./eurobotClient');
-const { getActiveConnection } = require('./aiKnowledgeSyncService');
+const { getActiveConnections } = require('./aiKnowledgeSyncService');
 
 const extractTrainingAiAnswer = (payload) => {
   if (typeof payload === 'string') return payload;
@@ -25,15 +25,28 @@ const buildTrainingAiPrompt = ({ message, moduleContext, courseContext }) => [
   `Learner message: ${String(message || '').trim()}`
 ].filter(Boolean).join('\n');
 
-const resolveKnowledgeBaseIds = async ({ prisma, knowledgeBaseId, eurobotClient }) => {
+const normalizeRequestedKnowledgeBaseIds = (knowledgeBaseId) => {
+  if (Array.isArray(knowledgeBaseId)) return knowledgeBaseId.map(String).filter(Boolean);
   if (knowledgeBaseId) return [String(knowledgeBaseId)];
-  const connection = await getActiveConnection(prisma);
-  if (!connection?.remoteId && !connection?.remoteName && !connection?.collectionName) {
-    const error = new Error('AI knowledge base is not configured. Ask a manager to create or select a Training knowledge base.');
+  return [];
+};
+
+const resolveKnowledgeBaseIds = async ({ prisma, knowledgeBaseId, eurobotClient }) => {
+  const requested = normalizeRequestedKnowledgeBaseIds(knowledgeBaseId);
+  if (requested.length) return requested;
+
+  const connections = await getActiveConnections(prisma);
+  const ids = connections
+    .map((connection) => connection.remoteId || connection.collectionName || connection.remoteName)
+    .filter(Boolean)
+    .map(String);
+
+  if (!ids.length) {
+    const error = new Error('AI knowledge base is not configured. Ask a manager to create or select one or more Training knowledge bases.');
     error.statusCode = 503;
     throw error;
   }
-  return [String(connection.remoteId || connection.collectionName || connection.remoteName)];
+  return ids;
 };
 
 const chatWithTrainingAi = async ({

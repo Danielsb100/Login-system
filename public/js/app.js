@@ -885,28 +885,81 @@ function appendTrainingAiMessage(role, content) {
     history.scrollTop = history.scrollHeight;
 }
 
+function summarizeKbConnection(connection) {
+    const summary = connection?.syncSummary || {};
+    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed`;
+}
+
+function renderTrainingAiKbList(connections = [], canManageAi) {
+    const list = document.getElementById('ai-kb-list');
+    const saveBtn = document.getElementById('btn-ai-save-active-kbs');
+    const createForm = document.getElementById('ai-kb-create-form');
+    if (createForm) createForm.classList.toggle('hidden', !canManageAi);
+    if (saveBtn) saveBtn.classList.toggle('hidden', !canManageAi || !connections.length);
+    if (!list) return;
+
+    if (!connections.length) {
+        list.innerHTML = '<div class="empty-state-inline">No Training knowledge bases yet. Create one or connect the default KB.</div>';
+        return;
+    }
+
+    list.innerHTML = connections.map((connection) => {
+        const checked = connection.isDefault ? 'checked' : '';
+        const disabled = canManageAi && connection.status !== 'DISABLED' ? '' : 'disabled';
+        const statusClass = connection.isDefault ? 'active' : String(connection.status || '').toLowerCase();
+        return `
+            <article class="ai-kb-row ${connection.isDefault ? 'ai-kb-row-active' : ''}" data-kb-id="${connection.id}">
+                <label class="ai-kb-select">
+                    <input type="checkbox" class="ai-kb-active-checkbox" value="${connection.id}" ${checked} ${disabled}>
+                    <span>Use in AI</span>
+                </label>
+                <div class="ai-kb-row-main">
+                    <div class="ai-kb-row-title">
+                        <strong>${escapeHtml(connection.displayName || connection.remoteName || 'Training KB')}</strong>
+                        <span class="operations-pill ai-kb-row-pill ${statusClass}">${connection.isDefault ? 'Connected to AI' : (connection.status || 'ACTIVE')}</span>
+                    </div>
+                    <p>${escapeHtml(connection.collectionName || connection.remoteId || 'No remote collection yet')}</p>
+                    <small>Material sync: ${escapeHtml(summarizeKbConnection(connection))}</small>
+                </div>
+                <div class="ai-kb-row-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="documents" data-kb-id="${connection.id}">Documents</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="rename" data-kb-id="${connection.id}">Edit</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-ai-kb-action="sync" data-kb-id="${connection.id}">Sync</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="disable" data-kb-id="${connection.id}">${connection.status === 'DISABLED' ? 'Enable' : 'Disable'}</button>
+                </div>
+                <div class="ai-kb-documents hidden" id="ai-kb-documents-${connection.id}"></div>
+            </article>
+        `;
+    }).join('');
+}
+
 function renderTrainingAiKbConfig(payload, canManageAi) {
     const status = document.getElementById('ai-kb-status');
     const details = document.getElementById('ai-kb-details');
     const ensureBtn = document.getElementById('btn-ai-ensure-kb');
     const refreshBtn = document.getElementById('btn-ai-refresh-kb');
-    const connection = payload?.connection;
-    const summary = payload?.syncSummary || connection?.syncSummary || {};
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
 
-    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi || Boolean(connection));
-    if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !connection);
+    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi || Boolean(connections.length));
+    if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !activeConnections.length);
+    renderTrainingAiKbList(connections, canManageAi);
 
-    if (!connection) {
-        if (status) status.textContent = 'Not connected';
+    if (!activeConnections.length) {
+        if (status) status.textContent = connections.length ? 'No AI KB selected' : 'Not connected';
         if (details) details.textContent = canManageAi
-            ? 'Connect the default Eurobot knowledge base, then sync Training materials to make them available in the 3D world AI assistant.'
+            ? 'Create or select one or more Eurobot knowledge bases, then save the AI selection and sync materials.'
             : 'The Eurobot knowledge base is not connected yet.';
         return;
     }
 
-    if (status) status.textContent = `Connected · ${connection.displayName}`;
+    const activeNames = activeConnections.map((connection) => connection.displayName).join(', ');
+    const totalSynced = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.synced || 0), 0);
+    const totalPending = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.pending || 0), 0);
+    const totalFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.failed || 0), 0);
+    if (status) status.textContent = `AI uses ${activeConnections.length} KB${activeConnections.length === 1 ? '' : 's'}`;
     if (details) {
-        details.textContent = `Eurobot collection: ${connection.collectionName || connection.remoteId}. Material sync: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.`;
+        details.textContent = `Connected to AI: ${activeNames}. Material sync across selected KBs: ${totalSynced} synced, ${totalPending} pending, ${totalFailed} failed.`;
     }
 }
 
@@ -915,8 +968,139 @@ async function loadTrainingAiKbConfig(canManageAi) {
         const payload = await apiCall('/api/ai/knowledge-base/config');
         renderTrainingAiKbConfig(payload, canManageAi);
     } catch (error) {
-        renderTrainingAiKbConfig({ connection: null }, canManageAi);
+        renderTrainingAiKbConfig({ connections: [] }, canManageAi);
         setTrainingAiStatus(error.message, true);
+    }
+}
+
+async function saveTrainingAiKbSelection(canManageAi) {
+    const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+        .map((input) => Number(input.value))
+        .filter(Number.isInteger);
+    setTrainingAiStatus('Saving AI knowledge-base selection...');
+    const payload = await apiCall('/api/ai/knowledge-base/connections/active', 'PUT', { connectionIds: ids });
+    renderTrainingAiKbConfig(payload, canManageAi);
+    setTrainingAiStatus(ids.length ? 'AI knowledge-base selection saved.' : 'No KB selected for AI.');
+}
+
+async function createTrainingAiKb(canManageAi, event) {
+    event?.preventDefault();
+    const nameInput = document.getElementById('ai-kb-new-name');
+    const descriptionInput = document.getElementById('ai-kb-new-description');
+    const displayName = String(nameInput?.value || '').trim();
+    if (!displayName) {
+        setTrainingAiStatus('Knowledge base name is required.', true);
+        return;
+    }
+    setTrainingAiStatus('Creating Eurobot knowledge base...');
+    await apiCall('/api/ai/knowledge-base/connections', 'POST', {
+        displayName,
+        description: descriptionInput?.value || ''
+    });
+    if (nameInput) nameInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
+    await loadTrainingAiKbConfig(canManageAi);
+    setTrainingAiStatus('Knowledge base created. Select it if the AI should use it, then sync materials.');
+}
+
+async function loadTrainingAiKbDocuments(connectionId, { toggle = true } = {}) {
+    const panel = document.getElementById(`ai-kb-documents-${connectionId}`);
+    if (!panel) return;
+    if (toggle) panel.classList.toggle('hidden');
+    else panel.classList.remove('hidden');
+    if (panel.classList.contains('hidden')) return;
+    panel.innerHTML = '<div class="empty-state-inline">Loading KB documents...</div>';
+    const payload = await apiCall(`/api/ai/knowledge-base/sync-items?connectionId=${encodeURIComponent(connectionId)}`);
+    const items = payload.items || [];
+    if (!items.length) {
+        panel.innerHTML = '<div class="empty-state-inline">No synced documents yet. Click Sync for this KB to populate the document list.</div>';
+        return;
+    }
+    panel.innerHTML = `
+        <div class="ai-kb-documents-header">
+            <strong>Documents / materials in this KB</strong>
+            <span>Use Include/Exclude to control what this KB syncs next.</span>
+        </div>
+        <div class="ai-kb-document-list">
+            ${items.map((item) => {
+                const included = !item.excluded;
+                const status = item.excluded ? 'EXCLUDED' : (item.status || 'PENDING');
+                return `
+                    <div class="ai-kb-document-row ${item.excluded ? 'is-excluded' : ''}" data-sync-item-id="${item.id}">
+                        <label class="ai-kb-document-toggle">
+                            <input type="checkbox" class="ai-kb-document-include" data-sync-item-id="${item.id}" ${included ? 'checked' : ''}>
+                            <span>${included ? 'Included' : 'Excluded'}</span>
+                        </label>
+                        <div class="ai-kb-document-main">
+                            <strong>${escapeHtml(item.filename || `${item.sourceType} ${item.sourceId}`)}</strong>
+                            <small>${escapeHtml(item.sourceType)} · source ${escapeHtml(item.sourceId)} · ${escapeHtml(status)}${item.isStale ? ' · stale' : ''}</small>
+                            ${item.lastError ? `<p>${escapeHtml(item.lastError)}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+async function updateTrainingAiKbDocumentInclusion(canManageAi, event) {
+    const input = event.target.closest('.ai-kb-document-include');
+    if (!input) return false;
+    const id = Number(input.dataset.syncItemId);
+    if (!Number.isInteger(id)) return false;
+    setTrainingAiStatus(input.checked ? 'Including document in KB sync...' : 'Excluding document from KB sync...');
+    await apiCall(`/api/ai/knowledge-base/sync-items/${id}`, 'PUT', { excluded: !input.checked });
+    const connectionRow = input.closest('.ai-kb-row');
+    const connectionId = connectionRow?.dataset?.kbId;
+    if (connectionId) {
+        await loadTrainingAiKbDocuments(connectionId, { toggle: false });
+    }
+    setTrainingAiStatus(input.checked ? 'Document included. Click Sync to upload/update it.' : 'Document excluded from future syncs.');
+    return true;
+}
+
+async function handleTrainingAiKbAction(canManageAi, event) {
+    if (await updateTrainingAiKbDocumentInclusion(canManageAi, event)) return;
+    const button = event.target.closest('[data-ai-kb-action]');
+    if (!button) return;
+    const id = Number(button.dataset.kbId);
+    const action = button.dataset.aiKbAction;
+    if (!Number.isInteger(id)) return;
+
+    if (action === 'documents') {
+        await loadTrainingAiKbDocuments(id);
+        return;
+    }
+
+    if (action === 'sync') {
+        setTrainingAiStatus('Syncing materials to selected Eurobot KB...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base sync finished.');
+        return;
+    }
+
+    if (action === 'rename') {
+        const card = button.closest('.ai-kb-row');
+        const current = card?.querySelector('.ai-kb-row-main strong')?.textContent || '';
+        const displayName = window.prompt('Knowledge base name', current);
+        if (displayName === null) return;
+        setTrainingAiStatus('Updating knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { displayName });
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base updated.');
+        return;
+    }
+
+    if (action === 'disable') {
+        const card = button.closest('.ai-kb-row');
+        const currentlyDisabled = button.textContent.trim().toLowerCase() === 'enable';
+        const nextStatus = currentlyDisabled ? 'ACTIVE' : 'DISABLED';
+        setTrainingAiStatus(`${currentlyDisabled ? 'Enabling' : 'Disabling'} knowledge base...`);
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { status: nextStatus });
+        if (card && !currentlyDisabled) card.querySelector('.ai-kb-active-checkbox').checked = false;
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus(`Knowledge base ${currentlyDisabled ? 'enabled' : 'disabled'}.`);
     }
 }
 
@@ -1004,6 +1188,15 @@ function playTrainingAiLastAnswer() {
 async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
     if (!document.getElementById('ai-assistant-panel')) return;
     await loadTrainingAiKbConfig(canManageAi);
+    document.getElementById('btn-ai-save-active-kbs')?.addEventListener('click', () => {
+        saveTrainingAiKbSelection(canManageAi).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-create-form')?.addEventListener('submit', (event) => {
+        createTrainingAiKb(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-list')?.addEventListener('click', (event) => {
+        handleTrainingAiKbAction(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
     document.getElementById('btn-ai-chat-send')?.addEventListener('click', () => sendTrainingAiMessage());
     document.getElementById('ai-chat-input')?.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -1022,10 +1215,15 @@ async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
         setTrainingAiStatus('Default knowledge base ready.');
     });
     document.getElementById('btn-ai-refresh-kb')?.addEventListener('click', async () => {
-        setTrainingAiStatus('Refreshing knowledge base materials...');
-        await apiCall('/api/ai/knowledge-base/refresh', 'POST', {});
+        setTrainingAiStatus('Refreshing selected knowledge bases...');
+        const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+            .map((input) => Number(input.value))
+            .filter(Number.isInteger);
+        for (const id of ids) {
+            await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+        }
         await loadTrainingAiKbConfig(canManageAi);
-        setTrainingAiStatus('Knowledge base refresh finished.');
+        setTrainingAiStatus('Selected knowledge bases refreshed.');
     });
 }
 

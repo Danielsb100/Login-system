@@ -163,12 +163,32 @@
                     <div class="operations-card ai-kb-card">
                         <div class="operations-card-header">
                             <div>
-                                <h4>Training materials → Eurobot KB</h4>
+                                <h4>Training materials → Eurobot KBs</h4>
                                 <p id="ai-kb-details" class="empty-state-inline">Loading AI knowledge base status...</p>
                             </div>
                         </div>
+                        <div class="ai-kb-manager">
+                            <div id="ai-kb-list" class="ai-kb-list">
+                                <div class="empty-state-inline">Loading knowledge bases...</div>
+                            </div>
+                            <div class="ai-kb-manager-actions">
+                                <button type="button" id="btn-ai-save-active-kbs" class="btn btn-secondary btn-sm hidden">Save AI selection</button>
+                            </div>
+                            <form id="ai-kb-create-form" class="ai-kb-create-form hidden">
+                                <div class="input-group">
+                                    <label for="ai-kb-new-name">New knowledge base</label>
+                                    <input type="text" id="ai-kb-new-name" placeholder="Example: AI Engineering KB">
+                                </div>
+                                <div class="input-group">
+                                    <label for="ai-kb-new-description">Description</label>
+                                    <input type="text" id="ai-kb-new-description" placeholder="What this KB should contain">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Create KB</button>
+                            </form>
+                        </div>
                         <div class="ai-kb-help">
-                            <span>Use this panel only to connect the knowledge base and send/sync materials.</span>
+                            <span>Select one or more KBs that the 3D world AI assistant should use.</span>
+                            <span>Sync each KB after changing Training materials so Eurobot has the latest indexed files.</span>
                             <span>The student/teacher AI chat stays in the 3D world module assistant.</span>
                         </div>
                         <div id="ai-chat-status" class="form-message"></div>

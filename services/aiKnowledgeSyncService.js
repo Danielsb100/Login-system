@@ -54,10 +54,15 @@ const extractUploadResult = (upload) => {
   };
 };
 
-const getActiveConnection = async (prisma) => prisma.aiKnowledgeBaseConnection.findFirst({
+const getActiveConnections = async (prisma) => prisma.aiKnowledgeBaseConnection.findMany({
   where: { isDefault: true, status: { not: 'DISABLED' } },
-  orderBy: { updatedAt: 'desc' }
+  orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }]
 });
+
+const getActiveConnection = async (prisma) => {
+  const connections = await getActiveConnections(prisma);
+  return connections[0] || null;
+};
 
 const getConnectionSyncSummary = async (prisma, connectionId) => {
   const items = connectionId
@@ -65,6 +70,21 @@ const getConnectionSyncSummary = async (prisma, connectionId) => {
     : [];
   return summarizeSyncItems(items);
 };
+
+const getConnectionSyncSummaries = async (prisma, connections = []) => {
+  const summaries = {};
+  for (const connection of connections) {
+    summaries[connection.id] = await getConnectionSyncSummary(prisma, connection.id);
+  }
+  return summaries;
+};
+
+const slugifyKnowledgeBaseName = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 64);
 
 const ensureDefaultKnowledgeBaseConnection = async ({ prisma, eurobotClient = defaultEurobotClient } = {}) => {
   if (!prisma) throw new Error('Prisma client is required.');
@@ -108,6 +128,91 @@ const ensureDefaultKnowledgeBaseConnection = async ({ prisma, eurobotClient = de
   return prisma.aiKnowledgeBaseConnection.create({ data });
 };
 
+const listKnowledgeBaseConnections = async (prisma) => {
+  const connections = await prisma.aiKnowledgeBaseConnection.findMany({
+    orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }]
+  });
+  const summaries = await getConnectionSyncSummaries(prisma, connections);
+  return connections.map((connection) => ({ ...connection, syncSummary: summaries[connection.id] }));
+};
+
+const createKnowledgeBaseConnection = async ({ prisma, eurobotClient = defaultEurobotClient, displayName, description, tenantCode } = {}) => {
+  if (!prisma) throw new Error('Prisma client is required.');
+  const resolvedTenantCode = tenantCode || env.eurobot?.tenantCode || 'default';
+  const trimmedName = String(displayName || '').trim();
+  if (!trimmedName) {
+    const error = new Error('Knowledge base name is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const safeName = slugifyKnowledgeBaseName(trimmedName);
+  const remoteName = safeName || `training-${Date.now()}`;
+  const remote = await eurobotClient.createInternalCollection({
+    name: remoteName,
+    description: String(description || '').trim() || `Training knowledge base: ${trimmedName}`
+  });
+
+  return prisma.aiKnowledgeBaseConnection.create({
+    data: {
+      tenantCode: resolvedTenantCode,
+      displayName: trimmedName,
+      remoteType: 'internal_collection',
+      remoteId: String(remote.id || remote.remoteId || remote.collection_name || remoteName),
+      remoteName: remote.name || remoteName,
+      collectionName: remote.collection_name || remote.collectionName || remoteName.replace(/-/g, '_'),
+      isDefault: false,
+      status: 'ACTIVE',
+      lastRefreshAt: null,
+      lastError: null
+    }
+  });
+};
+
+const updateKnowledgeBaseConnection = async ({ prisma, id, data = {} } = {}) => {
+  const connectionId = Number(id);
+  if (!Number.isInteger(connectionId)) {
+    const error = new Error('Invalid knowledge base id.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const update = {};
+  if (data.displayName !== undefined) {
+    const displayName = String(data.displayName || '').trim();
+    if (!displayName) {
+      const error = new Error('Knowledge base name cannot be empty.');
+      error.statusCode = 400;
+      throw error;
+    }
+    update.displayName = displayName;
+  }
+  if (data.status !== undefined) {
+    const status = String(data.status || '').toUpperCase();
+    if (!['ACTIVE', 'DISABLED', 'ERROR'].includes(status)) {
+      const error = new Error('Invalid AI knowledge base status.');
+      error.statusCode = 400;
+      throw error;
+    }
+    update.status = status;
+    if (status === 'DISABLED') update.isDefault = false;
+  }
+
+  return prisma.aiKnowledgeBaseConnection.update({ where: { id: connectionId }, data: update });
+};
+
+const setActiveKnowledgeBaseConnections = async ({ prisma, connectionIds = [] } = {}) => {
+  const ids = [...new Set((connectionIds || []).map(Number).filter(Number.isInteger))];
+  await prisma.aiKnowledgeBaseConnection.updateMany({ data: { isDefault: false } });
+  if (ids.length) {
+    await prisma.aiKnowledgeBaseConnection.updateMany({
+      where: { id: { in: ids }, status: { not: 'DISABLED' } },
+      data: { isDefault: true, status: 'ACTIVE' }
+    });
+  }
+  return listKnowledgeBaseConnections(prisma);
+};
+
 const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClient, connectionId } = {}) => {
   const connection = connectionId
     ? await prisma.aiKnowledgeBaseConnection.findUnique({ where: { id: Number(connectionId) } })
@@ -132,6 +237,18 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
     };
 
     const existing = await prisma.aiKnowledgeBaseSyncItem.findUnique({ where }).catch(() => null);
+    if (existing?.excluded) {
+      const skipped = await prisma.aiKnowledgeBaseSyncItem.update({
+        where: { id: existing.id },
+        data: {
+          status: 'SKIPPED',
+          sourceHash: material.sourceHash,
+          lastError: null
+        }
+      });
+      results.push(skipped);
+      continue;
+    }
     if (existing?.status === 'SYNCED' && existing.sourceHash === material.sourceHash && existing.remoteFileId) {
       results.push(existing);
       continue;
@@ -139,7 +256,7 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
 
     const pending = await prisma.aiKnowledgeBaseSyncItem.upsert({
       where,
-      update: { status: 'PENDING', sourceHash: material.sourceHash, lastError: null },
+      update: { status: 'PENDING', excluded: false, sourceHash: material.sourceHash, lastError: null },
       create: {
         connectionId: connection.id,
         sourceType: material.sourceType,
@@ -201,10 +318,16 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
 
 module.exports = {
   SYNC_STATUSES,
+  createKnowledgeBaseConnection,
   ensureDefaultKnowledgeBaseConnection,
   getActiveConnection,
+  getActiveConnections,
+  getConnectionSyncSummaries,
   getConnectionSyncSummary,
+  listKnowledgeBaseConnections,
   normalizeCollectionList,
   refreshKnowledgeBase,
-  summarizeSyncItems
+  setActiveKnowledgeBaseConnections,
+  summarizeSyncItems,
+  updateKnowledgeBaseConnection
 };
