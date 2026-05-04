@@ -29,6 +29,31 @@ const collectionNameMatches = (collection, defaultName) => {
   return candidates.includes(normalizedDefault) || candidates.includes(normalizedDefault.replace(/-/g, '_'));
 };
 
+const extractUploadResult = (upload) => {
+  const results = Array.isArray(upload?.results) ? upload.results : [];
+  const failed = results.find((result) => result && result.done === false);
+  if (failed) {
+    throw new Error(failed.error || failed.detail || `Eurobot upload failed for ${failed.filename || 'file'}.`);
+  }
+
+  const first = results[0] || upload || {};
+  const pipeline = first.pipeline || {};
+  return {
+    remoteFileId: String(
+      first.file_id ||
+      first.id ||
+      first.job_id ||
+      pipeline.doc_id ||
+      pipeline.unique_id ||
+      pipeline.job_id ||
+      upload?.file_id ||
+      upload?.id ||
+      upload?.job_id ||
+      ''
+    )
+  };
+};
+
 const getActiveConnection = async (prisma) => prisma.aiKnowledgeBaseConnection.findFirst({
   where: { isDefault: true, status: { not: 'DISABLED' } },
   orderBy: { updatedAt: 'desc' }
@@ -107,7 +132,7 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
     };
 
     const existing = await prisma.aiKnowledgeBaseSyncItem.findUnique({ where }).catch(() => null);
-    if (existing?.status === 'SYNCED' && existing.sourceHash === material.sourceHash) {
+    if (existing?.status === 'SYNCED' && existing.sourceHash === material.sourceHash && existing.remoteFileId) {
       results.push(existing);
       continue;
     }
@@ -130,11 +155,12 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
         filename: material.filename,
         mimeType: material.mimeType || 'text/plain'
       }]);
+      const uploadResult = extractUploadResult(upload);
       const synced = await prisma.aiKnowledgeBaseSyncItem.update({
         where: { id: pending.id },
         data: {
           status: 'SYNCED',
-          remoteFileId: String(upload?.file_id || upload?.id || upload?.job_id || ''),
+          remoteFileId: uploadResult.remoteFileId,
           lastSyncedAt: new Date(),
           lastError: null
         }

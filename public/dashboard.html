@@ -148,28 +148,29 @@
                     </div>
                 </section>
 
-                <section class="ai-assistant-panel glassmorphism fade-in" id="ai-assistant-panel">
+                <section class="ai-assistant-panel operations-panel glassmorphism fade-in" id="ai-assistant-panel">
                     <div class="section-header operations-panel-header">
                         <div>
-                            <h3>Training AI Assistant</h3>
-                            <p>Ask questions across the configured Training knowledge base. Managers can create or refresh the Eurobot-backed base below.</p>
+                            <h3>Eurobot Knowledge Base Sync</h3>
+                            <p>Manage which Training materials are available to the AI used inside the 3D world assistant.</p>
                         </div>
-                        <div class="operations-summary-badges">
+                        <div class="operations-summary-badges ai-kb-actions">
                             <span class="operations-pill" id="ai-kb-status">KB not loaded</span>
-                            <button type="button" id="btn-ai-ensure-kb" class="btn btn-secondary btn-sm hidden">Ensure default base</button>
-                            <button type="button" id="btn-ai-refresh-kb" class="btn btn-secondary btn-sm hidden">Refresh materials</button>
+                            <button type="button" id="btn-ai-ensure-kb" class="btn btn-secondary btn-sm hidden">Connect default KB</button>
+                            <button type="button" id="btn-ai-refresh-kb" class="btn btn-primary btn-sm hidden">Sync materials to Eurobot</button>
                         </div>
                     </div>
-                    <div id="ai-kb-details" class="empty-state-inline">Loading AI knowledge base status...</div>
-                    <div id="ai-chat-history" class="operations-list" style="margin-top:1rem; max-height:260px; overflow:auto;"></div>
-                    <div class="input-group" style="margin-top:1rem;">
-                        <label for="ai-chat-input">Message</label>
-                        <textarea id="ai-chat-input" rows="3" class="identity-textarea" placeholder="Ask anything about your Training materials..."></textarea>
-                    </div>
-                    <div class="identity-actions" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                        <button type="button" id="btn-ai-chat-send" class="btn btn-primary">Send</button>
-                        <button type="button" id="btn-ai-chat-record" class="btn btn-secondary">Record voice</button>
-                        <button type="button" id="btn-ai-chat-speak" class="btn btn-secondary">Play last answer</button>
+                    <div class="operations-card ai-kb-card">
+                        <div class="operations-card-header">
+                            <div>
+                                <h4>Training materials → Eurobot KB</h4>
+                                <p id="ai-kb-details" class="empty-state-inline">Loading AI knowledge base status...</p>
+                            </div>
+                        </div>
+                        <div class="ai-kb-help">
+                            <span>Use this panel only to connect the knowledge base and send/sync materials.</span>
+                            <span>The student/teacher AI chat stays in the 3D world module assistant.</span>
+                        </div>
                         <div id="ai-chat-status" class="form-message"></div>
                     </div>
                 </section>

@@ -893,20 +893,20 @@ function renderTrainingAiKbConfig(payload, canManageAi) {
     const connection = payload?.connection;
     const summary = payload?.syncSummary || connection?.syncSummary || {};
 
-    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi);
+    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi || Boolean(connection));
     if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !connection);
 
     if (!connection) {
-        if (status) status.textContent = 'No KB configured';
+        if (status) status.textContent = 'Not connected';
         if (details) details.textContent = canManageAi
-            ? 'Create the default Eurobot knowledge base before using Training-wide AI.'
-            : 'Training AI is not configured yet.';
+            ? 'Connect the default Eurobot knowledge base, then sync Training materials to make them available in the 3D world AI assistant.'
+            : 'The Eurobot knowledge base is not connected yet.';
         return;
     }
 
-    if (status) status.textContent = `${connection.status} · ${connection.displayName}`;
+    if (status) status.textContent = `Connected · ${connection.displayName}`;
     if (details) {
-        details.textContent = `Remote collection: ${connection.collectionName || connection.remoteId}. Sync: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.`;
+        details.textContent = `Eurobot collection: ${connection.collectionName || connection.remoteId}. Material sync: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.`;
     }
 }
 
