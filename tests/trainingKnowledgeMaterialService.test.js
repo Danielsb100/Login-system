@@ -2,6 +2,9 @@ const assert = require('assert');
 
 async function run() {
   const { buildMaterialFilename, buildTrainingMaterialList, stripQuizAnswerKeys } = require('../services/trainingKnowledgeMaterialService');
+  const fs = require('fs');
+  const path = require('path');
+  const env = require('../config/env');
 
   assert.strictEqual(buildMaterialFilename('TrainingModule', 42, 'metadata'), 'trainingmodule-42-metadata.txt');
 

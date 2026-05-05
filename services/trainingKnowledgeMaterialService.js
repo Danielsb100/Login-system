@@ -1,4 +1,9 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const env = require('../config/env');
+const { createLocalAssetStorage } = require('./assetStorage');
+
+const assetStorage = createLocalAssetStorage({ rootDir: env.upload.storageDir });
 
 const sanitizePart = (value) => String(value || 'item')
   .trim()
@@ -64,10 +69,31 @@ const buildCourseMetadataText = (course) => {
   ].filter((line) => line !== null).join('\n');
 };
 
-const documentToMaterial = (moduleId, moduleDocument) => {
+const resolveDocumentBuffer = async (document, fallbackText) => {
+  if (document.data) return Buffer.from(document.data);
+  if (document.storageProvider === 'local' && document.storageKey) {
+    return fs.promises.readFile(assetStorage.resolvePath(document.storageKey));
+  }
+  return textBuffer(fallbackText);
+};
+
+const resolveDocumentUpdatedAt = async (document, moduleDocument) => {
+  if (document.updatedAt) return document.updatedAt;
+  if (document.storageProvider === 'local' && document.storageKey) {
+    try {
+      const stats = await assetStorage.stat(document.storageKey);
+      return stats.updatedAt || moduleDocument.updatedAt || document.createdAt;
+    } catch (error) {
+      return moduleDocument.updatedAt || document.createdAt;
+    }
+  }
+  return moduleDocument.updatedAt || document.createdAt;
+};
+
+const documentToMaterial = async (moduleId, moduleDocument) => {
   const document = moduleDocument.document || {};
   const fallbackText = `Document linked to module ${moduleId}: ${moduleDocument.title || document.name || `Document ${document.id}`}`;
-  const buffer = document.data ? Buffer.from(document.data) : textBuffer(fallbackText);
+  const buffer = await resolveDocumentBuffer(document, fallbackText).catch(() => textBuffer(fallbackText));
   const filename = document.name || buildMaterialFilename('Document', document.id || moduleDocument.id, moduleDocument.title || 'document');
   const material = {
     sourceType: 'Document',
@@ -75,7 +101,7 @@ const documentToMaterial = (moduleId, moduleDocument) => {
     filename,
     mimeType: document.type || 'text/plain',
     buffer,
-    updatedAt: document.updatedAt || moduleDocument.updatedAt,
+    updatedAt: await resolveDocumentUpdatedAt(document, moduleDocument),
     storageKey: document.storageKey,
     sizeBytes: document.sizeBytes || buffer.length
   };
@@ -83,7 +109,7 @@ const documentToMaterial = (moduleId, moduleDocument) => {
   return material;
 };
 
-const moduleToMaterials = (module) => {
+const moduleToMaterials = async (module) => {
   const metadataText = buildModuleMetadataText(module);
   const metadata = {
     sourceType: 'TrainingModule',
@@ -96,7 +122,7 @@ const moduleToMaterials = (module) => {
   };
   metadata.sourceHash = hashMaterial(metadata);
 
-  const documents = (module.documents || []).map((doc) => documentToMaterial(module.id, doc));
+  const documents = await Promise.all((module.documents || []).map((doc) => documentToMaterial(module.id, doc)));
   return [metadata, ...documents];
 };
 
@@ -140,7 +166,7 @@ const buildTrainingMaterialList = async (prisma) => {
   ]);
 
   return [
-    ...modules.flatMap(moduleToMaterials),
+    ...(await Promise.all(modules.map(moduleToMaterials))).flat(),
     ...courses.map(courseToMaterial)
   ];
 };

@@ -3,6 +3,7 @@ const defaultEurobotClient = require('./eurobotClient');
 const { buildTrainingMaterialList } = require('./trainingKnowledgeMaterialService');
 
 const SYNC_STATUSES = ['PENDING', 'SYNCED', 'FAILED', 'SKIPPED', 'STALE'];
+const scheduledRefreshTimers = new Map();
 
 const summarizeSyncItems = (items = []) => {
   const summary = { pending: 0, synced: 0, failed: 0, skipped: 0, stale: 0, total: items.length };
@@ -213,6 +214,43 @@ const setActiveKnowledgeBaseConnections = async ({ prisma, connectionIds = [] } 
   return listKnowledgeBaseConnections(prisma);
 };
 
+const scheduleKnowledgeBaseRefresh = async ({
+  prisma,
+  eurobotClient = defaultEurobotClient,
+  connectionIds,
+  delayMs = 1500,
+  reason = 'training material changed'
+} = {}) => {
+  if (!prisma) throw new Error('Prisma client is required.');
+  const connections = Array.isArray(connectionIds) && connectionIds.length
+    ? await prisma.aiKnowledgeBaseConnection.findMany({
+        where: { id: { in: connectionIds.map(Number).filter(Number.isInteger) }, status: { not: 'DISABLED' } }
+      })
+    : await getActiveConnections(prisma);
+
+  for (const connection of connections) {
+    const existingTimer = scheduledRefreshTimers.get(connection.id);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const timer = setTimeout(async () => {
+      scheduledRefreshTimers.delete(connection.id);
+      try {
+        await refreshKnowledgeBase({ prisma, eurobotClient, connectionId: connection.id });
+      } catch (error) {
+        console.error(`Scheduled AI KB refresh failed for connection ${connection.id} (${reason}):`, error);
+        await prisma.aiKnowledgeBaseConnection.update({
+          where: { id: connection.id },
+          data: { status: 'ERROR', lastError: error.message || 'Scheduled KB refresh failed.' }
+        }).catch(() => null);
+      }
+    }, delayMs);
+    if (typeof timer.unref === 'function') timer.unref();
+    scheduledRefreshTimers.set(connection.id, timer);
+  }
+
+  return { scheduled: connections.length };
+};
+
 const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClient, connectionId } = {}) => {
   const connection = connectionId
     ? await prisma.aiKnowledgeBaseConnection.findUnique({ where: { id: Number(connectionId) } })
@@ -327,6 +365,7 @@ module.exports = {
   listKnowledgeBaseConnections,
   normalizeCollectionList,
   refreshKnowledgeBase,
+  scheduleKnowledgeBaseRefresh,
   setActiveKnowledgeBaseConnections,
   summarizeSyncItems,
   updateKnowledgeBaseConnection

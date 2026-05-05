@@ -1487,6 +1487,13 @@ p {
     white-space: nowrap;
 }
 
+.ai-kb-actions .btn.is-processing,
+.ai-kb-row-actions .btn.is-processing {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+
 .ai-kb-card {
     min-height: 0;
 }

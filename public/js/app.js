@@ -887,7 +887,24 @@ function appendTrainingAiMessage(role, content) {
 
 function summarizeKbConnection(connection) {
     const summary = connection?.syncSummary || {};
-    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed`;
+    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed${summary.stale ? `, ${summary.stale} stale` : ''}`;
+}
+
+function setTrainingAiKbBusy(connectionId, isBusy, label = 'Syncing...') {
+    const selector = connectionId
+        ? `[data-ai-kb-action="sync"][data-kb-id="${connectionId}"]`
+        : '#btn-ai-refresh-kb, [data-ai-kb-action="sync"]';
+    document.querySelectorAll(selector).forEach((button) => {
+        if (!button.dataset.originalLabel) button.dataset.originalLabel = button.textContent;
+        button.disabled = isBusy;
+        button.classList.toggle('is-processing', isBusy);
+        button.textContent = isBusy ? label : button.dataset.originalLabel;
+    });
+}
+
+function setTrainingAiKbDetails(message) {
+    const details = document.getElementById('ai-kb-details');
+    if (details && message) details.textContent = message;
 }
 
 function renderTrainingAiKbList(connections = [], canManageAi) {
@@ -1073,10 +1090,19 @@ async function handleTrainingAiKbAction(canManageAi, event) {
     }
 
     if (action === 'sync') {
-        setTrainingAiStatus('Syncing materials to selected Eurobot KB...');
-        await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
-        await loadTrainingAiKbConfig(canManageAi);
-        setTrainingAiStatus('Knowledge base sync finished.');
+        setTrainingAiStatus('Sync started. Uploading materials to Eurobot and waiting for the ingestion pipeline...');
+        setTrainingAiKbDetails('Processing materials now. This can take a minute for Word/PDF files; keep this panel open for completion status.');
+        setTrainingAiKbBusy(id, true, 'Processing...');
+        try {
+            const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+            const summary = result.syncSummary || {};
+            await loadTrainingAiKbConfig(canManageAi);
+            await loadTrainingAiKbDocuments(id, { toggle: false }).catch(() => null);
+            const failedText = summary.failed ? ` ${summary.failed} failed — open Documents for details.` : '';
+            setTrainingAiStatus(`Knowledge base sync finished: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.${failedText}`, Boolean(summary.failed));
+        } finally {
+            setTrainingAiKbBusy(id, false);
+        }
         return;
     }
 
@@ -1215,15 +1241,29 @@ async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
         setTrainingAiStatus('Default knowledge base ready.');
     });
     document.getElementById('btn-ai-refresh-kb')?.addEventListener('click', async () => {
-        setTrainingAiStatus('Refreshing selected knowledge bases...');
-        const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
-            .map((input) => Number(input.value))
-            .filter(Number.isInteger);
-        for (const id of ids) {
-            await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+        setTrainingAiStatus('Sync started. Uploading selected KB materials to Eurobot and waiting for ingestion...');
+        setTrainingAiKbDetails('Processing selected knowledge bases now. Word/PDF ingestion can take a minute; completion counts will appear here.');
+        setTrainingAiKbBusy(null, true, 'Processing...');
+        try {
+            const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+                .map((input) => Number(input.value))
+                .filter(Number.isInteger);
+            const summaries = [];
+            for (const id of ids) {
+                const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+                summaries.push(result.syncSummary || {});
+            }
+            await loadTrainingAiKbConfig(canManageAi);
+            const totals = summaries.reduce((acc, summary) => {
+                acc.synced += summary.synced || 0;
+                acc.pending += summary.pending || 0;
+                acc.failed += summary.failed || 0;
+                return acc;
+            }, { synced: 0, pending: 0, failed: 0 });
+            setTrainingAiStatus(`Selected KB sync finished: ${totals.synced} synced, ${totals.pending} pending, ${totals.failed} failed.`, Boolean(totals.failed));
+        } finally {
+            setTrainingAiKbBusy(null, false);
         }
-        await loadTrainingAiKbConfig(canManageAi);
-        setTrainingAiStatus('Selected knowledge bases refreshed.');
     });
 }
 

@@ -70,8 +70,8 @@ const chat = async (req, res) => {
         courseModuleId
       });
       if (!hasAccess) return res.status(403).json({ error: 'Unauthorized' });
-    } else if (!isTrainingAiManager(req.user)) {
-      return res.status(403).json({ error: 'Training-wide AI chat requires manager access or a permitted module/course context.' });
+    } else if (courseContext && courseContext.status !== 'PUBLISHED' && !isTrainingAiManager(req.user)) {
+      return res.status(403).json({ error: 'Unauthorized' });
     }
 
     const result = await chatWithTrainingAi({
