@@ -31,14 +31,6 @@ const hashMaterial = ({ sourceType, sourceId, text, buffer, updatedAt, storageKe
   return hash.digest('hex');
 };
 
-const stripQuizAnswerKeys = (quizzes = []) => (quizzes || []).map((quiz) => ({
-  title: quiz.title,
-  questions: (quiz.questions || []).map((question) => ({
-    text: question.text,
-    options: (question.options || []).map((option) => option.text).filter(Boolean)
-  }))
-}));
-
 const textBuffer = (text) => Buffer.from(String(text || ''), 'utf8');
 
 const buildModuleMetadataText = (module) => {
@@ -47,10 +39,7 @@ const buildModuleMetadataText = (module) => {
     module.description ? `Description: ${module.description}` : null,
     '',
     'Videos:',
-    ...(module.videos || []).map((video, index) => `- ${index + 1}. ${video.title || 'Untitled video'} — ${video.url || 'no URL'}`),
-    '',
-    'Quizzes and questions (answer keys intentionally omitted):',
-    JSON.stringify(stripQuizAnswerKeys(module.quizzes || []), null, 2)
+    ...(module.videos || []).map((video, index) => `- ${index + 1}. ${video.title || 'Untitled video'} — ${video.url || 'no URL'}`)
   ].filter((line) => line !== null);
   return lines.join('\n');
 };
@@ -146,13 +135,7 @@ const buildTrainingMaterialList = async (prisma) => {
     prisma.trainingModule.findMany({
       include: {
         videos: { orderBy: { order: 'asc' } },
-        documents: { include: { document: true }, orderBy: { order: 'asc' } },
-        quizzes: {
-          orderBy: { order: 'asc' },
-          include: {
-            questions: { orderBy: { order: 'asc' }, include: { options: true } }
-          }
-        }
+        documents: { include: { document: true }, orderBy: { order: 'asc' } }
       }
     }),
     prisma.course.findMany({
@@ -179,6 +162,5 @@ module.exports = {
   courseToMaterial,
   documentToMaterial,
   hashMaterial,
-  moduleToMaterials,
-  stripQuizAnswerKeys
+  moduleToMaterials
 };

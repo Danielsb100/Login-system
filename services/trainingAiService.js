@@ -14,8 +14,8 @@ const extractTrainingAiAnswer = (payload) => {
 
 const buildTrainingAiPrompt = ({ message, moduleContext, courseContext }) => [
   'You are a helpful AI assistant for the Training platform.',
-  'Use the configured Training knowledge base when possible.',
-  'Do not reveal, identify, or imply correct quiz answers or answer keys.',
+  'Use the configured Training knowledge base when possible and answer directly from retrieved course/material facts.',
+  'Factual questions about course material, documents, naming conventions, rules, concepts, or procedures are allowed and should be answered from the knowledge base.',
   'If the knowledge base does not contain the answer, say so clearly and give only concise general guidance.',
   moduleContext?.title ? `Current module: ${moduleContext.title}` : null,
   moduleContext?.description ? `Module description: ${moduleContext.description}` : null,

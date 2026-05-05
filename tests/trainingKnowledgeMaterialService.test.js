@@ -1,7 +1,7 @@
 const assert = require('assert');
 
 async function run() {
-  const { buildMaterialFilename, buildTrainingMaterialList, stripQuizAnswerKeys } = require('../services/trainingKnowledgeMaterialService');
+  const { buildMaterialFilename, buildTrainingMaterialList } = require('../services/trainingKnowledgeMaterialService');
   const fs = require('fs');
   const path = require('path');
   const env = require('../config/env');
@@ -20,10 +20,6 @@ async function run() {
       }
     ]
   };
-  const stripped = stripQuizAnswerKeys([quiz]);
-  assert.deepStrictEqual(stripped[0].questions[0].options, ['Correct option', 'Wrong option']);
-  assert.strictEqual(JSON.stringify(stripped).includes('isCorrect'), false);
-
   const fakePrisma = {
     trainingModule: {
       findMany: async () => ([{
@@ -45,6 +41,10 @@ async function run() {
   const combined = materials.map((item) => item.text || item.buffer?.toString('utf8') || '').join('\n');
   assert.match(combined, /Module A/);
   assert.match(combined, /Video A/);
+  assert.strictEqual(combined.includes('Safety Quiz'), false);
+  assert.strictEqual(combined.includes('What is safe?'), false);
+  assert.strictEqual(combined.includes('Correct option'), false);
+  assert.strictEqual(combined.includes('Wrong option'), false);
   assert.strictEqual(combined.includes('isCorrect'), false);
 
   console.log('trainingKnowledgeMaterialService tests passed');

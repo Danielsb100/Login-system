@@ -41,7 +41,8 @@ async function run() {
   assert.deepStrictEqual(calls[0].knowledgeBaseIds, ['kb-remote-1', 'kb-remote-2']);
   assert.match(calls[0].message, /What should I study\?/);
   assert.match(calls[0].message, /Current module: Intro/);
-  assert.match(calls[0].message, /Do not reveal/);
+  assert.match(calls[0].message, /Factual questions about course material/);
+  assert.doesNotMatch(calls[0].message, /quiz|answer key|correct option/i);
 
   await assert.rejects(
     () => chatWithTrainingAi({

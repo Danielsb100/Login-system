@@ -907,6 +907,47 @@ function setTrainingAiKbDetails(message) {
     if (details && message) details.textContent = message;
 }
 
+function summarizeActiveKbSync(payload = {}) {
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
+    return activeConnections.reduce((totals, connection) => {
+        const summary = connection.syncSummary || {};
+        totals.synced += summary.synced || 0;
+        totals.pending += summary.pending || 0;
+        totals.failed += summary.failed || 0;
+        totals.stale += summary.stale || 0;
+        return totals;
+    }, { synced: 0, pending: 0, failed: 0, stale: 0 });
+}
+
+function watchQueuedKnowledgeBaseSync({ label = 'New material' } = {}) {
+    const delays = [2500, 6500, 12000];
+    setTrainingAiStatus(`${label} queued for AI knowledge-base sync...`);
+    setTrainingAiKbDetails(`${label} was added to module assets. Eurobot ingestion is running in the background; this status will refresh automatically.`);
+
+    delays.forEach((delay, index) => {
+        setTimeout(async () => {
+            try {
+                const payload = await apiCall('/api/ai/knowledge-base/config');
+                renderTrainingAiKbConfig(payload, true);
+                const summary = summarizeActiveKbSync(payload);
+                const hasRemainingWork = summary.pending || summary.stale;
+                const hasFailures = summary.failed;
+                const isLastPoll = index === delays.length - 1;
+                if (hasFailures) {
+                    setTrainingAiStatus(`AI knowledge-base sync needs attention: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`, true);
+                } else if (!hasRemainingWork || isLastPoll) {
+                    setTrainingAiStatus(`AI knowledge-base status refreshed: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`);
+                } else {
+                    setTrainingAiStatus(`AI knowledge-base sync still processing: ${summary.synced} synced, ${summary.pending} pending.`);
+                }
+            } catch (error) {
+                if (index === delays.length - 1) setTrainingAiStatus(error.message, true);
+            }
+        }, delay);
+    });
+}
+
 function renderTrainingAiKbList(connections = [], canManageAi) {
     const list = document.getElementById('ai-kb-list');
     const saveBtn = document.getElementById('btn-ai-save-active-kbs');
@@ -2124,12 +2165,14 @@ async function selectModuleForPreview(moduleId) {
         });
 
         [pdfList, wordList].forEach(list => {
-            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Nenhum arquivo nesta categoria.</div>';
+            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No files in this category.</div>';
         });
-        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhuma imagem.</div>';
+        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No images.</div>';
         
-        // Default to PDF sub-tab
-        switchModuleDocTab('pdf');
+        // Keep the selected document category visible after uploads/refreshes.
+        const preferredDocTab = window.__preferredModuleDocTab || 'pdf';
+        switchModuleDocTab(preferredDocTab);
+        window.__preferredModuleDocTab = null;
             
         // Quiz Preview
         renderQuizList();
@@ -2462,9 +2505,19 @@ async function deleteModuleDoc(docId) {
     await loadModuleData(currentModuleId);
 }
 
+function getModuleDocumentPreviewTab(fileName = '', mimeType = '') {
+    const ext = fileName ? fileName.split('.').pop().toLowerCase() : '';
+    const type = String(mimeType || '').toLowerCase();
+    if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if (type.includes('word') || type.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(ext)) return 'word';
+    if (type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'img';
+    return 'pdf';
+}
+
 async function showAddDocForm() {
     let allDocs = [];
     let selectedDocId = null;
+    let selectedDocMeta = null;
     let currentFilter = 'all';
 
     const fetchDocs = async () => {
@@ -2508,10 +2561,18 @@ async function showAddDocForm() {
             `;
             item.onclick = () => {
                 selectedDocId = doc.id;
+                selectedDocMeta = doc;
                 document.querySelectorAll('.doc-item-mini').forEach(el => el.classList.remove('selected'));
                 item.classList.add('selected');
                 const titleIn = document.getElementById('d-title-in');
                 if (!titleIn.value) titleIn.value = doc.name;
+                const statusBox = document.getElementById('doc-upload-status');
+                if (statusBox) {
+                    statusBox.style.display = 'block';
+                    statusBox.style.color = 'var(--text-muted)';
+                    statusBox.style.background = 'rgba(255,255,255,0.06)';
+                    statusBox.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Selected from library. Click Confirm to add it to the module assets and queue AI knowledge-base sync.`;
+                }
             };
             grid.appendChild(item);
         });
@@ -2537,6 +2598,8 @@ async function showAddDocForm() {
                 </label>
             </div>
 
+            <div id="doc-upload-status" style="display:none; margin-top: 0.85rem; padding: 0.75rem 0.85rem; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 0.9rem; line-height: 1.45;"></div>
+
             <div id="mode-doc-library" class="selector-mode-pane hidden">
                 <div class="doc-tabs">
                     <button class="doc-tab active" data-filter="all">All</button>
@@ -2551,31 +2614,60 @@ async function showAddDocForm() {
             </div>
         </div>
     `, async () => {
-        const title = document.getElementById('d-title-in').value;
+        const title = document.getElementById('d-title-in').value.trim();
         const okBtn = document.getElementById('sub-modal-ok');
+        const statusBox = document.getElementById('doc-upload-status');
+        const setStatus = (message, isError = false) => {
+            if (!statusBox) return;
+            statusBox.style.display = 'block';
+            statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+            statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+            statusBox.innerHTML = message;
+        };
+        const setBusy = (message) => {
+            okBtn.disabled = true;
+            okBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+            setStatus(`<i class="fas fa-spinner fa-spin"></i> ${message}`);
+        };
         console.log('Confirming document add:', { title, selectedDocId });
         
         if (!title || !selectedDocId) {
-            alert('Por favor, preencha o título e selecione ou suba um arquivo.');
+            setStatus('Please enter a title and select or upload a file first.', true);
             return;
         }
-        
-        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        okBtn.disabled = true;
 
         const order = (currentModuleData && currentModuleData.documents) ? currentModuleData.documents.length : 0;
         try {
-            await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
+            setBusy('Adding to module assets...');
+            const added = await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
                 title, 
                 documentId: selectedDocId, 
                 order
             });
-            await loadModuleData(currentModuleId);
-            closeSubModal();
+
+            setBusy('Refreshing module preview...');
+            const previewTab = getModuleDocumentPreviewTab(title || selectedDocMeta?.name, selectedDocMeta?.type);
+            window.__preferredModuleDocTab = previewTab;
+            await refreshCurrentModuleContent({
+                previewPane: 'docs',
+                notice: `Document "${title}" was added to this module and queued for AI knowledge-base sync.`
+            });
+            switchModuleDocTab(previewTab);
+
+            if (added?.aiKnowledgeSyncQueued) {
+                setStatus('<i class="fas fa-sync-alt fa-spin"></i> Added to module assets. AI knowledge-base sync is queued and will continue in the background. The KB panel will update when ingestion finishes.');
+                watchQueuedKnowledgeBaseSync({ label: `Document "${title}"` });
+            } else {
+                setStatus('<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Added to module assets.');
+            }
+
+            okBtn.innerHTML = '<i class="fas fa-check"></i> Added';
+            setTimeout(() => closeSubModal(), 900);
         } catch (err) {
             console.error('Save Doc Error:', err);
-            alert('Erro ao vincular documento: ' + err.message);
-            okBtn.textContent = 'Confirm';
+            setStatus('Error linking document: ' + err.message, true);
+            showModulePreviewNotice('Error linking document: ' + err.message, true);
+            okBtn.textContent = 'Try Again';
             okBtn.disabled = false;
         }
     });
@@ -2584,7 +2676,16 @@ async function showAddDocForm() {
     setTimeout(() => {
         const fileHidden = document.getElementById('d-file-hidden');
         const statusText = document.getElementById('upload-status-text');
+        const statusBox = document.getElementById('doc-upload-status');
         const okBtn = document.getElementById('sub-modal-ok');
+        const setUploadStatus = (message, isError = false) => {
+            if (statusBox) {
+                statusBox.style.display = 'block';
+                statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+                statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+                statusBox.innerHTML = message;
+            }
+        };
 
         document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
@@ -2599,21 +2700,33 @@ async function showAddDocForm() {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subindo ${file.name}...`;
-                if (okBtn) okBtn.disabled = true;
+                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Uploading ${file.name}...`;
+                setUploadStatus(`<i class="fas fa-spinner fa-spin"></i> Uploading file to your asset library. After this finishes, click Confirm to add it to the module assets and queue AI knowledge-base sync.`);
+                if (okBtn) {
+                    okBtn.disabled = true;
+                    okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                }
 
                 try {
                     const data = await uploadAssetFile(file, 'File upload');
                     selectedDocId = data.id;
-                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} (Pronto)`;
-                    if (okBtn) okBtn.disabled = false;
+                    selectedDocMeta = { id: data.id, name: data.name || file.name, type: data.type || file.type };
+                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} uploaded`;
+                    setUploadStatus(`<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Upload complete. Click Confirm to add it to this module's assets and queue AI knowledge-base sync.`);
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Confirm';
+                    }
                     
                     const titleIn = document.getElementById('d-title-in');
                     if (titleIn && !titleIn.value) titleIn.value = file.name;
                 } catch (err) {
-                    alert('Erro no upload: ' + err.message);
+                    setUploadStatus('Upload error: ' + err.message, true);
                     statusText.textContent = 'Click to select a file';
-                    if (okBtn) okBtn.disabled = false;
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Try Again';
+                    }
                 }
             };
         }
