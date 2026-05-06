@@ -239,7 +239,8 @@ const deleteModule = async (req, res) => {
         }
 
         await prisma.trainingModule.delete({ where: { id: parseInt(id) } });
-        res.json({ message: 'Module deleted successfully' });
+        queueAiKnowledgeRefresh('module deleted');
+        res.json({ message: 'Module deleted successfully', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete module' });
     }

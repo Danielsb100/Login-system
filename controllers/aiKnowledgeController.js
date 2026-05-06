@@ -3,6 +3,7 @@ const eurobotClient = require('../services/eurobotClient');
 const { buildTrainingMaterialList } = require('../services/trainingKnowledgeMaterialService');
 const {
   createKnowledgeBaseConnection,
+  deleteKnowledgeBaseConnection,
   ensureDefaultKnowledgeBaseConnection,
   getActiveConnection,
   getConnectionSyncSummary,
@@ -91,6 +92,16 @@ const createConnection = async (req, res) => {
   } catch (error) {
     console.error('AI KB create failed:', error);
     res.status(error.statusCode || 500).json({ error: error.message || 'Failed to create AI knowledge base.' });
+  }
+};
+
+const deleteConnection = async (req, res) => {
+  try {
+    const result = await deleteKnowledgeBaseConnection({ prisma, eurobotClient, id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    console.error('AI KB delete failed:', error);
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to delete AI knowledge base.' });
   }
 };
 
@@ -214,6 +225,7 @@ const updateSyncItem = async (req, res) => {
 
 module.exports = {
   createConnection,
+  deleteConnection,
   ensureDefault,
   getConfig,
   listConnections,

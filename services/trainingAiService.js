@@ -49,6 +49,49 @@ const resolveKnowledgeBaseIds = async ({ prisma, knowledgeBaseId, eurobotClient 
   return ids;
 };
 
+const normalizeSourceName = (value) => String(value || '')
+  .trim()
+  .replace(/^\[|\]$/g, '')
+  .replace(/^Source\s*\d+\s*[:.)-]\s*/i, '')
+  .trim();
+
+const getCitationSourceName = (citation) => normalizeSourceName(
+  citation?.source_file || citation?.filename || citation?.title || citation?.file_name || citation?.metadata?.filename
+);
+
+const normalizeCitationSources = async (prisma, citations = []) => {
+  const sourceNames = [...new Set((citations || [])
+    .map(getCitationSourceName)
+    .filter(Boolean))];
+
+  if (!sourceNames.length) return [];
+
+  let documents = [];
+  if (prisma?.document?.findMany) {
+    documents = await prisma.document.findMany({
+      where: { name: { in: sourceNames } },
+      select: { id: true, name: true, type: true }
+    }).catch(() => []);
+  }
+
+  const documentByName = new Map(documents.map((document) => [String(document.name || '').toLowerCase(), document]));
+  const seen = new Set();
+
+  return sourceNames.map((name) => {
+    const document = documentByName.get(name.toLowerCase());
+    const key = document ? `document:${document.id}` : `name:${name.toLowerCase()}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+
+    return {
+      fileName: document?.name || name,
+      url: document ? `/api/documents/download/${document.id}` : null,
+      documentId: document?.id || null,
+      type: document?.type || null
+    };
+  }).filter(Boolean);
+};
+
 const chatWithTrainingAi = async ({
   prisma = prismaDefault,
   eurobotClient = eurobotClientDefault,

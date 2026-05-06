@@ -218,6 +218,7 @@ app.get('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(
 app.post('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.createConnection);
 app.put('/api/ai/knowledge-base/connections/active', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.setActiveConnections);
 app.put('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConnection);
+app.delete('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.deleteConnection);
 app.post('/api/ai/knowledge-base/connections/:id/refresh', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.refresh);
 app.post('/api/ai/knowledge-base/default', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.ensureDefault);
 app.put('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConfig);

@@ -2,11 +2,11 @@ const env = require('../config/env');
 const defaultEurobotClient = require('./eurobotClient');
 const { buildTrainingMaterialList } = require('./trainingKnowledgeMaterialService');
 
-const SYNC_STATUSES = ['PENDING', 'SYNCED', 'FAILED', 'SKIPPED', 'STALE'];
+const SYNC_STATUSES = ['PENDING', 'SYNCED', 'FAILED', 'SKIPPED', 'STALE', 'DELETED', 'DELETE_FAILED'];
 const scheduledRefreshTimers = new Map();
 
 const summarizeSyncItems = (items = []) => {
-  const summary = { pending: 0, synced: 0, failed: 0, skipped: 0, stale: 0, total: items.length };
+  const summary = { pending: 0, synced: 0, failed: 0, skipped: 0, stale: 0, deleted: 0, delete_failed: 0, total: items.length };
   for (const item of items || []) {
     const key = String(item.status || '').toLowerCase();
     if (Object.prototype.hasOwnProperty.call(summary, key)) summary[key] += 1;
@@ -65,11 +65,123 @@ const getActiveConnection = async (prisma) => {
   return connections[0] || null;
 };
 
+const deleteRemoteFileForSyncItem = async ({ prisma, eurobotClient = defaultEurobotClient, connection, item }) => {
+  const remoteFileId = String(item?.remoteFileId || '').trim();
+  if (!remoteFileId) {
+    return prisma.aiKnowledgeBaseSyncItem.update({
+      where: { id: item.id },
+      data: { status: 'DELETED', lastError: null, remoteFileId: null }
+    });
+  }
+
+  try {
+    await eurobotClient.deleteFileFromInternalCollection({
+      collectionId: connection.remoteId,
+      fileId: remoteFileId
+    });
+    return prisma.aiKnowledgeBaseSyncItem.update({
+      where: { id: item.id },
+      data: {
+        status: 'DELETED',
+        remoteFileId: null,
+        lastError: null
+      }
+    });
+  } catch (error) {
+    return prisma.aiKnowledgeBaseSyncItem.update({
+      where: { id: item.id },
+      data: {
+        status: 'DELETE_FAILED',
+        lastError: error.message || 'Remote Eurobot file delete failed.'
+      }
+    });
+  }
+};
+
 const getConnectionSyncSummary = async (prisma, connectionId) => {
   const items = connectionId
     ? await prisma.aiKnowledgeBaseSyncItem.findMany({ where: { connectionId } })
     : [];
   return summarizeSyncItems(items);
+};
+
+const normalizeRemoteFilename = (value) => String(value || '')
+  .trim()
+  .toLowerCase();
+
+const getRemoteFileName = (file = {}) => file.file_name || file.filename || file.name || file.title || '';
+
+const getRemoteFileId = (file = {}) => file.id || file.file_id || file.doc_id || '';
+
+const getExpectedRemoteFilenames = (filename) => {
+  const raw = normalizeRemoteFilename(filename);
+  if (!raw) return [];
+  const names = new Set([raw]);
+  // The internal text extractor currently stores text/plain uploads as `<filename>.txt`.
+  if (!raw.endsWith('.txt.txt')) names.add(`${raw}.txt`);
+  return [...names];
+};
+
+const listRemoteFilesForConnection = async ({ eurobotClient = defaultEurobotClient, connection }) => {
+  if (!eurobotClient?.listInternalCollectionFiles || !connection?.remoteId) return null;
+  try {
+    const payload = await eurobotClient.listInternalCollectionFiles({ collectionId: connection.remoteId });
+    return Array.isArray(payload?.files) ? payload.files : [];
+  } catch (error) {
+    console.warn(`Could not list Eurobot files for KB ${connection.id}; falling back to local sync state:`, error.message || error);
+    return null;
+  }
+};
+
+const findRemoteFileForMaterial = (remoteFiles, material, existing) => {
+  if (!Array.isArray(remoteFiles)) return null;
+  const expectedNames = new Set(getExpectedRemoteFilenames(material.filename));
+  const existingRemoteFileId = String(existing?.remoteFileId || '');
+  return remoteFiles.find((file) => {
+    const fileId = String(getRemoteFileId(file) || '');
+    const fileName = normalizeRemoteFilename(getRemoteFileName(file));
+    return (existingRemoteFileId && fileId === existingRemoteFileId) || expectedNames.has(fileName);
+  }) || null;
+};
+
+const reconcileRemoteOrphans = async ({ prisma, eurobotClient = defaultEurobotClient, connection, materials }) => {
+  const remoteFiles = await listRemoteFilesForConnection({ eurobotClient, connection });
+  if (!Array.isArray(remoteFiles)) return [];
+
+  const expectedNames = new Set();
+  for (const material of materials || []) {
+    getExpectedRemoteFilenames(material.filename).forEach((name) => expectedNames.add(name));
+  }
+
+  const deleted = [];
+  for (const file of remoteFiles) {
+    const fileName = normalizeRemoteFilename(getRemoteFileName(file));
+    const fileId = String(getRemoteFileId(file) || '');
+    if (!fileId || expectedNames.has(fileName)) continue;
+    try {
+      await eurobotClient.deleteFileFromInternalCollection({ collectionId: connection.remoteId, fileId });
+      deleted.push({
+        id: `remote:${fileId}`,
+        connectionId: connection.id,
+        sourceType: 'RemoteFile',
+        sourceId: fileId,
+        status: 'DELETED',
+        remoteFileId: fileId,
+        lastError: null
+      });
+    } catch (error) {
+      deleted.push({
+        id: `remote:${fileId}`,
+        connectionId: connection.id,
+        sourceType: 'RemoteFile',
+        sourceId: fileId,
+        status: 'DELETE_FAILED',
+        remoteFileId: fileId,
+        lastError: error.message || 'Remote orphan delete failed.'
+      });
+    }
+  }
+  return deleted;
 };
 
 const getConnectionSyncSummaries = async (prisma, connections = []) => {
@@ -98,9 +210,20 @@ const ensureDefaultKnowledgeBaseConnection = async ({ prisma, eurobotClient = de
     where: { tenantCode, isDefault: true },
     orderBy: { updatedAt: 'desc' }
   });
-  if (existing?.remoteId) return existing;
 
   const remoteCollections = normalizeCollectionList(await eurobotClient.listInternalCollections());
+  if (existing?.remoteId) {
+    const existingRemoteId = String(existing.remoteId);
+    const remoteStillExists = remoteCollections.some((collection) => [
+      collection.id,
+      collection.remoteId,
+      collection.collection_name,
+      collection.collectionName,
+      collection.name
+    ].filter(Boolean).map(String).includes(existingRemoteId));
+    if (remoteStillExists) return existing;
+  }
+
   let remote = remoteCollections.find((collection) => collectionNameMatches(collection, defaultName));
   if (!remote) {
     remote = await eurobotClient.createInternalCollection({
@@ -168,6 +291,25 @@ const createKnowledgeBaseConnection = async ({ prisma, eurobotClient = defaultEu
       lastError: null
     }
   });
+};
+
+const deleteKnowledgeBaseConnection = async ({ prisma, eurobotClient = defaultEurobotClient, id } = {}) => {
+  const connectionId = Number(id);
+  if (!Number.isInteger(connectionId)) {
+    const error = new Error('Invalid knowledge base id.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const connection = await prisma.aiKnowledgeBaseConnection.findUnique({ where: { id: connectionId } });
+  if (!connection) {
+    const error = new Error('AI knowledge base connection not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await eurobotClient.deleteInternalCollection(connection.remoteId);
+  await prisma.aiKnowledgeBaseConnection.delete({ where: { id: connectionId } });
+  return { ok: true, deleted: true, id: connectionId };
 };
 
 const updateKnowledgeBaseConnection = async ({ prisma, id, data = {} } = {}) => {
@@ -263,6 +405,7 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
   }
 
   const materials = await buildTrainingMaterialList(prisma);
+  const remoteFilesAtStart = await listRemoteFilesForConnection({ eurobotClient, connection });
   const results = [];
 
   for (const material of materials) {
@@ -275,6 +418,7 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
     };
 
     const existing = await prisma.aiKnowledgeBaseSyncItem.findUnique({ where }).catch(() => null);
+    const remoteFile = findRemoteFileForMaterial(remoteFilesAtStart, material, existing);
     if (existing?.excluded) {
       const skipped = await prisma.aiKnowledgeBaseSyncItem.update({
         where: { id: existing.id },
@@ -287,7 +431,18 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
       results.push(skipped);
       continue;
     }
-    if (existing?.status === 'SYNCED' && existing.sourceHash === material.sourceHash && existing.remoteFileId) {
+    if (existing?.status === 'SYNCED' && existing.sourceHash === material.sourceHash && existing.remoteFileId && (!Array.isArray(remoteFilesAtStart) || remoteFile)) {
+      if (remoteFile) {
+        const remoteFileId = String(getRemoteFileId(remoteFile) || existing.remoteFileId || '');
+        if (remoteFileId && remoteFileId !== existing.remoteFileId) {
+          const repaired = await prisma.aiKnowledgeBaseSyncItem.update({
+            where: { id: existing.id },
+            data: { remoteFileId, lastError: null }
+          });
+          results.push(repaired);
+          continue;
+        }
+      }
       results.push(existing);
       continue;
     }
@@ -311,6 +466,9 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
         mimeType: material.mimeType || 'text/plain'
       }]);
       const uploadResult = extractUploadResult(upload);
+      const previousRemoteFileId = existing?.remoteFileId && existing.sourceHash !== material.sourceHash
+        ? String(existing.remoteFileId)
+        : '';
       const synced = await prisma.aiKnowledgeBaseSyncItem.update({
         where: { id: pending.id },
         data: {
@@ -320,6 +478,14 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
           lastError: null
         }
       });
+      if (previousRemoteFileId && previousRemoteFileId !== uploadResult.remoteFileId) {
+        await eurobotClient.deleteFileFromInternalCollection({
+          collectionId: connection.remoteId,
+          fileId: previousRemoteFileId
+        }).catch((error) => {
+          console.warn(`Failed to delete replaced Eurobot file ${previousRemoteFileId}:`, error.message || error);
+        });
+      }
       results.push(synced);
     } catch (error) {
       const failed = await prisma.aiKnowledgeBaseSyncItem.update({
@@ -330,21 +496,23 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
     }
   }
 
-  for (const sourceType of [...new Set(materials.map((material) => material.sourceType))]) {
-    await prisma.aiKnowledgeBaseSyncItem.updateMany({
-      where: {
-        connectionId: connection.id,
-        sourceType,
-        sourceId: {
-          notIn: materials
-            .filter((material) => material.sourceType === sourceType)
-            .map((material) => String(material.sourceId))
-        },
-        status: { in: ['PENDING', 'SYNCED', 'FAILED'] }
-      },
-      data: { status: 'STALE' }
-    }).catch(() => null);
+  const currentKeys = new Set(materials.map((material) => `${material.sourceType}:${String(material.sourceId)}`));
+  const potentiallyRemovedItems = await prisma.aiKnowledgeBaseSyncItem.findMany({
+    where: {
+      connectionId: connection.id,
+      status: { in: ['PENDING', 'SYNCED', 'FAILED', 'STALE', 'DELETE_FAILED'] }
+    }
+  });
+
+  for (const item of potentiallyRemovedItems) {
+    const key = `${item.sourceType}:${String(item.sourceId)}`;
+    if (currentKeys.has(key)) continue;
+    const deleted = await deleteRemoteFileForSyncItem({ prisma, eurobotClient, connection, item });
+    results.push(deleted);
   }
+
+  const reconciledRemoteFiles = await reconcileRemoteOrphans({ prisma, eurobotClient, connection, materials });
+  results.push(...reconciledRemoteFiles);
 
   const updatedConnection = await prisma.aiKnowledgeBaseConnection.update({
     where: { id: connection.id },
@@ -357,6 +525,7 @@ const refreshKnowledgeBase = async ({ prisma, eurobotClient = defaultEurobotClie
 module.exports = {
   SYNC_STATUSES,
   createKnowledgeBaseConnection,
+  deleteKnowledgeBaseConnection,
   ensureDefaultKnowledgeBaseConnection,
   getActiveConnection,
   getActiveConnections,

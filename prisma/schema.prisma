@@ -322,6 +322,8 @@ enum AiKnowledgeSyncStatus {
   FAILED
   SKIPPED
   STALE
+  DELETED
+  DELETE_FAILED
 }
 
 // New Models

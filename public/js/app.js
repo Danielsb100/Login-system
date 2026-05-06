@@ -887,7 +887,7 @@ function appendTrainingAiMessage(role, content) {
 
 function summarizeKbConnection(connection) {
     const summary = connection?.syncSummary || {};
-    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed${summary.stale ? `, ${summary.stale} stale` : ''}`;
+    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed${summary.deleted ? `, ${summary.deleted} deleted` : ''}${summary.delete_failed ? `, ${summary.delete_failed} delete failed` : ''}${summary.stale ? `, ${summary.stale} stale` : ''}`;
 }
 
 function setTrainingAiKbBusy(connectionId, isBusy, label = 'Syncing...') {
@@ -907,6 +907,14 @@ function setTrainingAiKbDetails(message) {
     if (details && message) details.textContent = message;
 }
 
+function setTrainingAiKbRowFeedback(connectionId, message, isError = false) {
+    const feedback = document.getElementById(`ai-kb-row-feedback-${connectionId}`);
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.classList.toggle('message-error', Boolean(isError));
+    feedback.classList.toggle('message-success', Boolean(message && !isError));
+}
+
 function summarizeActiveKbSync(payload = {}) {
     const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
     const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
@@ -916,8 +924,10 @@ function summarizeActiveKbSync(payload = {}) {
         totals.pending += summary.pending || 0;
         totals.failed += summary.failed || 0;
         totals.stale += summary.stale || 0;
+        totals.deleted += summary.deleted || 0;
+        totals.delete_failed += summary.delete_failed || 0;
         return totals;
-    }, { synced: 0, pending: 0, failed: 0, stale: 0 });
+    }, { synced: 0, pending: 0, failed: 0, stale: 0, deleted: 0, delete_failed: 0 });
 }
 
 function watchQueuedKnowledgeBaseSync({ label = 'New material' } = {}) {
@@ -978,12 +988,14 @@ function renderTrainingAiKbList(connections = [], canManageAi) {
                     </div>
                     <p>${escapeHtml(connection.collectionName || connection.remoteId || 'No remote collection yet')}</p>
                     <small>Material sync: ${escapeHtml(summarizeKbConnection(connection))}</small>
+                    <small class="ai-kb-row-feedback" id="ai-kb-row-feedback-${connection.id}">${connection.lastRefreshAt ? `Last sync: ${escapeHtml(new Date(connection.lastRefreshAt).toLocaleString())}` : ''}</small>
                 </div>
                 <div class="ai-kb-row-actions">
                     <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="documents" data-kb-id="${connection.id}">Documents</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="rename" data-kb-id="${connection.id}">Edit</button>
                     <button type="button" class="btn btn-primary btn-sm" data-ai-kb-action="sync" data-kb-id="${connection.id}">Sync</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="disable" data-kb-id="${connection.id}">${connection.status === 'DISABLED' ? 'Enable' : 'Disable'}</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="delete" data-kb-id="${connection.id}" style="color: var(--error);">Delete</button>
                 </div>
                 <div class="ai-kb-documents hidden" id="ai-kb-documents-${connection.id}"></div>
             </article>
@@ -1017,7 +1029,9 @@ function renderTrainingAiKbConfig(payload, canManageAi) {
     const totalFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.failed || 0), 0);
     if (status) status.textContent = `AI uses ${activeConnections.length} KB${activeConnections.length === 1 ? '' : 's'}`;
     if (details) {
-        details.textContent = `Connected to AI: ${activeNames}. Material sync across selected KBs: ${totalSynced} synced, ${totalPending} pending, ${totalFailed} failed.`;
+        const totalDeleted = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.deleted || 0), 0);
+        const totalDeleteFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.delete_failed || 0), 0);
+        details.textContent = `Connected to AI: ${activeNames}. Material sync across selected KBs: ${totalSynced} synced, ${totalPending} pending, ${totalFailed} failed${totalDeleted ? `, ${totalDeleted} deleted` : ''}${totalDeleteFailed ? `, ${totalDeleteFailed} delete failed` : ''}.`;
     }
 }
 
@@ -1133,6 +1147,7 @@ async function handleTrainingAiKbAction(canManageAi, event) {
     if (action === 'sync') {
         setTrainingAiStatus('Sync started. Uploading materials to Eurobot and waiting for the ingestion pipeline...');
         setTrainingAiKbDetails('Processing materials now. This can take a minute for Word/PDF files; keep this panel open for completion status.');
+        setTrainingAiKbRowFeedback(id, 'Syncing now...');
         setTrainingAiKbBusy(id, true, 'Processing...');
         try {
             const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
@@ -1140,7 +1155,13 @@ async function handleTrainingAiKbAction(canManageAi, event) {
             await loadTrainingAiKbConfig(canManageAi);
             await loadTrainingAiKbDocuments(id, { toggle: false }).catch(() => null);
             const failedText = summary.failed ? ` ${summary.failed} failed — open Documents for details.` : '';
-            setTrainingAiStatus(`Knowledge base sync finished: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed.${failedText}`, Boolean(summary.failed));
+            const deleteFailedText = summary.delete_failed ? ` ${summary.delete_failed} remote delete failed — open Documents for details.` : '';
+            const message = `Knowledge base sync finished: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed, ${summary.deleted || 0} deleted.${failedText}${deleteFailedText}`;
+            setTrainingAiStatus(message, Boolean(summary.failed || summary.delete_failed));
+            setTrainingAiKbRowFeedback(id, message, Boolean(summary.failed || summary.delete_failed));
+        } catch (error) {
+            setTrainingAiKbRowFeedback(id, error.message || 'Sync failed.', true);
+            throw error;
         } finally {
             setTrainingAiKbBusy(id, false);
         }
@@ -1168,6 +1189,19 @@ async function handleTrainingAiKbAction(canManageAi, event) {
         if (card && !currentlyDisabled) card.querySelector('.ai-kb-active-checkbox').checked = false;
         await loadTrainingAiKbConfig(canManageAi);
         setTrainingAiStatus(`Knowledge base ${currentlyDisabled ? 'enabled' : 'disabled'}.`);
+        return;
+    }
+
+    if (action === 'delete') {
+        const card = button.closest('.ai-kb-row');
+        const name = card?.querySelector('.ai-kb-row-main strong')?.textContent || 'this knowledge base';
+        const confirmed = window.confirm(`Delete ${name}? This removes only Training-created Eurobot KBs and their vector collection. Existing Eurobot/Eurolegal KBs are protected by Eurobot.`);
+        if (!confirmed) return;
+        setTrainingAiStatus('Deleting Training-created Eurobot knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'DELETE');
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base deleted from Training and Eurobot.');
+        return;
     }
 }
 

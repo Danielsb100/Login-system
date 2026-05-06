@@ -81,15 +81,28 @@ const eurobotJsonRequest = async (path, { method = 'GET', body, params, timeoutM
 
 const listInternalCollections = () => eurobotJsonRequest('/admin/internal-collections');
 
-const createInternalCollection = ({ name, description }) => eurobotJsonRequest('/admin/internal-collections', {
+const createInternalCollection = ({ name, description, sourceApp = env.eurobot?.serviceClient || 'training' }) => eurobotJsonRequest('/admin/internal-collections', {
   method: 'POST',
-  body: { name, description: description || null }
+  body: { name, description: description || null, source_app: sourceApp || null }
 });
 
 const updateInternalCollection = (collectionId, { name, description }) => eurobotJsonRequest(`/admin/internal-collections/${encodeURIComponent(collectionId)}`, {
   method: 'PUT',
   body: { name: name || null, description: description || null }
 });
+
+const deleteInternalCollection = (collectionId) => eurobotJsonRequest(`/admin/internal-collections/${encodeURIComponent(collectionId)}`, {
+  method: 'DELETE'
+});
+
+const deleteFileFromInternalCollection = ({ collectionId, fileId }) => eurobotJsonRequest(
+  `/admin/internal-collections/${encodeURIComponent(collectionId)}/files/${encodeURIComponent(fileId)}`,
+  { method: 'DELETE' }
+);
+
+const listInternalCollectionFiles = ({ collectionId }) => eurobotJsonRequest(
+  `/admin/internal-collections/${encodeURIComponent(collectionId)}/files`
+);
 
 const checkFileExists = ({ collectionName, filename }) => eurobotJsonRequest(
   `/admin/collections/${encodeURIComponent(collectionName)}/files/check`,
@@ -162,7 +175,10 @@ module.exports = {
   chat,
   checkFileExists,
   createInternalCollection,
+  deleteFileFromInternalCollection,
+  deleteInternalCollection,
   getDefaultKnowledgeBaseName,
+  listInternalCollectionFiles,
   listInternalCollections,
   serviceHeaders,
   transcribe,
