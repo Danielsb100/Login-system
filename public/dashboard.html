@@ -469,14 +469,15 @@
 
                             <div id="course-manager-actions" class="hidden" style="margin-bottom:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
                                 <button id="btn-edit-course" class="btn btn-secondary btn-sm">Edit Course</button>
-                                <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Add Module to Trail</button>
-                                <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Create / Edit Modules</button>
+                                <button id="btn-add-existing-module" class="btn btn-secondary btn-sm">+ Add Existing Module</button>
+                                <button id="btn-create-course-module" class="btn btn-primary btn-sm">+ Create Module Here</button>
+                                <button id="btn-open-module-workbench" class="btn btn-secondary btn-sm">Open Modules Workbench</button>
                                 <button id="btn-link-landing-page" class="btn btn-secondary btn-sm">Link Landing Page</button>
                             </div>
 
                             <div class="glassmorphism" style="margin-bottom:1rem; padding:1rem; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(15,23,42,0.45);">
                                 <strong style="display:block; margin-bottom:0.45rem;">How to build this course trail</strong>
-                                <p style="margin:0; color:var(--text-muted); line-height:1.6;">1. Create or edit modules in the modules workbench. 2. Add modules to this course trail. 3. Use ↑ and ↓ to define the exact learning order. 4. Open this course's 3D world — one room is created per module in the same order.</p>
+                                <p style="margin:0; color:var(--text-muted); line-height:1.6;">Create, edit, publish, and attach modules from this Course tab. Each trail item can optionally block progression: enable “Required to move” only when learners must finish that module before the next room unlocks, and enable the quiz gate only when passing the quiz should also be mandatory.</p>
                             </div>
 
                             <div class="operations-grid" style="margin-top:1rem;">
@@ -774,8 +775,8 @@
                     <label for="course-module-room-label">Room label in the 3D world</label>
                     <input type="text" id="course-module-room-label" placeholder="Intro Room">
                 </div>
-                <label class="identity-toggle"><input type="checkbox" id="course-module-required" checked> <span>Required before learners can continue to the next room</span></label>
-                <label class="identity-toggle"><input type="checkbox" id="course-module-require-quiz-pass"> <span>Require quiz pass before the next room unlocks</span></label>
+                <label class="identity-toggle"><input type="checkbox" id="course-module-required"> <span>Required to move to the next room</span></label>
+                <label class="identity-toggle"><input type="checkbox" id="course-module-require-quiz-pass"> <span>Quiz required to move</span></label>
                 <div class="input-group">
                     <label for="course-module-minimum-quiz-score">Minimum quiz score (%)</label>
                     <input type="number" id="course-module-minimum-quiz-score" min="0" max="100" step="1" value="70" disabled>
@@ -952,8 +953,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="/app-config.js?v=1"></script>
     <script src="/js/templates.js"></script>
-    <script src="/js/app.js?v=2.3"></script>
-    <script src="/js/courses.js?v=1"></script>
+    <script src="/js/app.js?v=2.4"></script>
+    <script src="/js/courses.js?v=2"></script>
     <script src="/js/landingPage.js?v=6"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {

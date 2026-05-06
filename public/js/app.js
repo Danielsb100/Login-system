@@ -22,8 +22,22 @@ function resolveLocalMultiplayerUrl() {
 }
 
 // --- UI Helpers ---
-async function openModuleEditor(id = null) {
+let moduleEditorContext = null;
+
+async function notifyModuleEditorContext(eventName, payload = {}) {
+    if (!moduleEditorContext?.onSaved && !moduleEditorContext?.onStatusChanged) return;
+    if (eventName === 'statusChanged' && moduleEditorContext.onStatusChanged) {
+        await moduleEditorContext.onStatusChanged(payload);
+        return;
+    }
+    if (moduleEditorContext.onSaved) {
+        await moduleEditorContext.onSaved({ eventName, ...payload });
+    }
+}
+
+async function openModuleEditor(id = null, options = {}) {
     console.log('Opening module editor for ID:', id);
+    moduleEditorContext = options && typeof options === 'object' ? options : null;
     const modal = document.getElementById('module-editor-modal');
     const title = document.getElementById('editor-title');
     if (!modal || !title) {
@@ -44,16 +58,23 @@ async function openModuleEditor(id = null) {
     }
 
     if (!id) {
-        title.textContent = 'Create New Module';
+        title.textContent = moduleEditorContext?.title || 'Create New Module';
         const form = document.getElementById('module-basics-form');
         if (form) form.reset();
         const tabs = document.getElementById('editor-tabs');
         if (tabs) tabs.classList.add('hidden');
+        switchEditorTab('basics');
+        const btnPublish = document.getElementById('btn-publish-module');
+        if (btnPublish) btnPublish.classList.add('hidden');
         modal.classList.remove('hidden');
+        modal.style.display = 'block';
+        modal.style.opacity = '1';
         return;
     }
 
     title.textContent = 'Configure Module Content';
+    const btnPublish = document.getElementById('btn-publish-module');
+    if (btnPublish) btnPublish.classList.remove('hidden');
     if (modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'block'; // Force show
@@ -2303,6 +2324,7 @@ async function loadModuleData(id) {
             btnPublish.onclick = async () => {
                 await updateModuleStatus(id, isPublished ? 'DRAFT' : 'PUBLISHED');
                 await loadModuleData(id); // Refresh editor
+                await notifyModuleEditorContext('statusChanged', { moduleId: id, status: isPublished ? 'DRAFT' : 'PUBLISHED' });
                 alert(isPublished ? 'Module hidden!' : 'Module published!');
             };
         }
@@ -2324,16 +2346,29 @@ if (mbForm) {
 
     try {
         if (currentModuleId) {
-            await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
+            const updated = await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
             await loadModulesPanel();
-            closeModuleEditor();
+            await notifyModuleEditorContext('updated', { moduleId: currentModuleId, module: updated });
+            if (!moduleEditorContext?.keepOpenAfterSave) {
+                closeModuleEditor();
+            }
             alert('Module updated!');
         } else {
             const res = await apiCall('/modules', 'POST', data);
             currentModuleId = res.id;
             await loadModulesPanel();
-            closeModuleEditor(); // Fixed: Close after create
-            alert('Module created!');
+            await notifyModuleEditorContext('created', { moduleId: res.id, module: res });
+            if (moduleEditorContext?.keepOpenAfterCreate) {
+                const title = document.getElementById('editor-title');
+                if (title) title.textContent = 'Configure Module Content';
+                document.getElementById('editor-tabs')?.classList.remove('hidden');
+                await loadModuleData(res.id);
+                switchEditorTab('basics');
+                alert('Module created and attached to this course. Add content or publish it here.');
+            } else {
+                closeModuleEditor(); // Fixed: Close after create
+                alert('Module created!');
+            }
         }
     } catch (error) {
         alert('Error: ' + error.message);

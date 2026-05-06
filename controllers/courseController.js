@@ -528,7 +528,7 @@ async function addModuleToCourse(req, res) {
           courseId,
           moduleId,
           orderIndex: typeof req.body.orderIndex === 'number' ? req.body.orderIndex : (lastModule?.orderIndex || 0) + 1,
-          isRequired: req.body.isRequired !== false,
+          isRequired: Boolean(req.body.isRequired),
           requireQuizPass,
           minimumQuizScore,
           roomLabel: req.body.roomLabel || null
