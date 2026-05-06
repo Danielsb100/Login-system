@@ -6,7 +6,7 @@
     <!-- SYNC_CHECK: 24/03/2026 16:40 -->
     <title>User Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/style.css?v=1.4">
+    <link rel="stylesheet" href="/css/style.css?v=1.6">
     <link rel="stylesheet" href="/css/modules.css?v=1.4">
     <link rel="stylesheet" href="/css/modular-style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -145,6 +145,53 @@
                                 <div class="empty-state-inline">No open automatic reminders.</div>
                             </div>
                         </section>
+                    </div>
+                </section>
+
+                <section class="ai-assistant-panel operations-panel glassmorphism fade-in" id="ai-assistant-panel">
+                    <div class="section-header operations-panel-header">
+                        <div>
+                            <h3>Eurobot Knowledge Base Sync</h3>
+                            <p>Manage which Training materials are available to the AI used inside the 3D world assistant.</p>
+                        </div>
+                        <div class="operations-summary-badges ai-kb-actions">
+                            <span class="operations-pill" id="ai-kb-status">KB not loaded</span>
+                            <button type="button" id="btn-ai-ensure-kb" class="btn btn-secondary btn-sm hidden">Connect default KB</button>
+                            <button type="button" id="btn-ai-refresh-kb" class="btn btn-primary btn-sm hidden">Sync materials to Eurobot</button>
+                        </div>
+                    </div>
+                    <div class="operations-card ai-kb-card">
+                        <div class="operations-card-header">
+                            <div>
+                                <h4>Training materials → Eurobot KBs</h4>
+                                <p id="ai-kb-details" class="empty-state-inline">Loading AI knowledge base status...</p>
+                            </div>
+                        </div>
+                        <div class="ai-kb-manager">
+                            <div id="ai-kb-list" class="ai-kb-list">
+                                <div class="empty-state-inline">Loading knowledge bases...</div>
+                            </div>
+                            <div class="ai-kb-manager-actions">
+                                <button type="button" id="btn-ai-save-active-kbs" class="btn btn-secondary btn-sm hidden">Save AI selection</button>
+                            </div>
+                            <form id="ai-kb-create-form" class="ai-kb-create-form hidden">
+                                <div class="input-group">
+                                    <label for="ai-kb-new-name">New knowledge base</label>
+                                    <input type="text" id="ai-kb-new-name" placeholder="Example: AI Engineering KB">
+                                </div>
+                                <div class="input-group">
+                                    <label for="ai-kb-new-description">Description</label>
+                                    <input type="text" id="ai-kb-new-description" placeholder="What this KB should contain">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Create KB</button>
+                            </form>
+                        </div>
+                        <div class="ai-kb-help">
+                            <span>Select one or more KBs that the 3D world AI assistant should use.</span>
+                            <span>Training automatically queues a Eurobot sync when modules, documents, videos, quizzes, or course trails change; use Sync when you want to force it now and watch the processing result.</span>
+                            <span>The student/teacher AI chat stays in the 3D world module assistant.</span>
+                        </div>
+                        <div id="ai-chat-status" class="form-message"></div>
                     </div>
                 </section>
 
@@ -905,7 +952,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="/app-config.js?v=1"></script>
     <script src="/js/templates.js"></script>
-    <script src="/js/app.js?v=2.1"></script>
+    <script src="/js/app.js?v=2.3"></script>
     <script src="/js/courses.js?v=1"></script>
     <script src="/js/landingPage.js?v=6"></script>
     <script>

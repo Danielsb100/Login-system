@@ -2,9 +2,16 @@ const fs = require('fs');
 const prisma = require('../config/db');
 const env = require('../config/env');
 const { createLocalAssetStorage } = require('../services/assetStorage');
+const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
 // SYNC_CHECK: 24/03/2026 16:40
 
 const assetStorage = createLocalAssetStorage({ rootDir: env.upload.storageDir });
+
+const queueAiKnowledgeRefresh = (reason) => {
+    scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
+        console.error(`Failed to schedule AI KB refresh (${reason}):`, error);
+    });
+};
 
 const buildDocumentResponse = (document) => ({
     id: document.id,
@@ -171,7 +178,8 @@ exports.deleteDocument = async (req, res) => {
         if (document.storageProvider === 'local' && document.storageKey) {
             await assetStorage.remove(document.storageKey);
         }
-        res.json({ message: 'Deleted' });
+        queueAiKnowledgeRefresh('document deleted');
+        res.json({ message: 'Deleted', aiKnowledgeSyncQueued: true });
     } catch (err) {
         console.error('Delete document error:', err);
         res.status(500).json({ error: 'Internal server error' });

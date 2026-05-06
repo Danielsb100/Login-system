@@ -27,6 +27,9 @@ const notificationController = require('./controllers/notificationController');
 const courseController = require('./controllers/courseController');
 const landingPageController = require('./controllers/landingPageController');
 const moduleAiController = require('./controllers/moduleAiController');
+const aiVoiceController = require('./controllers/aiVoiceController');
+const aiKnowledgeController = require('./controllers/aiKnowledgeController');
+const trainingAiController = require('./controllers/trainingAiController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
@@ -209,6 +212,23 @@ app.put(
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
 app.post('/modules/:id/assistant/chat', authenticateToken, moduleAiController.chatWithModuleAssistant);
+app.post('/api/ai/chat', authenticateToken, trainingAiController.chat);
+app.get('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.getConfig);
+app.get('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listConnections);
+app.post('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.createConnection);
+app.put('/api/ai/knowledge-base/connections/active', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.setActiveConnections);
+app.put('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConnection);
+app.delete('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.deleteConnection);
+app.post('/api/ai/knowledge-base/connections/:id/refresh', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.refresh);
+app.post('/api/ai/knowledge-base/default', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.ensureDefault);
+app.put('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConfig);
+app.get('/api/ai/knowledge-base/remote', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listRemote);
+app.post('/api/ai/knowledge-base/refresh', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.refresh);
+app.get('/api/ai/knowledge-base/sync-items', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listSyncItems);
+app.put('/api/ai/knowledge-base/sync-items/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateSyncItem);
+app.post('/api/ai/transcribe', authenticateToken, handleUploadError('audio'), aiVoiceController.transcribeAudio);
+app.post('/api/ai/tts', authenticateToken, aiVoiceController.textToSpeech);
+app.post('/api/ai/voice-chat', authenticateToken, handleUploadError('audio'), aiVoiceController.voiceChat);
 
 app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
 app.get('/modules/:id/forum/threads', authenticateToken, forumController.getThreadsByModule);

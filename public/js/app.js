@@ -850,6 +850,7 @@ async function loadDashboard() {
         }
 
         await loadUserDocuments();
+        await initializeTrainingAiPanel({ canManageAi: canManageModules || isAdmin });
     } catch (error) {
         console.error('Dashboard error:', error);
         if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
@@ -859,6 +860,486 @@ async function loadDashboard() {
             console.error('Critical Dashboard failure: ', error.message);
         }
     }
+}
+
+let trainingAiConversationId = localStorage.getItem('training_ai_conversation_id') || `training-ai-${Date.now()}`;
+let trainingAiLastAudio = null;
+let trainingAiRecorder = null;
+let trainingAiChunks = [];
+localStorage.setItem('training_ai_conversation_id', trainingAiConversationId);
+
+function setTrainingAiStatus(message, isError = false) {
+    const status = document.getElementById('ai-chat-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.className = `form-message ${isError ? 'message-error' : 'message-success'}`;
+}
+
+function appendTrainingAiMessage(role, content) {
+    const history = document.getElementById('ai-chat-history');
+    if (!history) return;
+    const item = document.createElement('div');
+    item.className = 'operations-item';
+    item.innerHTML = `<strong>${role === 'user' ? 'You' : 'AI'}</strong><p>${escapeHtml(content)}</p>`;
+    history.appendChild(item);
+    history.scrollTop = history.scrollHeight;
+}
+
+function summarizeKbConnection(connection) {
+    const summary = connection?.syncSummary || {};
+    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed${summary.deleted ? `, ${summary.deleted} deleted` : ''}${summary.delete_failed ? `, ${summary.delete_failed} delete failed` : ''}${summary.stale ? `, ${summary.stale} stale` : ''}`;
+}
+
+function setTrainingAiKbBusy(connectionId, isBusy, label = 'Syncing...') {
+    const selector = connectionId
+        ? `[data-ai-kb-action="sync"][data-kb-id="${connectionId}"]`
+        : '#btn-ai-refresh-kb, [data-ai-kb-action="sync"]';
+    document.querySelectorAll(selector).forEach((button) => {
+        if (!button.dataset.originalLabel) button.dataset.originalLabel = button.textContent;
+        button.disabled = isBusy;
+        button.classList.toggle('is-processing', isBusy);
+        button.textContent = isBusy ? label : button.dataset.originalLabel;
+    });
+}
+
+function setTrainingAiKbDetails(message) {
+    const details = document.getElementById('ai-kb-details');
+    if (details && message) details.textContent = message;
+}
+
+function setTrainingAiKbRowFeedback(connectionId, message, isError = false) {
+    const feedback = document.getElementById(`ai-kb-row-feedback-${connectionId}`);
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.classList.toggle('message-error', Boolean(isError));
+    feedback.classList.toggle('message-success', Boolean(message && !isError));
+}
+
+function summarizeActiveKbSync(payload = {}) {
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
+    return activeConnections.reduce((totals, connection) => {
+        const summary = connection.syncSummary || {};
+        totals.synced += summary.synced || 0;
+        totals.pending += summary.pending || 0;
+        totals.failed += summary.failed || 0;
+        totals.stale += summary.stale || 0;
+        totals.deleted += summary.deleted || 0;
+        totals.delete_failed += summary.delete_failed || 0;
+        return totals;
+    }, { synced: 0, pending: 0, failed: 0, stale: 0, deleted: 0, delete_failed: 0 });
+}
+
+function watchQueuedKnowledgeBaseSync({ label = 'New material' } = {}) {
+    const delays = [2500, 6500, 12000];
+    setTrainingAiStatus(`${label} queued for AI knowledge-base sync...`);
+    setTrainingAiKbDetails(`${label} was added to module assets. Eurobot ingestion is running in the background; this status will refresh automatically.`);
+
+    delays.forEach((delay, index) => {
+        setTimeout(async () => {
+            try {
+                const payload = await apiCall('/api/ai/knowledge-base/config');
+                renderTrainingAiKbConfig(payload, true);
+                const summary = summarizeActiveKbSync(payload);
+                const hasRemainingWork = summary.pending || summary.stale;
+                const hasFailures = summary.failed;
+                const isLastPoll = index === delays.length - 1;
+                if (hasFailures) {
+                    setTrainingAiStatus(`AI knowledge-base sync needs attention: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`, true);
+                } else if (!hasRemainingWork || isLastPoll) {
+                    setTrainingAiStatus(`AI knowledge-base status refreshed: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`);
+                } else {
+                    setTrainingAiStatus(`AI knowledge-base sync still processing: ${summary.synced} synced, ${summary.pending} pending.`);
+                }
+            } catch (error) {
+                if (index === delays.length - 1) setTrainingAiStatus(error.message, true);
+            }
+        }, delay);
+    });
+}
+
+function renderTrainingAiKbList(connections = [], canManageAi) {
+    const list = document.getElementById('ai-kb-list');
+    const saveBtn = document.getElementById('btn-ai-save-active-kbs');
+    const createForm = document.getElementById('ai-kb-create-form');
+    if (createForm) createForm.classList.toggle('hidden', !canManageAi);
+    if (saveBtn) saveBtn.classList.toggle('hidden', !canManageAi || !connections.length);
+    if (!list) return;
+
+    if (!connections.length) {
+        list.innerHTML = '<div class="empty-state-inline">No Training knowledge bases yet. Create one or connect the default KB.</div>';
+        return;
+    }
+
+    list.innerHTML = connections.map((connection) => {
+        const checked = connection.isDefault ? 'checked' : '';
+        const disabled = canManageAi && connection.status !== 'DISABLED' ? '' : 'disabled';
+        const statusClass = connection.isDefault ? 'active' : String(connection.status || '').toLowerCase();
+        return `
+            <article class="ai-kb-row ${connection.isDefault ? 'ai-kb-row-active' : ''}" data-kb-id="${connection.id}">
+                <label class="ai-kb-select">
+                    <input type="checkbox" class="ai-kb-active-checkbox" value="${connection.id}" ${checked} ${disabled}>
+                    <span>Use in AI</span>
+                </label>
+                <div class="ai-kb-row-main">
+                    <div class="ai-kb-row-title">
+                        <strong>${escapeHtml(connection.displayName || connection.remoteName || 'Training KB')}</strong>
+                        <span class="operations-pill ai-kb-row-pill ${statusClass}">${connection.isDefault ? 'Connected to AI' : (connection.status || 'ACTIVE')}</span>
+                    </div>
+                    <p>${escapeHtml(connection.collectionName || connection.remoteId || 'No remote collection yet')}</p>
+                    <small>Material sync: ${escapeHtml(summarizeKbConnection(connection))}</small>
+                    <small class="ai-kb-row-feedback" id="ai-kb-row-feedback-${connection.id}">${connection.lastRefreshAt ? `Last sync: ${escapeHtml(new Date(connection.lastRefreshAt).toLocaleString())}` : ''}</small>
+                </div>
+                <div class="ai-kb-row-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="documents" data-kb-id="${connection.id}">Documents</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="rename" data-kb-id="${connection.id}">Edit</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-ai-kb-action="sync" data-kb-id="${connection.id}">Sync</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="disable" data-kb-id="${connection.id}">${connection.status === 'DISABLED' ? 'Enable' : 'Disable'}</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="delete" data-kb-id="${connection.id}" style="color: var(--error);">Delete</button>
+                </div>
+                <div class="ai-kb-documents hidden" id="ai-kb-documents-${connection.id}"></div>
+            </article>
+        `;
+    }).join('');
+}
+
+function renderTrainingAiKbConfig(payload, canManageAi) {
+    const status = document.getElementById('ai-kb-status');
+    const details = document.getElementById('ai-kb-details');
+    const ensureBtn = document.getElementById('btn-ai-ensure-kb');
+    const refreshBtn = document.getElementById('btn-ai-refresh-kb');
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
+
+    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi || Boolean(connections.length));
+    if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !activeConnections.length);
+    renderTrainingAiKbList(connections, canManageAi);
+
+    if (!activeConnections.length) {
+        if (status) status.textContent = connections.length ? 'No AI KB selected' : 'Not connected';
+        if (details) details.textContent = canManageAi
+            ? 'Create or select one or more Eurobot knowledge bases, then save the AI selection and sync materials.'
+            : 'The Eurobot knowledge base is not connected yet.';
+        return;
+    }
+
+    const activeNames = activeConnections.map((connection) => connection.displayName).join(', ');
+    const totalSynced = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.synced || 0), 0);
+    const totalPending = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.pending || 0), 0);
+    const totalFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.failed || 0), 0);
+    if (status) status.textContent = `AI uses ${activeConnections.length} KB${activeConnections.length === 1 ? '' : 's'}`;
+    if (details) {
+        const totalDeleted = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.deleted || 0), 0);
+        const totalDeleteFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.delete_failed || 0), 0);
+        details.textContent = `Connected to AI: ${activeNames}. Material sync across selected KBs: ${totalSynced} synced, ${totalPending} pending, ${totalFailed} failed${totalDeleted ? `, ${totalDeleted} deleted` : ''}${totalDeleteFailed ? `, ${totalDeleteFailed} delete failed` : ''}.`;
+    }
+}
+
+async function loadTrainingAiKbConfig(canManageAi) {
+    try {
+        const payload = await apiCall('/api/ai/knowledge-base/config');
+        renderTrainingAiKbConfig(payload, canManageAi);
+    } catch (error) {
+        renderTrainingAiKbConfig({ connections: [] }, canManageAi);
+        setTrainingAiStatus(error.message, true);
+    }
+}
+
+async function saveTrainingAiKbSelection(canManageAi) {
+    const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+        .map((input) => Number(input.value))
+        .filter(Number.isInteger);
+    setTrainingAiStatus('Saving AI knowledge-base selection...');
+    const payload = await apiCall('/api/ai/knowledge-base/connections/active', 'PUT', { connectionIds: ids });
+    renderTrainingAiKbConfig(payload, canManageAi);
+    setTrainingAiStatus(ids.length ? 'AI knowledge-base selection saved.' : 'No KB selected for AI.');
+}
+
+async function createTrainingAiKb(canManageAi, event) {
+    event?.preventDefault();
+    const nameInput = document.getElementById('ai-kb-new-name');
+    const descriptionInput = document.getElementById('ai-kb-new-description');
+    const displayName = String(nameInput?.value || '').trim();
+    if (!displayName) {
+        setTrainingAiStatus('Knowledge base name is required.', true);
+        return;
+    }
+    setTrainingAiStatus('Creating Eurobot knowledge base...');
+    await apiCall('/api/ai/knowledge-base/connections', 'POST', {
+        displayName,
+        description: descriptionInput?.value || ''
+    });
+    if (nameInput) nameInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
+    await loadTrainingAiKbConfig(canManageAi);
+    setTrainingAiStatus('Knowledge base created. Select it if the AI should use it, then sync materials.');
+}
+
+async function loadTrainingAiKbDocuments(connectionId, { toggle = true } = {}) {
+    const panel = document.getElementById(`ai-kb-documents-${connectionId}`);
+    if (!panel) return;
+    if (toggle) panel.classList.toggle('hidden');
+    else panel.classList.remove('hidden');
+    if (panel.classList.contains('hidden')) return;
+    panel.innerHTML = '<div class="empty-state-inline">Loading KB documents...</div>';
+    const payload = await apiCall(`/api/ai/knowledge-base/sync-items?connectionId=${encodeURIComponent(connectionId)}`);
+    const items = payload.items || [];
+    if (!items.length) {
+        panel.innerHTML = '<div class="empty-state-inline">No synced documents yet. Click Sync for this KB to populate the document list.</div>';
+        return;
+    }
+    panel.innerHTML = `
+        <div class="ai-kb-documents-header">
+            <strong>Documents / materials in this KB</strong>
+            <span>Use Include/Exclude to control what this KB syncs next.</span>
+        </div>
+        <div class="ai-kb-document-list">
+            ${items.map((item) => {
+                const included = !item.excluded;
+                const status = item.excluded ? 'EXCLUDED' : (item.status || 'PENDING');
+                return `
+                    <div class="ai-kb-document-row ${item.excluded ? 'is-excluded' : ''}" data-sync-item-id="${item.id}">
+                        <label class="ai-kb-document-toggle">
+                            <input type="checkbox" class="ai-kb-document-include" data-sync-item-id="${item.id}" ${included ? 'checked' : ''}>
+                            <span>${included ? 'Included' : 'Excluded'}</span>
+                        </label>
+                        <div class="ai-kb-document-main">
+                            <strong>${escapeHtml(item.filename || `${item.sourceType} ${item.sourceId}`)}</strong>
+                            <small>${escapeHtml(item.sourceType)} · source ${escapeHtml(item.sourceId)} · ${escapeHtml(status)}${item.isStale ? ' · stale' : ''}</small>
+                            ${item.lastError ? `<p>${escapeHtml(item.lastError)}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+async function updateTrainingAiKbDocumentInclusion(canManageAi, event) {
+    const input = event.target.closest('.ai-kb-document-include');
+    if (!input) return false;
+    const id = Number(input.dataset.syncItemId);
+    if (!Number.isInteger(id)) return false;
+    setTrainingAiStatus(input.checked ? 'Including document in KB sync...' : 'Excluding document from KB sync...');
+    await apiCall(`/api/ai/knowledge-base/sync-items/${id}`, 'PUT', { excluded: !input.checked });
+    const connectionRow = input.closest('.ai-kb-row');
+    const connectionId = connectionRow?.dataset?.kbId;
+    if (connectionId) {
+        await loadTrainingAiKbDocuments(connectionId, { toggle: false });
+    }
+    setTrainingAiStatus(input.checked ? 'Document included. Click Sync to upload/update it.' : 'Document excluded from future syncs.');
+    return true;
+}
+
+async function handleTrainingAiKbAction(canManageAi, event) {
+    if (await updateTrainingAiKbDocumentInclusion(canManageAi, event)) return;
+    const button = event.target.closest('[data-ai-kb-action]');
+    if (!button) return;
+    const id = Number(button.dataset.kbId);
+    const action = button.dataset.aiKbAction;
+    if (!Number.isInteger(id)) return;
+
+    if (action === 'documents') {
+        await loadTrainingAiKbDocuments(id);
+        return;
+    }
+
+    if (action === 'sync') {
+        setTrainingAiStatus('Sync started. Uploading materials to Eurobot and waiting for the ingestion pipeline...');
+        setTrainingAiKbDetails('Processing materials now. This can take a minute for Word/PDF files; keep this panel open for completion status.');
+        setTrainingAiKbRowFeedback(id, 'Syncing now...');
+        setTrainingAiKbBusy(id, true, 'Processing...');
+        try {
+            const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+            const summary = result.syncSummary || {};
+            await loadTrainingAiKbConfig(canManageAi);
+            await loadTrainingAiKbDocuments(id, { toggle: false }).catch(() => null);
+            const failedText = summary.failed ? ` ${summary.failed} failed — open Documents for details.` : '';
+            const deleteFailedText = summary.delete_failed ? ` ${summary.delete_failed} remote delete failed — open Documents for details.` : '';
+            const message = `Knowledge base sync finished: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed, ${summary.deleted || 0} deleted.${failedText}${deleteFailedText}`;
+            setTrainingAiStatus(message, Boolean(summary.failed || summary.delete_failed));
+            setTrainingAiKbRowFeedback(id, message, Boolean(summary.failed || summary.delete_failed));
+        } catch (error) {
+            setTrainingAiKbRowFeedback(id, error.message || 'Sync failed.', true);
+            throw error;
+        } finally {
+            setTrainingAiKbBusy(id, false);
+        }
+        return;
+    }
+
+    if (action === 'rename') {
+        const card = button.closest('.ai-kb-row');
+        const current = card?.querySelector('.ai-kb-row-main strong')?.textContent || '';
+        const displayName = window.prompt('Knowledge base name', current);
+        if (displayName === null) return;
+        setTrainingAiStatus('Updating knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { displayName });
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base updated.');
+        return;
+    }
+
+    if (action === 'disable') {
+        const card = button.closest('.ai-kb-row');
+        const currentlyDisabled = button.textContent.trim().toLowerCase() === 'enable';
+        const nextStatus = currentlyDisabled ? 'ACTIVE' : 'DISABLED';
+        setTrainingAiStatus(`${currentlyDisabled ? 'Enabling' : 'Disabling'} knowledge base...`);
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { status: nextStatus });
+        if (card && !currentlyDisabled) card.querySelector('.ai-kb-active-checkbox').checked = false;
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus(`Knowledge base ${currentlyDisabled ? 'enabled' : 'disabled'}.`);
+        return;
+    }
+
+    if (action === 'delete') {
+        const card = button.closest('.ai-kb-row');
+        const name = card?.querySelector('.ai-kb-row-main strong')?.textContent || 'this knowledge base';
+        const confirmed = window.confirm(`Delete ${name}? This removes only Training-created Eurobot KBs and their vector collection. Existing Eurobot/Eurolegal KBs are protected by Eurobot.`);
+        if (!confirmed) return;
+        setTrainingAiStatus('Deleting Training-created Eurobot knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'DELETE');
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base deleted from Training and Eurobot.');
+        return;
+    }
+}
+
+async function sendTrainingAiMessage(messageOverride = null) {
+    const input = document.getElementById('ai-chat-input');
+    const sendBtn = document.getElementById('btn-ai-chat-send');
+    const message = String(messageOverride ?? input?.value ?? '').trim();
+    if (!message) return;
+
+    appendTrainingAiMessage('user', message);
+    if (input) input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+    setTrainingAiStatus('Thinking...');
+
+    try {
+        const response = await apiCall('/api/ai/chat', 'POST', {
+            message,
+            conversationId: trainingAiConversationId,
+            returnAudio: false
+        });
+        appendTrainingAiMessage('assistant', response.answer || 'No answer returned.');
+        trainingAiLastAudio = response.audioBase64 ? response : null;
+        setTrainingAiStatus('Answer ready.');
+    } catch (error) {
+        appendTrainingAiMessage('assistant', error.message);
+        setTrainingAiStatus(error.message, true);
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+async function startTrainingAiVoiceRecording() {
+    const recordBtn = document.getElementById('btn-ai-chat-record');
+    if (trainingAiRecorder && trainingAiRecorder.state === 'recording') {
+        trainingAiRecorder.stop();
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setTrainingAiStatus('Voice recording is not available in this browser context.', true);
+        return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    trainingAiChunks = [];
+    trainingAiRecorder = new MediaRecorder(stream);
+    trainingAiRecorder.ondataavailable = (event) => {
+        if (event.data?.size) trainingAiChunks.push(event.data);
+    };
+    trainingAiRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (recordBtn) recordBtn.textContent = 'Record voice';
+        const audio = new Blob(trainingAiChunks, { type: trainingAiRecorder.mimeType || 'audio/webm' });
+        await transcribeAndSendTrainingAiAudio(audio);
+    };
+    trainingAiRecorder.start();
+    if (recordBtn) recordBtn.textContent = 'Stop recording';
+    setTrainingAiStatus('Recording... click again to stop.');
+}
+
+async function transcribeAndSendTrainingAiAudio(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'training-ai.webm');
+    setTrainingAiStatus('Transcribing...');
+    const response = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Failed to transcribe audio.');
+    const text = String(payload.text || '').trim();
+    if (!text) throw new Error('Could not transcribe audio.');
+    await sendTrainingAiMessage(text);
+}
+
+function playTrainingAiLastAnswer() {
+    if (!trainingAiLastAudio?.audioBase64) {
+        setTrainingAiStatus('No spoken answer is available yet.', true);
+        return;
+    }
+    const audio = new Audio(`data:audio/${trainingAiLastAudio.audioFormat || 'mp3'};base64,${trainingAiLastAudio.audioBase64}`);
+    audio.play().catch((error) => setTrainingAiStatus(error.message, true));
+}
+
+async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
+    if (!document.getElementById('ai-assistant-panel')) return;
+    await loadTrainingAiKbConfig(canManageAi);
+    document.getElementById('btn-ai-save-active-kbs')?.addEventListener('click', () => {
+        saveTrainingAiKbSelection(canManageAi).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-create-form')?.addEventListener('submit', (event) => {
+        createTrainingAiKb(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-list')?.addEventListener('click', (event) => {
+        handleTrainingAiKbAction(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('btn-ai-chat-send')?.addEventListener('click', () => sendTrainingAiMessage());
+    document.getElementById('ai-chat-input')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendTrainingAiMessage();
+        }
+    });
+    document.getElementById('btn-ai-chat-record')?.addEventListener('click', () => {
+        startTrainingAiVoiceRecording().catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('btn-ai-chat-speak')?.addEventListener('click', playTrainingAiLastAnswer);
+    document.getElementById('btn-ai-ensure-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Creating default knowledge base...');
+        await apiCall('/api/ai/knowledge-base/default', 'POST', {});
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Default knowledge base ready.');
+    });
+    document.getElementById('btn-ai-refresh-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Sync started. Uploading selected KB materials to Eurobot and waiting for ingestion...');
+        setTrainingAiKbDetails('Processing selected knowledge bases now. Word/PDF ingestion can take a minute; completion counts will appear here.');
+        setTrainingAiKbBusy(null, true, 'Processing...');
+        try {
+            const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+                .map((input) => Number(input.value))
+                .filter(Number.isInteger);
+            const summaries = [];
+            for (const id of ids) {
+                const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+                summaries.push(result.syncSummary || {});
+            }
+            await loadTrainingAiKbConfig(canManageAi);
+            const totals = summaries.reduce((acc, summary) => {
+                acc.synced += summary.synced || 0;
+                acc.pending += summary.pending || 0;
+                acc.failed += summary.failed || 0;
+                return acc;
+            }, { synced: 0, pending: 0, failed: 0 });
+            setTrainingAiStatus(`Selected KB sync finished: ${totals.synced} synced, ${totals.pending} pending, ${totals.failed} failed.`, Boolean(totals.failed));
+        } finally {
+            setTrainingAiKbBusy(null, false);
+        }
+    });
 }
 
 async function loadAdminPanel() {
@@ -1718,12 +2199,14 @@ async function selectModuleForPreview(moduleId) {
         });
 
         [pdfList, wordList].forEach(list => {
-            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Nenhum arquivo nesta categoria.</div>';
+            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No files in this category.</div>';
         });
-        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhuma imagem.</div>';
+        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No images.</div>';
         
-        // Default to PDF sub-tab
-        switchModuleDocTab('pdf');
+        // Keep the selected document category visible after uploads/refreshes.
+        const preferredDocTab = window.__preferredModuleDocTab || 'pdf';
+        switchModuleDocTab(preferredDocTab);
+        window.__preferredModuleDocTab = null;
             
         // Quiz Preview
         renderQuizList();
@@ -2056,9 +2539,19 @@ async function deleteModuleDoc(docId) {
     await loadModuleData(currentModuleId);
 }
 
+function getModuleDocumentPreviewTab(fileName = '', mimeType = '') {
+    const ext = fileName ? fileName.split('.').pop().toLowerCase() : '';
+    const type = String(mimeType || '').toLowerCase();
+    if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if (type.includes('word') || type.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(ext)) return 'word';
+    if (type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'img';
+    return 'pdf';
+}
+
 async function showAddDocForm() {
     let allDocs = [];
     let selectedDocId = null;
+    let selectedDocMeta = null;
     let currentFilter = 'all';
 
     const fetchDocs = async () => {
@@ -2102,10 +2595,18 @@ async function showAddDocForm() {
             `;
             item.onclick = () => {
                 selectedDocId = doc.id;
+                selectedDocMeta = doc;
                 document.querySelectorAll('.doc-item-mini').forEach(el => el.classList.remove('selected'));
                 item.classList.add('selected');
                 const titleIn = document.getElementById('d-title-in');
                 if (!titleIn.value) titleIn.value = doc.name;
+                const statusBox = document.getElementById('doc-upload-status');
+                if (statusBox) {
+                    statusBox.style.display = 'block';
+                    statusBox.style.color = 'var(--text-muted)';
+                    statusBox.style.background = 'rgba(255,255,255,0.06)';
+                    statusBox.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Selected from library. Click Confirm to add it to the module assets and queue AI knowledge-base sync.`;
+                }
             };
             grid.appendChild(item);
         });
@@ -2131,6 +2632,8 @@ async function showAddDocForm() {
                 </label>
             </div>
 
+            <div id="doc-upload-status" style="display:none; margin-top: 0.85rem; padding: 0.75rem 0.85rem; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 0.9rem; line-height: 1.45;"></div>
+
             <div id="mode-doc-library" class="selector-mode-pane hidden">
                 <div class="doc-tabs">
                     <button class="doc-tab active" data-filter="all">All</button>
@@ -2145,31 +2648,60 @@ async function showAddDocForm() {
             </div>
         </div>
     `, async () => {
-        const title = document.getElementById('d-title-in').value;
+        const title = document.getElementById('d-title-in').value.trim();
         const okBtn = document.getElementById('sub-modal-ok');
+        const statusBox = document.getElementById('doc-upload-status');
+        const setStatus = (message, isError = false) => {
+            if (!statusBox) return;
+            statusBox.style.display = 'block';
+            statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+            statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+            statusBox.innerHTML = message;
+        };
+        const setBusy = (message) => {
+            okBtn.disabled = true;
+            okBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+            setStatus(`<i class="fas fa-spinner fa-spin"></i> ${message}`);
+        };
         console.log('Confirming document add:', { title, selectedDocId });
         
         if (!title || !selectedDocId) {
-            alert('Por favor, preencha o título e selecione ou suba um arquivo.');
+            setStatus('Please enter a title and select or upload a file first.', true);
             return;
         }
-        
-        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        okBtn.disabled = true;
 
         const order = (currentModuleData && currentModuleData.documents) ? currentModuleData.documents.length : 0;
         try {
-            await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
+            setBusy('Adding to module assets...');
+            const added = await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
                 title, 
                 documentId: selectedDocId, 
                 order
             });
-            await loadModuleData(currentModuleId);
-            closeSubModal();
+
+            setBusy('Refreshing module preview...');
+            const previewTab = getModuleDocumentPreviewTab(title || selectedDocMeta?.name, selectedDocMeta?.type);
+            window.__preferredModuleDocTab = previewTab;
+            await refreshCurrentModuleContent({
+                previewPane: 'docs',
+                notice: `Document "${title}" was added to this module and queued for AI knowledge-base sync.`
+            });
+            switchModuleDocTab(previewTab);
+
+            if (added?.aiKnowledgeSyncQueued) {
+                setStatus('<i class="fas fa-sync-alt fa-spin"></i> Added to module assets. AI knowledge-base sync is queued and will continue in the background. The KB panel will update when ingestion finishes.');
+                watchQueuedKnowledgeBaseSync({ label: `Document "${title}"` });
+            } else {
+                setStatus('<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Added to module assets.');
+            }
+
+            okBtn.innerHTML = '<i class="fas fa-check"></i> Added';
+            setTimeout(() => closeSubModal(), 900);
         } catch (err) {
             console.error('Save Doc Error:', err);
-            alert('Erro ao vincular documento: ' + err.message);
-            okBtn.textContent = 'Confirm';
+            setStatus('Error linking document: ' + err.message, true);
+            showModulePreviewNotice('Error linking document: ' + err.message, true);
+            okBtn.textContent = 'Try Again';
             okBtn.disabled = false;
         }
     });
@@ -2178,7 +2710,16 @@ async function showAddDocForm() {
     setTimeout(() => {
         const fileHidden = document.getElementById('d-file-hidden');
         const statusText = document.getElementById('upload-status-text');
+        const statusBox = document.getElementById('doc-upload-status');
         const okBtn = document.getElementById('sub-modal-ok');
+        const setUploadStatus = (message, isError = false) => {
+            if (statusBox) {
+                statusBox.style.display = 'block';
+                statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+                statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+                statusBox.innerHTML = message;
+            }
+        };
 
         document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
@@ -2193,21 +2734,33 @@ async function showAddDocForm() {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subindo ${file.name}...`;
-                if (okBtn) okBtn.disabled = true;
+                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Uploading ${file.name}...`;
+                setUploadStatus(`<i class="fas fa-spinner fa-spin"></i> Uploading file to your asset library. After this finishes, click Confirm to add it to the module assets and queue AI knowledge-base sync.`);
+                if (okBtn) {
+                    okBtn.disabled = true;
+                    okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                }
 
                 try {
                     const data = await uploadAssetFile(file, 'File upload');
                     selectedDocId = data.id;
-                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} (Pronto)`;
-                    if (okBtn) okBtn.disabled = false;
+                    selectedDocMeta = { id: data.id, name: data.name || file.name, type: data.type || file.type };
+                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} uploaded`;
+                    setUploadStatus(`<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Upload complete. Click Confirm to link it and queue AI sync.`);
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Confirm';
+                    }
                     
                     const titleIn = document.getElementById('d-title-in');
                     if (titleIn && !titleIn.value) titleIn.value = file.name;
                 } catch (err) {
-                    alert('Erro no upload: ' + err.message);
+                    setUploadStatus('Upload error: ' + err.message, true);
                     statusText.textContent = 'Click to select a file';
-                    if (okBtn) okBtn.disabled = false;
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Try Again';
+                    }
                 }
             };
         }

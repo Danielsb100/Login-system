@@ -310,6 +310,22 @@ enum LogSource {
   MULTIPLAYER_WORLD
 }
 
+enum AiKnowledgeBaseStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum AiKnowledgeSyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+  SKIPPED
+  STALE
+  DELETED
+  DELETE_FAILED
+}
+
 // New Models
 
 model TrainingModule {
@@ -566,6 +582,46 @@ model WorldModulePlacement {
   interactedAnim String?         // Interaction animation name
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+}
+
+model AiKnowledgeBaseConnection {
+  id            Int                   @id @default(autoincrement())
+  tenantCode    String                @default("default")
+  displayName   String
+  remoteType    String                @default("internal_collection")
+  remoteId      String
+  remoteName    String?
+  collectionName String?
+  isDefault     Boolean               @default(false)
+  status        AiKnowledgeBaseStatus @default(ACTIVE)
+  lastRefreshAt DateTime?
+  lastError     String?               @db.Text
+  syncItems     AiKnowledgeBaseSyncItem[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([tenantCode, isDefault])
+  @@index([remoteType, remoteId])
+}
+
+model AiKnowledgeBaseSyncItem {
+  id               Int                     @id @default(autoincrement())
+  connectionId     Int
+  connection       AiKnowledgeBaseConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  sourceType       String
+  sourceId         String
+  sourceHash       String?
+  remoteFileId     String?
+  remoteDocumentId String?
+  excluded         Boolean                 @default(false)
+  status           AiKnowledgeSyncStatus   @default(PENDING)
+  lastSyncedAt     DateTime?
+  lastError        String?                 @db.Text
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@unique([connectionId, sourceType, sourceId])
+  @@index([status, updatedAt])
 }
 
 model AuditLog {

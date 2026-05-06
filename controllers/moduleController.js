@@ -1,5 +1,12 @@
 const prisma = require('../config/db');
 const { notifyModulePublished } = require('../services/notificationService');
+const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+
+const queueAiKnowledgeRefresh = (reason) => {
+    scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
+        console.error(`Failed to queue AI KB refresh (${reason}):`, error);
+    });
+};
 
 /**
  * Helper to format module based on target (Edit vs Runtime)
@@ -75,7 +82,8 @@ const createModule = async (req, res) => {
             }
         });
 
-        res.status(201).json(newModule);
+        queueAiKnowledgeRefresh('module created');
+        res.status(201).json({ ...newModule, aiKnowledgeSyncQueued: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to create module' });
@@ -180,7 +188,8 @@ const updateModule = async (req, res) => {
             data: { title, description, coverImage }
         });
 
-        res.json(updated);
+        queueAiKnowledgeRefresh('module updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to update module' });
     }
@@ -212,7 +221,8 @@ const patchStatus = async (req, res, status) => {
             return nextModule;
         });
 
-        res.json(updated);
+        queueAiKnowledgeRefresh(`module ${String(status).toLowerCase()}`);
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to update status' });
@@ -229,7 +239,8 @@ const deleteModule = async (req, res) => {
         }
 
         await prisma.trainingModule.delete({ where: { id: parseInt(id) } });
-        res.json({ message: 'Module deleted successfully' });
+        queueAiKnowledgeRefresh('module deleted');
+        res.json({ message: 'Module deleted successfully', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete module' });
     }

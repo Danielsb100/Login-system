@@ -1,4 +1,5 @@
 const env = require('../config/env');
+const { chatWithTrainingAi } = require('./trainingAiService');
 const { buildModuleContextContent } = require('./openaiQuizService');
 
 const extractResponseText = (responsePayload) => {
@@ -27,17 +28,36 @@ const buildAssistantInputContent = (module, message) => [
   }
 ];
 
-const generateModuleAssistantResponse = async (module, message) => {
-  if (!env.openai.apiKey) {
-    const error = new Error('OPENAI_API_KEY is not configured.');
-    error.statusCode = 503;
-    throw error;
-  }
+const extractEurobotAnswer = (payload) => {
+  if (typeof payload?.answer === 'string') return payload.answer;
+  if (typeof payload?.output_text === 'string') return payload.output_text;
+  if (typeof payload === 'string') return payload;
+  return '';
+};
 
+const generateModuleAssistantResponse = async (module, message, options = {}) => {
   const trimmedMessage = String(message || '').trim();
   if (!trimmedMessage) {
     const error = new Error('Message is required.');
     error.statusCode = 400;
+    throw error;
+  }
+
+  if (env.eurobot?.apiUrl) {
+    const response = await chatWithTrainingAi({
+      message: trimmedMessage,
+      conversationId: options.conversationId || `training-module-${module.id}`,
+      knowledgeBaseId: options.knowledgeBaseId,
+      moduleContext: module,
+      courseContext: options.courseContext || null,
+      returnAudio: false
+    });
+    return response.answer;
+  }
+
+  if (!env.openai.apiKey) {
+    const error = new Error('OPENAI_API_KEY is not configured.');
+    error.statusCode = 503;
     throw error;
   }
 
