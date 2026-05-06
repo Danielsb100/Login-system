@@ -23,23 +23,39 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
         status: module.status,
         createdAt: module.createdAt,
         updatedAt: module.updatedAt,
-        videos: (module.videos || []).map(v => ({
-            id: v.id,
-            title: v.title,
-            url: v.url,
-            order: v.order
-        })).sort((a, b) => a.order - b.order),
-        documents: (module.documents || []).map(d => ({
-            id: d.id,
-            title: d.title,
-            order: d.order,
-            documentId: d.documentId,
-            type: d.document ? d.document.type : 'application/octet-stream'
-        })).sort((a, b) => a.order - b.order),
+        videos: (module.videos || []).map(v => {
+            const progressEntry = Array.isArray(v.progress) ? v.progress[0] : null;
+            const progressValue = Number(progressEntry?.progress || 0);
+            const completed = Boolean(progressEntry?.completed || progressValue >= 80);
+            return {
+                id: v.id,
+                title: v.title,
+                url: v.url,
+                order: v.order,
+                progress: progressValue,
+                completed,
+                viewed: completed
+            };
+        }).sort((a, b) => a.order - b.order),
+        documents: (module.documents || []).map(d => {
+            const viewed = Boolean(Array.isArray(d.downloads) && d.downloads.length);
+            return {
+                id: d.id,
+                title: d.title,
+                order: d.order,
+                documentId: d.documentId,
+                type: d.document ? d.document.type : 'application/octet-stream',
+                viewed
+            };
+        }).sort((a, b) => a.order - b.order),
         quizzes: (module.quizzes || []).map(qz => ({
             id: qz.id,
             title: qz.title,
             order: qz.order,
+            submitted: Boolean(Array.isArray(qz.submissions) && qz.submissions.length),
+            bestScore: Array.isArray(qz.submissions) && qz.submissions.length
+                ? qz.submissions.reduce((best, item) => Math.max(best, Number(item.score) || 0), 0)
+                : null,
             questions: (qz.questions || []).map(q => ({
                 id: q.id,
                 text: q.text,
@@ -127,15 +143,37 @@ const getAllPublishedModules = async (req, res) => {
 const getModuleById = async (req, res) => {
     try {
         const { id } = req.params;
+        const viewerUserId = req.user.id;
         const module = await prisma.trainingModule.findUnique({
             where: { id: parseInt(id) },
             include: {
-                videos: true,
+                videos: {
+                    include: {
+                        progress: {
+                            where: { userId: viewerUserId },
+                            orderBy: { updatedAt: 'desc' },
+                            take: 1
+                        }
+                    }
+                },
                 documents: {
-                    include: { document: true }
+                    include: {
+                        document: true,
+                        downloads: {
+                            where: { userId: viewerUserId },
+                            orderBy: { timestamp: 'desc' },
+                            take: 1
+                        }
+                    }
                 },
                 quizzes: {
-                    include: { questions: { include: { options: true } } }
+                    include: {
+                        submissions: {
+                            where: { userId: viewerUserId },
+                            orderBy: { createdAt: 'desc' }
+                        },
+                        questions: { include: { options: true } }
+                    }
                 }
             }
         });
