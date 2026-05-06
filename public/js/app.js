@@ -2712,7 +2712,7 @@ async function showAddDocForm() {
                     selectedDocId = data.id;
                     selectedDocMeta = { id: data.id, name: data.name || file.name, type: data.type || file.type };
                     statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} uploaded`;
-                    setUploadStatus(`<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Upload complete. Click Confirm to add it to this module's assets and queue AI knowledge-base sync.`);
+                    setUploadStatus(`<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Upload complete. Click Confirm to link it and queue AI sync.`);
                     if (okBtn) {
                         okBtn.disabled = false;
                         okBtn.textContent = 'Confirm';
