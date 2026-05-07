@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 
 const DEFAULT_UPLOAD_MAX_FILE_SIZE_MB = 500;
 const LEGACY_DEFAULT_JWT_SECRET = 'supersecretkey';
@@ -71,7 +72,25 @@ const env = {
   },
   upload: {
     maxFileSizeMb,
-    maxFileSizeBytes: maxFileSizeMb * 1024 * 1024
+    maxFileSizeBytes: maxFileSizeMb * 1024 * 1024,
+    storageProvider: process.env.UPLOAD_STORAGE_PROVIDER || 'local',
+    storageDir: process.env.UPLOAD_STORAGE_DIR || path.join(__dirname, '..', 'var', 'storage', 'uploads'),
+    tempDir: process.env.UPLOAD_TEMP_DIR || path.join(__dirname, '..', 'var', 'storage', 'tmp')
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    quizModel: process.env.OPENAI_QUIZ_MODEL || 'gpt-5.4',
+    reasoningEffort: process.env.OPENAI_REASONING_EFFORT || 'low'
+  },
+  eurobot: {
+    apiUrl: (process.env.EUROBOT_API_URL || '').replace(/\/+$/, ''),
+    serviceApiKey: process.env.EUROBOT_SERVICE_API_KEY || '',
+    serviceClient: process.env.EUROBOT_SERVICE_CLIENT || 'training',
+    serviceApiKeyHeader: process.env.EUROBOT_SERVICE_API_KEY_HEADER || 'X-Eurobot-Service-Key',
+    chatBackend: process.env.EUROBOT_CHAT_BACKEND || 'responses',
+    defaultKbPrefix: process.env.EUROBOT_DEFAULT_KB_PREFIX || 'training',
+    tenantCode: process.env.TRAINING_TENANT_CODE || 'default',
+    enableTts: parseBoolean(process.env.EUROBOT_ENABLE_TTS, true)
   },
   seed: {
     autoSeedMaster: parseBoolean(process.env.ENABLE_AUTO_SEED_MASTER, true),
@@ -103,6 +122,18 @@ if (!env.auth.requireEmailVerification) {
 
 if (env.seed.autoSeedMaster && env.seed.masterUser.password === LEGACY_DEFAULT_MASTER_PASSWORD) {
   warnings.push('MASTER_PASSWORD is using the default seed credential.');
+}
+
+if (!env.openai.apiKey) {
+  warnings.push('OPENAI_API_KEY is not configured. AI quiz/module-assistant features that use direct OpenAI calls will fail.');
+}
+
+if (!env.eurobot.apiUrl) {
+  warnings.push('EUROBOT_API_URL is not configured. Eurobot-backed Training AI integration will be disabled.');
+}
+
+if (env.eurobot.apiUrl && !env.eurobot.serviceApiKey) {
+  warnings.push('EUROBOT_SERVICE_API_KEY is not configured. Eurobot service-auth requests may be rejected.');
 }
 
 env.meta = { warnings };

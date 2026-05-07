@@ -1,4 +1,11 @@
 const prisma = require('../config/db');
+const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+
+const queueAiKnowledgeRefresh = (reason) => {
+  scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
+    console.error(`Failed to queue AI KB refresh (${reason}):`, error);
+  });
+};
 
 function getEffectiveUserRoles(user) {
   return new Set([
@@ -322,7 +329,8 @@ async function createCourse(req, res) {
       return updatedCourse;
     });
 
-    return res.status(201).json(created);
+    queueAiKnowledgeRefresh('course created');
+    return res.status(201).json({ ...created, aiKnowledgeSyncQueued: true });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to create course.' });
@@ -469,7 +477,8 @@ async function updateCourse(req, res) {
       }
     });
 
-    return res.json(updated);
+    queueAiKnowledgeRefresh('course updated');
+    return res.json({ ...updated, aiKnowledgeSyncQueued: true });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to update course.' });
@@ -519,7 +528,7 @@ async function addModuleToCourse(req, res) {
           courseId,
           moduleId,
           orderIndex: typeof req.body.orderIndex === 'number' ? req.body.orderIndex : (lastModule?.orderIndex || 0) + 1,
-          isRequired: req.body.isRequired !== false,
+          isRequired: Boolean(req.body.isRequired),
           requireQuizPass,
           minimumQuizScore,
           roomLabel: req.body.roomLabel || null
@@ -530,7 +539,8 @@ async function addModuleToCourse(req, res) {
       return created;
     });
 
-    return res.status(201).json(courseModule);
+    queueAiKnowledgeRefresh('module added to course');
+    return res.status(201).json({ ...courseModule, aiKnowledgeSyncQueued: true });
   } catch (error) {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'This module is already attached to the course.' });
@@ -595,7 +605,8 @@ async function updateCourseModule(req, res) {
       return entity;
     });
 
-    return res.json(updated);
+    queueAiKnowledgeRefresh('course module updated');
+    return res.json({ ...updated, aiKnowledgeSyncQueued: true });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to update course module.' });
@@ -627,7 +638,8 @@ async function reorderCourseModules(req, res) {
       await syncCoursePlacements(courseId, tx);
     });
 
-    return res.json({ message: 'Course modules reordered successfully.' });
+    queueAiKnowledgeRefresh('course modules reordered');
+    return res.json({ message: 'Course modules reordered successfully.', aiKnowledgeSyncQueued: true });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to reorder course modules.' });
@@ -653,7 +665,8 @@ async function removeCourseModule(req, res) {
       await syncCoursePlacements(current.courseId, tx);
     });
 
-    return res.json({ message: 'Module removed from course.' });
+    queueAiKnowledgeRefresh('module removed from course');
+    return res.json({ message: 'Module removed from course.', aiKnowledgeSyncQueued: true });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to remove module from course.' });
@@ -784,6 +797,11 @@ async function completeCourseModule(req, res) {
 }
 
 module.exports = {
+  getEffectiveUserRoles,
+  isCourseManager,
+  buildCourseInclude,
+  buildCourseProgress,
+  assertCourseAccess,
   createCourse,
   getMyCourses,
   getAccessibleCourses,

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
@@ -25,14 +26,37 @@ const reportController = require('./controllers/reportController');
 const notificationController = require('./controllers/notificationController');
 const courseController = require('./controllers/courseController');
 const landingPageController = require('./controllers/landingPageController');
+const moduleAiController = require('./controllers/moduleAiController');
+const aiVoiceController = require('./controllers/aiVoiceController');
+const aiKnowledgeController = require('./controllers/aiKnowledgeController');
+const trainingAiController = require('./controllers/trainingAiController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 
+fs.mkdirSync(env.upload.tempDir, { recursive: true });
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (req, file, callback) => callback(null, env.upload.tempDir),
+    filename: (req, file, callback) => callback(null, `${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`)
+  }),
   limits: { fileSize: env.upload.maxFileSizeBytes }
 });
+
+const handleUploadError = (fieldName) => (req, res, next) => {
+  upload.single(fieldName)(req, res, (error) => {
+    if (!error) return next();
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: `File is too large. Maximum allowed size is ${env.upload.maxFileSizeMb} MB.`
+      });
+    }
+
+    return res.status(400).json({ error: error.message || 'File upload failed.' });
+  });
+};
 
 const app = express();
 const PORT = env.port;
@@ -50,7 +74,8 @@ const corsOptions = env.cors.origins.length
   : undefined;
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');
@@ -86,7 +111,7 @@ app.delete('/api/users/:id', authenticateToken, roleMiddleware(['MASTER']), user
 app.post(
   '/api/users/profile-picture',
   authenticateToken,
-  upload.single('profilePicture'),
+  handleUploadError('profilePicture'),
   userController.uploadProfilePicture
 );
 app.get('/api/users/:id/profile-card', authenticateToken, profileController.getUserProfileCard);
@@ -172,8 +197,11 @@ app.delete(
   contentController.deleteDocument
 );
 app.post('/modules/:id/quizzes', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createQuiz);
+app.put('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.updateQuiz);
+app.post('/modules/:id/quizzes/ai-generate', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.createAiGeneratedQuiz);
 app.delete('/modules/:id/quizzes/:quizId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuiz);
 app.post('/quizzes/:quizId/questions', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.addQuizQuestion);
+app.delete('/modules/:id/quiz/questions/:questionId', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), contentController.deleteQuizQuestion);
 app.put(
   '/quizzes/:quizId/questions/:questionId',
   authenticateToken,
@@ -183,6 +211,24 @@ app.put(
 
 app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submitQuiz);
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
+app.post('/modules/:id/assistant/chat', authenticateToken, moduleAiController.chatWithModuleAssistant);
+app.post('/api/ai/chat', authenticateToken, trainingAiController.chat);
+app.get('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.getConfig);
+app.get('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listConnections);
+app.post('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.createConnection);
+app.put('/api/ai/knowledge-base/connections/active', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.setActiveConnections);
+app.put('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConnection);
+app.delete('/api/ai/knowledge-base/connections/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.deleteConnection);
+app.post('/api/ai/knowledge-base/connections/:id/refresh', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.refresh);
+app.post('/api/ai/knowledge-base/default', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.ensureDefault);
+app.put('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateConfig);
+app.get('/api/ai/knowledge-base/remote', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listRemote);
+app.post('/api/ai/knowledge-base/refresh', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.refresh);
+app.get('/api/ai/knowledge-base/sync-items', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listSyncItems);
+app.put('/api/ai/knowledge-base/sync-items/:id', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.updateSyncItem);
+app.post('/api/ai/transcribe', authenticateToken, handleUploadError('audio'), aiVoiceController.transcribeAudio);
+app.post('/api/ai/tts', authenticateToken, aiVoiceController.textToSpeech);
+app.post('/api/ai/voice-chat', authenticateToken, handleUploadError('audio'), aiVoiceController.voiceChat);
 
 app.post('/modules/:id/forum/threads', authenticateToken, forumController.createThread);
 app.get('/modules/:id/forum/threads', authenticateToken, forumController.getThreadsByModule);
@@ -231,7 +277,7 @@ app.get(
   reportController.getUserDetailedReport
 );
 
-app.post('/api/documents/upload', authenticateToken, upload.single('document'), documentController.uploadDocument);
+app.post('/api/documents/upload', authenticateToken, handleUploadError('document'), documentController.uploadDocument);
 app.get('/api/documents', authenticateToken, (req, res) => {
   req.params.username = req.user.username;
   documentController.getUserDocuments(req, res);
@@ -312,7 +358,7 @@ app.use((err, req, res, next) => {
   return sendError(res, {
     status: 500,
     code: 'INTERNAL_SERVER_ERROR',
-    message: 'Internal server error.'
+    message: err.message || 'Internal server error.'
   });
 });
 

@@ -1,5 +1,12 @@
 const prisma = require('../config/db');
 const { notifyModulePublished } = require('../services/notificationService');
+const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+
+const queueAiKnowledgeRefresh = (reason) => {
+    scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
+        console.error(`Failed to queue AI KB refresh (${reason}):`, error);
+    });
+};
 
 /**
  * Helper to format module based on target (Edit vs Runtime)
@@ -16,23 +23,39 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
         status: module.status,
         createdAt: module.createdAt,
         updatedAt: module.updatedAt,
-        videos: (module.videos || []).map(v => ({
-            id: v.id,
-            title: v.title,
-            url: v.url,
-            order: v.order
-        })).sort((a, b) => a.order - b.order),
-        documents: (module.documents || []).map(d => ({
-            id: d.id,
-            title: d.title,
-            order: d.order,
-            documentId: d.documentId,
-            type: d.document ? d.document.type : 'application/octet-stream'
-        })).sort((a, b) => a.order - b.order),
+        videos: (module.videos || []).map(v => {
+            const progressEntry = Array.isArray(v.progress) ? v.progress[0] : null;
+            const progressValue = Number(progressEntry?.progress || 0);
+            const completed = Boolean(progressEntry?.completed || progressValue >= 80);
+            return {
+                id: v.id,
+                title: v.title,
+                url: v.url,
+                order: v.order,
+                progress: progressValue,
+                completed,
+                viewed: completed
+            };
+        }).sort((a, b) => a.order - b.order),
+        documents: (module.documents || []).map(d => {
+            const viewed = Boolean(Array.isArray(d.downloads) && d.downloads.length);
+            return {
+                id: d.id,
+                title: d.title,
+                order: d.order,
+                documentId: d.documentId,
+                type: d.document ? d.document.type : 'application/octet-stream',
+                viewed
+            };
+        }).sort((a, b) => a.order - b.order),
         quizzes: (module.quizzes || []).map(qz => ({
             id: qz.id,
             title: qz.title,
             order: qz.order,
+            submitted: Boolean(Array.isArray(qz.submissions) && qz.submissions.length),
+            bestScore: Array.isArray(qz.submissions) && qz.submissions.length
+                ? qz.submissions.reduce((best, item) => Math.max(best, Number(item.score) || 0), 0)
+                : null,
             questions: (qz.questions || []).map(q => ({
                 id: q.id,
                 text: q.text,
@@ -58,28 +81,25 @@ const formatModuleData = (module, format = 'runtime', userRole = 'USER', userId 
 
 const createModule = async (req, res) => {
     try {
-        const { title, description, coverImage } = req.body;
-        const ownerMasterId = req.user.id;
-
-        // Check limit of 5 modules
-        const moduleCount = await prisma.trainingModule.count({
-            where: { ownerMasterId }
-        });
-
-        if (moduleCount >= 5) {
-            return res.status(400).json({ error: 'Limit reached: Each MASTER can create at most 5 modules.' });
+        const { title, description, coverImage } = req.body || {};
+        const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+        if (!normalizedTitle) {
+            return res.status(400).json({ error: 'Module title is required.' });
         }
+
+        const ownerMasterId = req.user.id;
 
         const newModule = await prisma.trainingModule.create({
             data: {
-                title,
+                title: normalizedTitle,
                 description,
                 coverImage,
                 ownerMasterId
             }
         });
 
-        res.status(201).json(newModule);
+        queueAiKnowledgeRefresh('module created');
+        res.status(201).json({ ...newModule, aiKnowledgeSyncQueued: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to create module' });
@@ -123,15 +143,37 @@ const getAllPublishedModules = async (req, res) => {
 const getModuleById = async (req, res) => {
     try {
         const { id } = req.params;
+        const viewerUserId = req.user.id;
         const module = await prisma.trainingModule.findUnique({
             where: { id: parseInt(id) },
             include: {
-                videos: true,
+                videos: {
+                    include: {
+                        progress: {
+                            where: { userId: viewerUserId },
+                            orderBy: { updatedAt: 'desc' },
+                            take: 1
+                        }
+                    }
+                },
                 documents: {
-                    include: { document: true }
+                    include: {
+                        document: true,
+                        downloads: {
+                            where: { userId: viewerUserId },
+                            orderBy: { timestamp: 'desc' },
+                            take: 1
+                        }
+                    }
                 },
                 quizzes: {
-                    include: { questions: { include: { options: true } } }
+                    include: {
+                        submissions: {
+                            where: { userId: viewerUserId },
+                            orderBy: { createdAt: 'desc' }
+                        },
+                        questions: { include: { options: true } }
+                    }
                 }
             }
         });
@@ -168,7 +210,10 @@ const getModuleById = async (req, res) => {
 const updateModule = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, description, coverImage } = req.body;
+        const { title, description, coverImage } = req.body || {};
+        if (!req.body) {
+            return res.status(400).json({ error: 'Request body is required.' });
+        }
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
@@ -181,7 +226,8 @@ const updateModule = async (req, res) => {
             data: { title, description, coverImage }
         });
 
-        res.json(updated);
+        queueAiKnowledgeRefresh('module updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to update module' });
     }
@@ -213,7 +259,8 @@ const patchStatus = async (req, res, status) => {
             return nextModule;
         });
 
-        res.json(updated);
+        queueAiKnowledgeRefresh(`module ${String(status).toLowerCase()}`);
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to update status' });
@@ -230,7 +277,8 @@ const deleteModule = async (req, res) => {
         }
 
         await prisma.trainingModule.delete({ where: { id: parseInt(id) } });
-        res.json({ message: 'Module deleted successfully' });
+        queueAiKnowledgeRefresh('module deleted');
+        res.json({ message: 'Module deleted successfully', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete module' });
     }

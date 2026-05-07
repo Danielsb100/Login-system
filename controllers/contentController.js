@@ -1,5 +1,55 @@
 const prisma = require('../config/db');
 const { notifyQuizSubmitted } = require('../services/notificationService');
+const { generateQuizFromModule, getModuleAssetUrl } = require('../services/openaiQuizService');
+const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+
+const queueAiKnowledgeRefresh = (reason) => {
+    scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
+        console.error(`Failed to queue AI KB refresh (${reason}):`, error);
+    });
+};
+
+const getEffectiveUserRoles = (user) => new Set([
+    ...(Array.isArray(user?.roles) ? user.roles : []),
+    user?.primaryRole,
+    user?.legacyRole,
+    user?.role
+].filter(Boolean));
+
+const isModuleManager = (user, module) => {
+    const roles = getEffectiveUserRoles(user);
+    return module?.ownerMasterId === user?.id
+        || roles.has('ADMIN')
+        || roles.has('MASTER')
+        || roles.has('SUPER_ADMIN');
+};
+
+const normalizeQuizOptions = (options) => {
+    if (!Array.isArray(options) || options.length < 2) {
+        const error = new Error('At least 2 options are required.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const normalized = options.map((option) => ({
+        text: String(option?.text || '').trim(),
+        isCorrect: Boolean(option?.isCorrect)
+    })).filter((option) => option.text);
+
+    if (normalized.length < 2) {
+        const error = new Error('At least 2 non-empty options are required.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (normalized.filter((option) => option.isCorrect).length !== 1) {
+        const error = new Error('Exactly one option must be marked correct.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return normalized;
+};
 
 // --- Video Management ---
 
@@ -10,7 +60,7 @@ const addVideo = async (req, res) => {
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
-        if (module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -24,7 +74,8 @@ const addVideo = async (req, res) => {
             }
         });
         console.log(`[DEBUG] Video created:`, video.id);
-        res.status(201).json(video);
+        queueAiKnowledgeRefresh('module video added');
+        res.status(201).json({ ...video, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to add video' });
     }
@@ -49,7 +100,8 @@ const updateVideo = async (req, res) => {
             where: { id: parseInt(videoId) },
             data: { title, url, order: parseInt(order) }
         });
-        res.json(updated);
+        queueAiKnowledgeRefresh('module video updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to update video' });
     }
@@ -69,7 +121,8 @@ const deleteVideo = async (req, res) => {
         }
 
         await prisma.moduleVideo.delete({ where: { id: parseInt(videoId) } });
-        res.json({ message: 'Video deleted' });
+        queueAiKnowledgeRefresh('module video deleted');
+        res.json({ message: 'Video deleted', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete video' });
     }
@@ -84,7 +137,7 @@ const addDocument = async (req, res) => {
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
-        if (module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -98,7 +151,8 @@ const addDocument = async (req, res) => {
             }
         });
         console.log(`[DEBUG] ModuleDocument created:`, doc.id);
-        res.status(201).json(doc);
+        queueAiKnowledgeRefresh('module document added');
+        res.status(201).json({ ...doc, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to add document' });
     }
@@ -123,7 +177,8 @@ const updateDocument = async (req, res) => {
             where: { id: parseInt(documentId) },
             data: { title, order: parseInt(order) }
         });
-        res.json(updated);
+        queueAiKnowledgeRefresh('module document updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to update document' });
     }
@@ -143,7 +198,8 @@ const deleteDocument = async (req, res) => {
         }
 
         await prisma.moduleDocument.delete({ where: { id: parseInt(documentId) } });
-        res.json({ message: 'Document removed from module' });
+        queueAiKnowledgeRefresh('module document removed');
+        res.json({ message: 'Document removed from module', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete document' });
     }
@@ -158,7 +214,7 @@ const createQuiz = async (req, res) => {
 
         const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
         if (!module) return res.status(404).json({ error: 'Module not found' });
-        if (module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -171,7 +227,8 @@ const createQuiz = async (req, res) => {
             }
         });
         console.log(`[DEBUG] Quiz created:`, quiz.id);
-        res.status(201).json(quiz);
+        queueAiKnowledgeRefresh('module quiz created');
+        res.status(201).json({ ...quiz, aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to create quiz' });
     }
@@ -179,21 +236,133 @@ const createQuiz = async (req, res) => {
 
 const deleteQuiz = async (req, res) => {
     try {
-        const { id, quizId } = req.params;
-        const userId = req.user.id;
+        const moduleId = parseInt(req.params.id, 10);
+        const quizId = parseInt(req.params.quizId, 10);
 
-        const module = await prisma.trainingModule.findUnique({ where: { id: parseInt(id) } });
-        if (!module || (module.ownerMasterId !== userId && req.user.role !== 'ADMIN')) {
+        const quiz = await prisma.quiz.findUnique({
+            where: { id: quizId },
+            include: { module: true }
+        });
+
+        if (!quiz || quiz.moduleId !== moduleId) return res.status(404).json({ error: 'Quiz not found' });
+        if (!isModuleManager(req.user, quiz.module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
         await prisma.quiz.delete({
-            where: { id: parseInt(quizId) }
+            where: { id: quizId }
         });
 
-        res.json({ message: 'Quiz deleted' });
+        queueAiKnowledgeRefresh('module quiz deleted');
+        res.json({ message: 'Quiz deleted', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete quiz' });
+    }
+};
+
+const updateQuiz = async (req, res) => {
+    try {
+        const moduleId = parseInt(req.params.id, 10);
+        const quizId = parseInt(req.params.quizId, 10);
+        const { title, order } = req.body || {};
+
+        const quiz = await prisma.quiz.findUnique({
+            where: { id: quizId },
+            include: { module: true }
+        });
+
+        if (!quiz || quiz.moduleId !== moduleId) return res.status(404).json({ error: 'Quiz not found' });
+        if (!isModuleManager(req.user, quiz.module)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const data = {};
+        if (title !== undefined) {
+            const trimmedTitle = String(title).trim();
+            if (!trimmedTitle) return res.status(400).json({ error: 'Quiz title is required' });
+            data.title = trimmedTitle;
+        }
+        if (order !== undefined) {
+            const parsedOrder = parseInt(order, 10);
+            if (!Number.isFinite(parsedOrder)) return res.status(400).json({ error: 'Quiz order must be a number' });
+            data.order = parsedOrder;
+        }
+
+        const updated = await prisma.quiz.update({
+            where: { id: quizId },
+            data,
+            include: { questions: { include: { options: true }, orderBy: { order: 'asc' } } }
+        });
+
+        queueAiKnowledgeRefresh('module quiz updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update quiz' });
+    }
+};
+
+const createAiGeneratedQuiz = async (req, res) => {
+    try {
+        const moduleId = parseInt(req.params.id, 10);
+        const { questionCount, optionsPerQuestion, title } = req.body || {};
+
+        const module = await prisma.trainingModule.findUnique({
+            where: { id: moduleId },
+            include: {
+                videos: true,
+                documents: { include: { document: true } }
+            }
+        });
+
+        if (!module) return res.status(404).json({ error: 'Module not found' });
+        if (!isModuleManager(req.user, module)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const videoAssetIds = [...new Set((module.videos || [])
+            .map((video) => getModuleAssetUrl(video.url))
+            .filter(Boolean))];
+
+        const videoAssetDocuments = videoAssetIds.length
+            ? await prisma.document.findMany({ where: { id: { in: videoAssetIds } } })
+            : [];
+
+        const generated = await generateQuizFromModule({ ...module, videoAssetDocuments }, {
+            questionCount,
+            optionsPerQuestion
+        });
+
+        if (!generated.questions.length) {
+            return res.status(502).json({ error: 'AI did not return enough valid quiz questions.' });
+        }
+
+        const order = await prisma.quiz.count({ where: { moduleId } });
+        const quiz = await prisma.quiz.create({
+            data: {
+                moduleId,
+                title: title || generated.title || 'AI Generated Quiz',
+                order,
+                questions: {
+                    create: generated.questions.map((question, questionIndex) => ({
+                        text: question.text,
+                        order: questionIndex,
+                        options: {
+                            create: question.options.map((option) => ({
+                                text: option.text,
+                                isCorrect: option.isCorrect
+                            }))
+                        }
+                    }))
+                }
+            },
+            include: { questions: { include: { options: true } } }
+        });
+
+        queueAiKnowledgeRefresh('AI quiz generated');
+        res.status(201).json({ ...quiz, aiKnowledgeSyncQueued: true });
+    } catch (error) {
+        console.error('AI quiz generation failed:', error);
+        res.status(error.statusCode || 500).json({ error: error.message || 'Failed to generate AI quiz' });
     }
 };
 
@@ -204,26 +373,29 @@ const addQuizQuestion = async (req, res) => {
 
         const quiz = await prisma.quiz.findUnique({ where: { id: parseInt(quizId) }, include: { module: true } });
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
-        if (quiz.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, quiz.module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
-        console.log(`[DEBUG] Adding question to quiz ${quizId}: "${text}" - options count: ${options?.length}`);
+        const normalizedOptions = normalizeQuizOptions(options);
+
+        console.log(`[DEBUG] Adding question to quiz ${quizId}: "${text}" - options count: ${normalizedOptions.length}`);
         const question = await prisma.quizQuestion.create({
             data: {
                 quizId: parseInt(quizId),
                 text,
                 order: parseInt(order) || 0,
                 options: {
-                    create: options
+                    create: normalizedOptions
                 }
             },
             include: { options: true }
         });
         console.log(`[DEBUG] Question created:`, question.id);
-        res.status(201).json(question);
+        queueAiKnowledgeRefresh('quiz question added');
+        res.status(201).json({ ...question, aiKnowledgeSyncQueued: true });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to add quiz question' });
+        res.status(error.statusCode || 500).json({ error: error.message || 'Failed to add quiz question' });
     }
 };
 
@@ -231,31 +403,59 @@ const updateQuizQuestion = async (req, res) => {
     try {
         const { questionId } = req.params;
         const { text, order, options } = req.body;
+        const parsedQuestionId = parseInt(questionId, 10);
 
         const question = await prisma.quizQuestion.findUnique({ 
-            where: { id: parseInt(questionId) },
-            include: { module: true }
+            where: { id: parsedQuestionId },
+            include: { quiz: { include: { module: true } } }
         });
 
         if (!question) return res.status(404).json({ error: 'Question not found' });
-        if (question.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, question.quiz.module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
-        // Complex update: replace options or update them?
-        // Simpler: Delete existing options and recreation if needed, or handle individually.
-        // For simplicity in this initial version: update text/order.
-        const updated = await prisma.quizQuestion.update({
-            where: { id: parseInt(questionId) },
-            data: { 
-                text, 
-                order: parseInt(order),
-                // To keep it simple, we expect options to be managed via separate endpoints or full replacement logic
+        const data = {};
+        if (text !== undefined) {
+            const trimmedText = String(text).trim();
+            if (!trimmedText) return res.status(400).json({ error: 'Question text is required' });
+            data.text = trimmedText;
+        }
+        if (order !== undefined) {
+            const parsedOrder = parseInt(order, 10);
+            if (!Number.isFinite(parsedOrder)) return res.status(400).json({ error: 'Question order must be a number' });
+            data.order = parsedOrder;
+        }
+
+        const normalizedOptions = options === undefined ? null : normalizeQuizOptions(options);
+
+        const updated = await prisma.$transaction(async (tx) => {
+            await tx.quizQuestion.update({
+                where: { id: parsedQuestionId },
+                data
+            });
+
+            if (normalizedOptions) {
+                await tx.quizOption.deleteMany({ where: { questionId: parsedQuestionId } });
+                await tx.quizOption.createMany({
+                    data: normalizedOptions.map((option) => ({
+                        questionId: parsedQuestionId,
+                        text: option.text,
+                        isCorrect: option.isCorrect
+                    }))
+                });
             }
+
+            return tx.quizQuestion.findUnique({
+                where: { id: parsedQuestionId },
+                include: { options: true }
+            });
         });
-        res.json(updated);
+
+        queueAiKnowledgeRefresh('quiz question updated');
+        res.json({ ...updated, aiKnowledgeSyncQueued: true });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update quiz question' });
+        res.status(error.statusCode || 500).json({ error: error.message || 'Failed to update quiz question' });
     }
 };
 
@@ -264,17 +464,18 @@ const deleteQuizQuestion = async (req, res) => {
         const { questionId } = req.params;
         const question = await prisma.quizQuestion.findUnique({ 
             where: { id: parseInt(questionId) },
-            include: { module: true }
+            include: { quiz: { include: { module: true } } }
         });
 
         if (!question) return res.status(404).json({ error: 'Question not found' });
-        if (question.module.ownerMasterId !== req.user.id && req.user.role !== 'ADMIN') {
+        if (!isModuleManager(req.user, question.quiz.module)) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
         // Cascading delete handles options if configured in Prisma, otherwise handle manually
         await prisma.quizQuestion.delete({ where: { id: parseInt(questionId) } });
-        res.json({ message: 'Question deleted' });
+        queueAiKnowledgeRefresh('quiz question deleted');
+        res.json({ message: 'Question deleted', aiKnowledgeSyncQueued: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete question' });
     }
@@ -378,6 +579,6 @@ const getQuizzesSubmissions = async (req, res) => {
 module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
-    createQuiz, deleteQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
+    createQuiz, updateQuiz, deleteQuiz, createAiGeneratedQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
     submitQuiz, getQuizzesSubmissions
 };

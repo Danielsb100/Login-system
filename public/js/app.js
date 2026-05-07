@@ -22,8 +22,22 @@ function resolveLocalMultiplayerUrl() {
 }
 
 // --- UI Helpers ---
-async function openModuleEditor(id = null) {
+let moduleEditorContext = null;
+
+async function notifyModuleEditorContext(eventName, payload = {}) {
+    if (!moduleEditorContext?.onSaved && !moduleEditorContext?.onStatusChanged) return;
+    if (eventName === 'statusChanged' && moduleEditorContext.onStatusChanged) {
+        await moduleEditorContext.onStatusChanged(payload);
+        return;
+    }
+    if (moduleEditorContext.onSaved) {
+        await moduleEditorContext.onSaved({ eventName, ...payload });
+    }
+}
+
+async function openModuleEditor(id = null, options = {}) {
     console.log('Opening module editor for ID:', id);
+    moduleEditorContext = options && typeof options === 'object' ? options : null;
     const modal = document.getElementById('module-editor-modal');
     const title = document.getElementById('editor-title');
     if (!modal || !title) {
@@ -44,16 +58,23 @@ async function openModuleEditor(id = null) {
     }
 
     if (!id) {
-        title.textContent = 'Create New Module';
+        title.textContent = moduleEditorContext?.title || 'Create New Module';
         const form = document.getElementById('module-basics-form');
         if (form) form.reset();
         const tabs = document.getElementById('editor-tabs');
         if (tabs) tabs.classList.add('hidden');
+        switchEditorTab('basics');
+        const btnPublish = document.getElementById('btn-publish-module');
+        if (btnPublish) btnPublish.classList.add('hidden');
         modal.classList.remove('hidden');
+        modal.style.display = 'block';
+        modal.style.opacity = '1';
         return;
     }
 
     title.textContent = 'Configure Module Content';
+    const btnPublish = document.getElementById('btn-publish-module');
+    if (btnPublish) btnPublish.classList.remove('hidden');
     if (modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'block'; // Force show
@@ -850,6 +871,7 @@ async function loadDashboard() {
         }
 
         await loadUserDocuments();
+        await initializeTrainingAiPanel({ canManageAi: canManageModules || isAdmin });
     } catch (error) {
         console.error('Dashboard error:', error);
         if (error.message.includes('401') || error.message.includes('token') || error.message.includes('expired')) {
@@ -859,6 +881,486 @@ async function loadDashboard() {
             console.error('Critical Dashboard failure: ', error.message);
         }
     }
+}
+
+let trainingAiConversationId = localStorage.getItem('training_ai_conversation_id') || `training-ai-${Date.now()}`;
+let trainingAiLastAudio = null;
+let trainingAiRecorder = null;
+let trainingAiChunks = [];
+localStorage.setItem('training_ai_conversation_id', trainingAiConversationId);
+
+function setTrainingAiStatus(message, isError = false) {
+    const status = document.getElementById('ai-chat-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.className = `form-message ${isError ? 'message-error' : 'message-success'}`;
+}
+
+function appendTrainingAiMessage(role, content) {
+    const history = document.getElementById('ai-chat-history');
+    if (!history) return;
+    const item = document.createElement('div');
+    item.className = 'operations-item';
+    item.innerHTML = `<strong>${role === 'user' ? 'You' : 'AI'}</strong><p>${escapeHtml(content)}</p>`;
+    history.appendChild(item);
+    history.scrollTop = history.scrollHeight;
+}
+
+function summarizeKbConnection(connection) {
+    const summary = connection?.syncSummary || {};
+    return `${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed${summary.deleted ? `, ${summary.deleted} deleted` : ''}${summary.delete_failed ? `, ${summary.delete_failed} delete failed` : ''}${summary.stale ? `, ${summary.stale} stale` : ''}`;
+}
+
+function setTrainingAiKbBusy(connectionId, isBusy, label = 'Syncing...') {
+    const selector = connectionId
+        ? `[data-ai-kb-action="sync"][data-kb-id="${connectionId}"]`
+        : '#btn-ai-refresh-kb, [data-ai-kb-action="sync"]';
+    document.querySelectorAll(selector).forEach((button) => {
+        if (!button.dataset.originalLabel) button.dataset.originalLabel = button.textContent;
+        button.disabled = isBusy;
+        button.classList.toggle('is-processing', isBusy);
+        button.textContent = isBusy ? label : button.dataset.originalLabel;
+    });
+}
+
+function setTrainingAiKbDetails(message) {
+    const details = document.getElementById('ai-kb-details');
+    if (details && message) details.textContent = message;
+}
+
+function setTrainingAiKbRowFeedback(connectionId, message, isError = false) {
+    const feedback = document.getElementById(`ai-kb-row-feedback-${connectionId}`);
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.classList.toggle('message-error', Boolean(isError));
+    feedback.classList.toggle('message-success', Boolean(message && !isError));
+}
+
+function summarizeActiveKbSync(payload = {}) {
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
+    return activeConnections.reduce((totals, connection) => {
+        const summary = connection.syncSummary || {};
+        totals.synced += summary.synced || 0;
+        totals.pending += summary.pending || 0;
+        totals.failed += summary.failed || 0;
+        totals.stale += summary.stale || 0;
+        totals.deleted += summary.deleted || 0;
+        totals.delete_failed += summary.delete_failed || 0;
+        return totals;
+    }, { synced: 0, pending: 0, failed: 0, stale: 0, deleted: 0, delete_failed: 0 });
+}
+
+function watchQueuedKnowledgeBaseSync({ label = 'New material' } = {}) {
+    const delays = [2500, 6500, 12000];
+    setTrainingAiStatus(`${label} queued for AI knowledge-base sync...`);
+    setTrainingAiKbDetails(`${label} was added to module assets. Eurobot ingestion is running in the background; this status will refresh automatically.`);
+
+    delays.forEach((delay, index) => {
+        setTimeout(async () => {
+            try {
+                const payload = await apiCall('/api/ai/knowledge-base/config');
+                renderTrainingAiKbConfig(payload, true);
+                const summary = summarizeActiveKbSync(payload);
+                const hasRemainingWork = summary.pending || summary.stale;
+                const hasFailures = summary.failed;
+                const isLastPoll = index === delays.length - 1;
+                if (hasFailures) {
+                    setTrainingAiStatus(`AI knowledge-base sync needs attention: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`, true);
+                } else if (!hasRemainingWork || isLastPoll) {
+                    setTrainingAiStatus(`AI knowledge-base status refreshed: ${summary.synced} synced, ${summary.pending} pending, ${summary.failed} failed.`);
+                } else {
+                    setTrainingAiStatus(`AI knowledge-base sync still processing: ${summary.synced} synced, ${summary.pending} pending.`);
+                }
+            } catch (error) {
+                if (index === delays.length - 1) setTrainingAiStatus(error.message, true);
+            }
+        }, delay);
+    });
+}
+
+function renderTrainingAiKbList(connections = [], canManageAi) {
+    const list = document.getElementById('ai-kb-list');
+    const saveBtn = document.getElementById('btn-ai-save-active-kbs');
+    const createForm = document.getElementById('ai-kb-create-form');
+    if (createForm) createForm.classList.toggle('hidden', !canManageAi);
+    if (saveBtn) saveBtn.classList.toggle('hidden', !canManageAi || !connections.length);
+    if (!list) return;
+
+    if (!connections.length) {
+        list.innerHTML = '<div class="empty-state-inline">No Training knowledge bases yet. Create one or connect the default KB.</div>';
+        return;
+    }
+
+    list.innerHTML = connections.map((connection) => {
+        const checked = connection.isDefault ? 'checked' : '';
+        const disabled = canManageAi && connection.status !== 'DISABLED' ? '' : 'disabled';
+        const statusClass = connection.isDefault ? 'active' : String(connection.status || '').toLowerCase();
+        return `
+            <article class="ai-kb-row ${connection.isDefault ? 'ai-kb-row-active' : ''}" data-kb-id="${connection.id}">
+                <label class="ai-kb-select">
+                    <input type="checkbox" class="ai-kb-active-checkbox" value="${connection.id}" ${checked} ${disabled}>
+                    <span>Use in AI</span>
+                </label>
+                <div class="ai-kb-row-main">
+                    <div class="ai-kb-row-title">
+                        <strong>${escapeHtml(connection.displayName || connection.remoteName || 'Training KB')}</strong>
+                        <span class="operations-pill ai-kb-row-pill ${statusClass}">${connection.isDefault ? 'Connected to AI' : (connection.status || 'ACTIVE')}</span>
+                    </div>
+                    <p>${escapeHtml(connection.collectionName || connection.remoteId || 'No remote collection yet')}</p>
+                    <small>Material sync: ${escapeHtml(summarizeKbConnection(connection))}</small>
+                    <small class="ai-kb-row-feedback" id="ai-kb-row-feedback-${connection.id}">${connection.lastRefreshAt ? `Last sync: ${escapeHtml(new Date(connection.lastRefreshAt).toLocaleString())}` : ''}</small>
+                </div>
+                <div class="ai-kb-row-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="documents" data-kb-id="${connection.id}">Documents</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="rename" data-kb-id="${connection.id}">Edit</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-ai-kb-action="sync" data-kb-id="${connection.id}">Sync</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="disable" data-kb-id="${connection.id}">${connection.status === 'DISABLED' ? 'Enable' : 'Disable'}</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-ai-kb-action="delete" data-kb-id="${connection.id}" style="color: var(--error);">Delete</button>
+                </div>
+                <div class="ai-kb-documents hidden" id="ai-kb-documents-${connection.id}"></div>
+            </article>
+        `;
+    }).join('');
+}
+
+function renderTrainingAiKbConfig(payload, canManageAi) {
+    const status = document.getElementById('ai-kb-status');
+    const details = document.getElementById('ai-kb-details');
+    const ensureBtn = document.getElementById('btn-ai-ensure-kb');
+    const refreshBtn = document.getElementById('btn-ai-refresh-kb');
+    const connections = payload?.connections || (payload?.connection ? [payload.connection] : []);
+    const activeConnections = connections.filter((connection) => connection.isDefault && connection.status !== 'DISABLED');
+
+    if (ensureBtn) ensureBtn.classList.toggle('hidden', !canManageAi || Boolean(connections.length));
+    if (refreshBtn) refreshBtn.classList.toggle('hidden', !canManageAi || !activeConnections.length);
+    renderTrainingAiKbList(connections, canManageAi);
+
+    if (!activeConnections.length) {
+        if (status) status.textContent = connections.length ? 'No AI KB selected' : 'Not connected';
+        if (details) details.textContent = canManageAi
+            ? 'Create or select one or more Eurobot knowledge bases, then save the AI selection and sync materials.'
+            : 'The Eurobot knowledge base is not connected yet.';
+        return;
+    }
+
+    const activeNames = activeConnections.map((connection) => connection.displayName).join(', ');
+    const totalSynced = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.synced || 0), 0);
+    const totalPending = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.pending || 0), 0);
+    const totalFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.failed || 0), 0);
+    if (status) status.textContent = `AI uses ${activeConnections.length} KB${activeConnections.length === 1 ? '' : 's'}`;
+    if (details) {
+        const totalDeleted = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.deleted || 0), 0);
+        const totalDeleteFailed = activeConnections.reduce((total, connection) => total + (connection.syncSummary?.delete_failed || 0), 0);
+        details.textContent = `Connected to AI: ${activeNames}. Material sync across selected KBs: ${totalSynced} synced, ${totalPending} pending, ${totalFailed} failed${totalDeleted ? `, ${totalDeleted} deleted` : ''}${totalDeleteFailed ? `, ${totalDeleteFailed} delete failed` : ''}.`;
+    }
+}
+
+async function loadTrainingAiKbConfig(canManageAi) {
+    try {
+        const payload = await apiCall('/api/ai/knowledge-base/config');
+        renderTrainingAiKbConfig(payload, canManageAi);
+    } catch (error) {
+        renderTrainingAiKbConfig({ connections: [] }, canManageAi);
+        setTrainingAiStatus(error.message, true);
+    }
+}
+
+async function saveTrainingAiKbSelection(canManageAi) {
+    const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+        .map((input) => Number(input.value))
+        .filter(Number.isInteger);
+    setTrainingAiStatus('Saving AI knowledge-base selection...');
+    const payload = await apiCall('/api/ai/knowledge-base/connections/active', 'PUT', { connectionIds: ids });
+    renderTrainingAiKbConfig(payload, canManageAi);
+    setTrainingAiStatus(ids.length ? 'AI knowledge-base selection saved.' : 'No KB selected for AI.');
+}
+
+async function createTrainingAiKb(canManageAi, event) {
+    event?.preventDefault();
+    const nameInput = document.getElementById('ai-kb-new-name');
+    const descriptionInput = document.getElementById('ai-kb-new-description');
+    const displayName = String(nameInput?.value || '').trim();
+    if (!displayName) {
+        setTrainingAiStatus('Knowledge base name is required.', true);
+        return;
+    }
+    setTrainingAiStatus('Creating Eurobot knowledge base...');
+    await apiCall('/api/ai/knowledge-base/connections', 'POST', {
+        displayName,
+        description: descriptionInput?.value || ''
+    });
+    if (nameInput) nameInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
+    await loadTrainingAiKbConfig(canManageAi);
+    setTrainingAiStatus('Knowledge base created. Select it if the AI should use it, then sync materials.');
+}
+
+async function loadTrainingAiKbDocuments(connectionId, { toggle = true } = {}) {
+    const panel = document.getElementById(`ai-kb-documents-${connectionId}`);
+    if (!panel) return;
+    if (toggle) panel.classList.toggle('hidden');
+    else panel.classList.remove('hidden');
+    if (panel.classList.contains('hidden')) return;
+    panel.innerHTML = '<div class="empty-state-inline">Loading KB documents...</div>';
+    const payload = await apiCall(`/api/ai/knowledge-base/sync-items?connectionId=${encodeURIComponent(connectionId)}`);
+    const items = payload.items || [];
+    if (!items.length) {
+        panel.innerHTML = '<div class="empty-state-inline">No synced documents yet. Click Sync for this KB to populate the document list.</div>';
+        return;
+    }
+    panel.innerHTML = `
+        <div class="ai-kb-documents-header">
+            <strong>Documents / materials in this KB</strong>
+            <span>Use Include/Exclude to control what this KB syncs next.</span>
+        </div>
+        <div class="ai-kb-document-list">
+            ${items.map((item) => {
+                const included = !item.excluded;
+                const status = item.excluded ? 'EXCLUDED' : (item.status || 'PENDING');
+                return `
+                    <div class="ai-kb-document-row ${item.excluded ? 'is-excluded' : ''}" data-sync-item-id="${item.id}">
+                        <label class="ai-kb-document-toggle">
+                            <input type="checkbox" class="ai-kb-document-include" data-sync-item-id="${item.id}" ${included ? 'checked' : ''}>
+                            <span>${included ? 'Included' : 'Excluded'}</span>
+                        </label>
+                        <div class="ai-kb-document-main">
+                            <strong>${escapeHtml(item.filename || `${item.sourceType} ${item.sourceId}`)}</strong>
+                            <small>${escapeHtml(item.sourceType)} · source ${escapeHtml(item.sourceId)} · ${escapeHtml(status)}${item.isStale ? ' · stale' : ''}</small>
+                            ${item.lastError ? `<p>${escapeHtml(item.lastError)}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+async function updateTrainingAiKbDocumentInclusion(canManageAi, event) {
+    const input = event.target.closest('.ai-kb-document-include');
+    if (!input) return false;
+    const id = Number(input.dataset.syncItemId);
+    if (!Number.isInteger(id)) return false;
+    setTrainingAiStatus(input.checked ? 'Including document in KB sync...' : 'Excluding document from KB sync...');
+    await apiCall(`/api/ai/knowledge-base/sync-items/${id}`, 'PUT', { excluded: !input.checked });
+    const connectionRow = input.closest('.ai-kb-row');
+    const connectionId = connectionRow?.dataset?.kbId;
+    if (connectionId) {
+        await loadTrainingAiKbDocuments(connectionId, { toggle: false });
+    }
+    setTrainingAiStatus(input.checked ? 'Document included. Click Sync to upload/update it.' : 'Document excluded from future syncs.');
+    return true;
+}
+
+async function handleTrainingAiKbAction(canManageAi, event) {
+    if (await updateTrainingAiKbDocumentInclusion(canManageAi, event)) return;
+    const button = event.target.closest('[data-ai-kb-action]');
+    if (!button) return;
+    const id = Number(button.dataset.kbId);
+    const action = button.dataset.aiKbAction;
+    if (!Number.isInteger(id)) return;
+
+    if (action === 'documents') {
+        await loadTrainingAiKbDocuments(id);
+        return;
+    }
+
+    if (action === 'sync') {
+        setTrainingAiStatus('Sync started. Uploading materials to Eurobot and waiting for the ingestion pipeline...');
+        setTrainingAiKbDetails('Processing materials now. This can take a minute for Word/PDF files; keep this panel open for completion status.');
+        setTrainingAiKbRowFeedback(id, 'Syncing now...');
+        setTrainingAiKbBusy(id, true, 'Processing...');
+        try {
+            const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+            const summary = result.syncSummary || {};
+            await loadTrainingAiKbConfig(canManageAi);
+            await loadTrainingAiKbDocuments(id, { toggle: false }).catch(() => null);
+            const failedText = summary.failed ? ` ${summary.failed} failed — open Documents for details.` : '';
+            const deleteFailedText = summary.delete_failed ? ` ${summary.delete_failed} remote delete failed — open Documents for details.` : '';
+            const message = `Knowledge base sync finished: ${summary.synced || 0} synced, ${summary.pending || 0} pending, ${summary.failed || 0} failed, ${summary.deleted || 0} deleted.${failedText}${deleteFailedText}`;
+            setTrainingAiStatus(message, Boolean(summary.failed || summary.delete_failed));
+            setTrainingAiKbRowFeedback(id, message, Boolean(summary.failed || summary.delete_failed));
+        } catch (error) {
+            setTrainingAiKbRowFeedback(id, error.message || 'Sync failed.', true);
+            throw error;
+        } finally {
+            setTrainingAiKbBusy(id, false);
+        }
+        return;
+    }
+
+    if (action === 'rename') {
+        const card = button.closest('.ai-kb-row');
+        const current = card?.querySelector('.ai-kb-row-main strong')?.textContent || '';
+        const displayName = window.prompt('Knowledge base name', current);
+        if (displayName === null) return;
+        setTrainingAiStatus('Updating knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { displayName });
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base updated.');
+        return;
+    }
+
+    if (action === 'disable') {
+        const card = button.closest('.ai-kb-row');
+        const currentlyDisabled = button.textContent.trim().toLowerCase() === 'enable';
+        const nextStatus = currentlyDisabled ? 'ACTIVE' : 'DISABLED';
+        setTrainingAiStatus(`${currentlyDisabled ? 'Enabling' : 'Disabling'} knowledge base...`);
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'PUT', { status: nextStatus });
+        if (card && !currentlyDisabled) card.querySelector('.ai-kb-active-checkbox').checked = false;
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus(`Knowledge base ${currentlyDisabled ? 'enabled' : 'disabled'}.`);
+        return;
+    }
+
+    if (action === 'delete') {
+        const card = button.closest('.ai-kb-row');
+        const name = card?.querySelector('.ai-kb-row-main strong')?.textContent || 'this knowledge base';
+        const confirmed = window.confirm(`Delete ${name}? This removes only Training-created Eurobot KBs and their vector collection. Existing Eurobot/Eurolegal KBs are protected by Eurobot.`);
+        if (!confirmed) return;
+        setTrainingAiStatus('Deleting Training-created Eurobot knowledge base...');
+        await apiCall(`/api/ai/knowledge-base/connections/${id}`, 'DELETE');
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Knowledge base deleted from Training and Eurobot.');
+        return;
+    }
+}
+
+async function sendTrainingAiMessage(messageOverride = null) {
+    const input = document.getElementById('ai-chat-input');
+    const sendBtn = document.getElementById('btn-ai-chat-send');
+    const message = String(messageOverride ?? input?.value ?? '').trim();
+    if (!message) return;
+
+    appendTrainingAiMessage('user', message);
+    if (input) input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+    setTrainingAiStatus('Thinking...');
+
+    try {
+        const response = await apiCall('/api/ai/chat', 'POST', {
+            message,
+            conversationId: trainingAiConversationId,
+            returnAudio: false
+        });
+        appendTrainingAiMessage('assistant', response.answer || 'No answer returned.');
+        trainingAiLastAudio = response.audioBase64 ? response : null;
+        setTrainingAiStatus('Answer ready.');
+    } catch (error) {
+        appendTrainingAiMessage('assistant', error.message);
+        setTrainingAiStatus(error.message, true);
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+async function startTrainingAiVoiceRecording() {
+    const recordBtn = document.getElementById('btn-ai-chat-record');
+    if (trainingAiRecorder && trainingAiRecorder.state === 'recording') {
+        trainingAiRecorder.stop();
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setTrainingAiStatus('Voice recording is not available in this browser context.', true);
+        return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    trainingAiChunks = [];
+    trainingAiRecorder = new MediaRecorder(stream);
+    trainingAiRecorder.ondataavailable = (event) => {
+        if (event.data?.size) trainingAiChunks.push(event.data);
+    };
+    trainingAiRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (recordBtn) recordBtn.textContent = 'Record voice';
+        const audio = new Blob(trainingAiChunks, { type: trainingAiRecorder.mimeType || 'audio/webm' });
+        await transcribeAndSendTrainingAiAudio(audio);
+    };
+    trainingAiRecorder.start();
+    if (recordBtn) recordBtn.textContent = 'Stop recording';
+    setTrainingAiStatus('Recording... click again to stop.');
+}
+
+async function transcribeAndSendTrainingAiAudio(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'training-ai.webm');
+    setTrainingAiStatus('Transcribing...');
+    const response = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Failed to transcribe audio.');
+    const text = String(payload.text || '').trim();
+    if (!text) throw new Error('Could not transcribe audio.');
+    await sendTrainingAiMessage(text);
+}
+
+function playTrainingAiLastAnswer() {
+    if (!trainingAiLastAudio?.audioBase64) {
+        setTrainingAiStatus('No spoken answer is available yet.', true);
+        return;
+    }
+    const audio = new Audio(`data:audio/${trainingAiLastAudio.audioFormat || 'mp3'};base64,${trainingAiLastAudio.audioBase64}`);
+    audio.play().catch((error) => setTrainingAiStatus(error.message, true));
+}
+
+async function initializeTrainingAiPanel({ canManageAi = false } = {}) {
+    if (!document.getElementById('ai-assistant-panel')) return;
+    await loadTrainingAiKbConfig(canManageAi);
+    document.getElementById('btn-ai-save-active-kbs')?.addEventListener('click', () => {
+        saveTrainingAiKbSelection(canManageAi).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-create-form')?.addEventListener('submit', (event) => {
+        createTrainingAiKb(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('ai-kb-list')?.addEventListener('click', (event) => {
+        handleTrainingAiKbAction(canManageAi, event).catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('btn-ai-chat-send')?.addEventListener('click', () => sendTrainingAiMessage());
+    document.getElementById('ai-chat-input')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendTrainingAiMessage();
+        }
+    });
+    document.getElementById('btn-ai-chat-record')?.addEventListener('click', () => {
+        startTrainingAiVoiceRecording().catch((error) => setTrainingAiStatus(error.message, true));
+    });
+    document.getElementById('btn-ai-chat-speak')?.addEventListener('click', playTrainingAiLastAnswer);
+    document.getElementById('btn-ai-ensure-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Creating default knowledge base...');
+        await apiCall('/api/ai/knowledge-base/default', 'POST', {});
+        await loadTrainingAiKbConfig(canManageAi);
+        setTrainingAiStatus('Default knowledge base ready.');
+    });
+    document.getElementById('btn-ai-refresh-kb')?.addEventListener('click', async () => {
+        setTrainingAiStatus('Sync started. Uploading selected KB materials to Eurobot and waiting for ingestion...');
+        setTrainingAiKbDetails('Processing selected knowledge bases now. Word/PDF ingestion can take a minute; completion counts will appear here.');
+        setTrainingAiKbBusy(null, true, 'Processing...');
+        try {
+            const ids = Array.from(document.querySelectorAll('.ai-kb-active-checkbox:checked'))
+                .map((input) => Number(input.value))
+                .filter(Number.isInteger);
+            const summaries = [];
+            for (const id of ids) {
+                const result = await apiCall(`/api/ai/knowledge-base/connections/${id}/refresh`, 'POST', {});
+                summaries.push(result.syncSummary || {});
+            }
+            await loadTrainingAiKbConfig(canManageAi);
+            const totals = summaries.reduce((acc, summary) => {
+                acc.synced += summary.synced || 0;
+                acc.pending += summary.pending || 0;
+                acc.failed += summary.failed || 0;
+                return acc;
+            }, { synced: 0, pending: 0, failed: 0 });
+            setTrainingAiStatus(`Selected KB sync finished: ${totals.synced} synced, ${totals.pending} pending, ${totals.failed} failed.`, Boolean(totals.failed));
+        } finally {
+            setTrainingAiKbBusy(null, false);
+        }
+    });
 }
 
 async function loadAdminPanel() {
@@ -1059,7 +1561,13 @@ async function openUserRolesModal(id) {
         </label>
     `).join('');
 
+    modal.style.zIndex = '1600';
     modal.classList.remove('hidden');
+
+    setTimeout(() => {
+        const firstInput = modal.querySelector('input, textarea, select');
+        if (firstInput) firstInput.focus();
+    }, 50);
 }
 window.openUserRolesModal = openUserRolesModal;
 
@@ -1459,10 +1967,10 @@ async function loadModulesPanel() {
 
     try {
         const modules = await apiCall('/modules/my');
-        counter.textContent = `Limit: ${modules.length}/5 modules created`;
+        counter.textContent = `${modules.length} modules created`;
         
         const btnCreate = document.getElementById('btn-create-module');
-        if (btnCreate) btnCreate.disabled = modules.length >= 5;
+        if (btnCreate) btnCreate.disabled = false;
 
         if (modules.length === 0) {
             modulesList.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">You have not created any modules yet.</div>';
@@ -1485,7 +1993,7 @@ async function loadModulesPanel() {
                 <div class="module-meta">
                     <span><i class="fas fa-video"></i> ${m._count.videos}</span>
                     <span><i class="fas fa-file-alt"></i> ${m._count.documents}</span>
-                    <span><i class="fas fa-question-circle"></i> ${m._count.questions}</span>
+                    <span><i class="fas fa-question-circle"></i> ${m._count.quizzes || 0}</span>
                 </div>
             `;
             card.onclick = () => selectModuleForPreview(m.id);
@@ -1500,6 +2008,52 @@ async function loadModulesPanel() {
 function switchPreviewTab(pane) {
     document.querySelectorAll('.prev-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.pane === pane));
     document.querySelectorAll('.prev-pane').forEach(p => p.classList.toggle('active', p.id === `prev-pane-${pane}`));
+}
+
+function showModulePreviewNotice(message, isError = false) {
+    const section = document.getElementById('module-preview-section');
+    if (!section || section.classList.contains('hidden')) return;
+
+    let notice = document.getElementById('module-preview-notice');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'module-preview-notice';
+        notice.style.cssText = 'margin: 0.75rem 0; padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.9rem; transition: opacity 0.2s ease;';
+        const title = document.getElementById('preview-title');
+        if (title && title.parentNode) {
+            title.parentNode.insertBefore(notice, title.nextSibling);
+        } else {
+            section.prepend(notice);
+        }
+    }
+
+    notice.textContent = message;
+    notice.style.display = 'block';
+    notice.style.opacity = '1';
+    notice.style.color = isError ? 'var(--error)' : 'var(--success, #5be49b)';
+    notice.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(91, 228, 155, 0.12)';
+    notice.style.border = isError ? '1px solid rgba(255, 80, 80, 0.35)' : '1px solid rgba(91, 228, 155, 0.35)';
+
+    if (!isError) {
+        setTimeout(() => {
+            if (notice.textContent === message) {
+                notice.style.opacity = '0';
+                setTimeout(() => {
+                    if (notice.textContent === message) notice.style.display = 'none';
+                }, 250);
+            }
+        }, 5000);
+    }
+}
+
+async function refreshCurrentModuleContent({ previewPane = 'videos', notice } = {}) {
+    if (!currentModuleId) return;
+    const moduleId = currentModuleId;
+    await loadModuleData(moduleId);
+    await loadModulesPanel();
+    await selectModuleForPreview(moduleId);
+    if (previewPane) switchPreviewTab(previewPane);
+    if (notice) showModulePreviewNotice(notice, false);
 }
 
 function switchModuleDocTab(type) {
@@ -1666,12 +2220,14 @@ async function selectModuleForPreview(moduleId) {
         });
 
         [pdfList, wordList].forEach(list => {
-            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Nenhum arquivo nesta categoria.</div>';
+            if (list.innerHTML === '') list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No files in this category.</div>';
         });
-        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Nenhuma imagem.</div>';
+        if (imgGrid.innerHTML === '') imgGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No images.</div>';
         
-        // Default to PDF sub-tab
-        switchModuleDocTab('pdf');
+        // Keep the selected document category visible after uploads/refreshes.
+        const preferredDocTab = window.__preferredModuleDocTab || 'pdf';
+        switchModuleDocTab(preferredDocTab);
+        window.__preferredModuleDocTab = null;
             
         // Quiz Preview
         renderQuizList();
@@ -1716,7 +2272,15 @@ async function selectModuleForPreview(moduleId) {
         const btnAddQuiz = document.getElementById('btn-add-quiz-direct');
         if (btnAddQuiz) btnAddQuiz.onclick = () => {
             currentModuleId = moduleId;
+            switchPreviewTab('quiz');
             showCreateQuizForm();
+        };
+
+        const btnAiQuiz = document.getElementById('btn-generate-ai-quiz-direct');
+        if (btnAiQuiz) btnAiQuiz.onclick = () => {
+            currentModuleId = moduleId;
+            switchPreviewTab('quiz');
+            showGenerateAiQuizForm(moduleId);
         };
         
         // Start on Videos tab by default
@@ -1760,6 +2324,7 @@ async function loadModuleData(id) {
             btnPublish.onclick = async () => {
                 await updateModuleStatus(id, isPublished ? 'DRAFT' : 'PUBLISHED');
                 await loadModuleData(id); // Refresh editor
+                await notifyModuleEditorContext('statusChanged', { moduleId: id, status: isPublished ? 'DRAFT' : 'PUBLISHED' });
                 alert(isPublished ? 'Module hidden!' : 'Module published!');
             };
         }
@@ -1781,16 +2346,29 @@ if (mbForm) {
 
     try {
         if (currentModuleId) {
-            await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
+            const updated = await apiCall(`/modules/${currentModuleId}`, 'PUT', data);
             await loadModulesPanel();
-            closeModuleEditor();
+            await notifyModuleEditorContext('updated', { moduleId: currentModuleId, module: updated });
+            if (!moduleEditorContext?.keepOpenAfterSave) {
+                closeModuleEditor();
+            }
             alert('Module updated!');
         } else {
             const res = await apiCall('/modules', 'POST', data);
             currentModuleId = res.id;
             await loadModulesPanel();
-            closeModuleEditor(); // Fixed: Close after create
-            alert('Module created!');
+            await notifyModuleEditorContext('created', { moduleId: res.id, module: res });
+            if (moduleEditorContext?.keepOpenAfterCreate) {
+                const title = document.getElementById('editor-title');
+                if (title) title.textContent = 'Configure Module Content';
+                document.getElementById('editor-tabs')?.classList.remove('hidden');
+                await loadModuleData(res.id);
+                switchEditorTab('basics');
+                alert('Module created and attached to this course. Add content or publish it here.');
+            } else {
+                closeModuleEditor(); // Fixed: Close after create
+                alert('Module created!');
+            }
         }
     } catch (error) {
         alert('Error: ' + error.message);
@@ -1834,6 +2412,27 @@ document.querySelectorAll('#editor-tabs .inner-tab-btn').forEach(btn => {
 
 // --- Content Handlers (Videos, Docs, Quiz) ---
 
+async function uploadAssetFile(file, progressLabel = 'Uploading...') {
+    const formData = new FormData();
+    formData.append('document', file);
+
+    const res = await fetch(`${API_URL}/api/documents/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+    });
+
+    let data = null;
+    try {
+        data = await res.json();
+    } catch (err) {
+        throw new Error(`${progressLabel} failed: server returned an invalid response.`);
+    }
+
+    if (!res.ok) throw new Error(data.error || `${progressLabel} failed`);
+    return data;
+}
+
 function renderVideoList() {
     const list = document.getElementById('v-list');
     list.innerHTML = '';
@@ -1868,50 +2467,65 @@ async function showAddVideoForm() {
             <label>Video File Upload</label>
             <input type="file" id="v-file-in" accept="video/*" class="glassmorphism" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--surface-border); border-radius: 8px;">
         </div>
+        <div id="video-upload-status" style="display:none; margin-top: 0.85rem; padding: 0.75rem; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 0.9rem; line-height: 1.4;"></div>
     `, async () => {
-        const title = document.getElementById('v-title-in').value;
-        const urlInput = document.getElementById('v-url-in').value;
+        const title = document.getElementById('v-title-in').value.trim();
+        const urlInput = document.getElementById('v-url-in').value.trim();
         const fileInput = document.getElementById('v-file-in').files[0];
         const okBtn = document.getElementById('sub-modal-ok');
+        const statusEl = document.getElementById('video-upload-status');
+        const setStatus = (message, isError = false) => {
+            if (!statusEl) return;
+            statusEl.style.display = 'block';
+            statusEl.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+            statusEl.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+            statusEl.innerHTML = message;
+        };
+        const setBusy = (message) => {
+            okBtn.disabled = true;
+            okBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+            setStatus(`<i class="fas fa-spinner fa-spin"></i> ${message}. Keep this window open; large videos can take a moment.`);
+        };
         
         let finalUrl = urlInput;
 
-        if (fileInput) {
-            okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-            okBtn.disabled = true;
-            try {
-                const formData = new FormData();
-                formData.append('document', fileInput);
-                console.log('Finalizing video upload...');
-                const res = await fetch(`${API_URL}/api/documents/upload`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${getToken()}` },
-                    body: formData
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Upload failed');
-                finalUrl = `/api/documents/download/${data.id}`;
-            } catch (err) {
-                console.error('Upload Error:', err);
-                alert('Error uploading video: ' + err.message);
-                okBtn.textContent = 'Confirmar';
-                okBtn.disabled = false;
-                return;
-            }
+        if (!title) {
+            setStatus('Please enter a video title.', true);
+            return;
         }
 
-        if (!finalUrl || !title) {
-            alert('Please enter a title and a URL or select a file.');
+        if (!finalUrl && !fileInput) {
+            setStatus('Please enter a video URL or select a video file.', true);
             return;
         }
 
         try {
+            if (fileInput) {
+                const sizeMb = fileInput.size ? (fileInput.size / 1024 / 1024).toFixed(1) : null;
+                setBusy(sizeMb ? `Uploading ${sizeMb} MB video...` : 'Uploading video...');
+                console.log('Uploading video asset...', { name: fileInput.name, size: fileInput.size });
+                const data = await uploadAssetFile(fileInput, 'Video upload');
+                finalUrl = data.downloadUrl || `/api/documents/download/${data.id}`;
+                setBusy('Upload complete. Saving video to module...');
+            } else {
+                setBusy('Saving video to module...');
+            }
+
             const order = (currentModuleData && currentModuleData.videos) ? currentModuleData.videos.length : 0;
             await apiCall(`/modules/${currentModuleId}/videos`, 'POST', { title, url: finalUrl, order });
-            await loadModuleData(currentModuleId);
-            closeSubModal();
+
+            setBusy('Video saved. Refreshing module preview...');
+            await refreshCurrentModuleContent({ previewPane: 'videos', notice: `Video "${title}" was added to this module.` });
+
+            setStatus('<i class="fas fa-check-circle"></i> Video added. The module preview and counter are up to date.');
+            okBtn.innerHTML = '<i class="fas fa-check"></i> Added';
+            setTimeout(() => closeSubModal(), 650);
         } catch (err) {
-            alert('Error saving video: ' + err.message);
+            console.error('Video save/upload error:', err);
+            setStatus(`Error adding video: ${err.message}`, true);
+            showModulePreviewNotice(`Error adding video: ${err.message}`, true);
+            okBtn.textContent = 'Try Again';
+            okBtn.disabled = false;
         }
     });
 }
@@ -1960,9 +2574,19 @@ async function deleteModuleDoc(docId) {
     await loadModuleData(currentModuleId);
 }
 
+function getModuleDocumentPreviewTab(fileName = '', mimeType = '') {
+    const ext = fileName ? fileName.split('.').pop().toLowerCase() : '';
+    const type = String(mimeType || '').toLowerCase();
+    if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if (type.includes('word') || type.includes('officedocument.wordprocessingml') || ['doc', 'docx'].includes(ext)) return 'word';
+    if (type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'img';
+    return 'pdf';
+}
+
 async function showAddDocForm() {
     let allDocs = [];
     let selectedDocId = null;
+    let selectedDocMeta = null;
     let currentFilter = 'all';
 
     const fetchDocs = async () => {
@@ -2006,10 +2630,18 @@ async function showAddDocForm() {
             `;
             item.onclick = () => {
                 selectedDocId = doc.id;
+                selectedDocMeta = doc;
                 document.querySelectorAll('.doc-item-mini').forEach(el => el.classList.remove('selected'));
                 item.classList.add('selected');
                 const titleIn = document.getElementById('d-title-in');
                 if (!titleIn.value) titleIn.value = doc.name;
+                const statusBox = document.getElementById('doc-upload-status');
+                if (statusBox) {
+                    statusBox.style.display = 'block';
+                    statusBox.style.color = 'var(--text-muted)';
+                    statusBox.style.background = 'rgba(255,255,255,0.06)';
+                    statusBox.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Selected from library. Click Confirm to add it to the module assets and queue AI knowledge-base sync.`;
+                }
             };
             grid.appendChild(item);
         });
@@ -2019,7 +2651,7 @@ async function showAddDocForm() {
         <div class="doc-selector-container">
             <div class="input-group">
                 <label>Display Title</label>
-                <input type="text" id="d-title-in" placeholder="Ex: Guia de Estudo PDF">
+                <input type="text" id="d-title-in" placeholder="Example: Study Guide PDF">
             </div>
 
             <div class="modal-tabs" style="margin-bottom: 1rem;">
@@ -2028,12 +2660,14 @@ async function showAddDocForm() {
             </div>
 
             <div id="mode-doc-upload" class="selector-mode-pane">
-                <div class="upload-dropzone" onclick="document.getElementById('d-file-hidden').click()">
+                <label class="upload-dropzone" for="d-file-hidden" style="display:block; position:relative; overflow:hidden;">
                     <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 10px;"></i>
                     <p id="upload-status-text">Click to select a file</p>
-                    <input type="file" id="d-file-hidden" class="hidden">
-                </div>
+                    <input type="file" id="d-file-hidden" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+                </label>
             </div>
+
+            <div id="doc-upload-status" style="display:none; margin-top: 0.85rem; padding: 0.75rem 0.85rem; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 0.9rem; line-height: 1.45;"></div>
 
             <div id="mode-doc-library" class="selector-mode-pane hidden">
                 <div class="doc-tabs">
@@ -2049,31 +2683,60 @@ async function showAddDocForm() {
             </div>
         </div>
     `, async () => {
-        const title = document.getElementById('d-title-in').value;
+        const title = document.getElementById('d-title-in').value.trim();
         const okBtn = document.getElementById('sub-modal-ok');
+        const statusBox = document.getElementById('doc-upload-status');
+        const setStatus = (message, isError = false) => {
+            if (!statusBox) return;
+            statusBox.style.display = 'block';
+            statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+            statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+            statusBox.innerHTML = message;
+        };
+        const setBusy = (message) => {
+            okBtn.disabled = true;
+            okBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+            setStatus(`<i class="fas fa-spinner fa-spin"></i> ${message}`);
+        };
         console.log('Confirming document add:', { title, selectedDocId });
         
         if (!title || !selectedDocId) {
-            alert('Por favor, preencha o título e selecione ou suba um arquivo.');
+            setStatus('Please enter a title and select or upload a file first.', true);
             return;
         }
-        
-        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        okBtn.disabled = true;
 
         const order = (currentModuleData && currentModuleData.documents) ? currentModuleData.documents.length : 0;
         try {
-            await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
+            setBusy('Adding to module assets...');
+            const added = await apiCall(`/modules/${currentModuleId}/documents`, 'POST', { 
                 title, 
                 documentId: selectedDocId, 
                 order
             });
-            await loadModuleData(currentModuleId);
-            closeSubModal();
+
+            setBusy('Refreshing module preview...');
+            const previewTab = getModuleDocumentPreviewTab(title || selectedDocMeta?.name, selectedDocMeta?.type);
+            window.__preferredModuleDocTab = previewTab;
+            await refreshCurrentModuleContent({
+                previewPane: 'docs',
+                notice: `Document "${title}" was added to this module and queued for AI knowledge-base sync.`
+            });
+            switchModuleDocTab(previewTab);
+
+            if (added?.aiKnowledgeSyncQueued) {
+                setStatus('<i class="fas fa-sync-alt fa-spin"></i> Added to module assets. AI knowledge-base sync is queued and will continue in the background. The KB panel will update when ingestion finishes.');
+                watchQueuedKnowledgeBaseSync({ label: `Document "${title}"` });
+            } else {
+                setStatus('<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Added to module assets.');
+            }
+
+            okBtn.innerHTML = '<i class="fas fa-check"></i> Added';
+            setTimeout(() => closeSubModal(), 900);
         } catch (err) {
             console.error('Save Doc Error:', err);
-            alert('Erro ao vincular documento: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            setStatus('Error linking document: ' + err.message, true);
+            showModulePreviewNotice('Error linking document: ' + err.message, true);
+            okBtn.textContent = 'Try Again';
             okBtn.disabled = false;
         }
     });
@@ -2082,7 +2745,16 @@ async function showAddDocForm() {
     setTimeout(() => {
         const fileHidden = document.getElementById('d-file-hidden');
         const statusText = document.getElementById('upload-status-text');
+        const statusBox = document.getElementById('doc-upload-status');
         const okBtn = document.getElementById('sub-modal-ok');
+        const setUploadStatus = (message, isError = false) => {
+            if (statusBox) {
+                statusBox.style.display = 'block';
+                statusBox.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
+                statusBox.style.background = isError ? 'rgba(255, 80, 80, 0.12)' : 'rgba(255,255,255,0.06)';
+                statusBox.innerHTML = message;
+            }
+        };
 
         document.querySelectorAll('.doc-tab').forEach(tab => {
             tab.onclick = () => {
@@ -2097,30 +2769,33 @@ async function showAddDocForm() {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subindo ${file.name}...`;
-                if (okBtn) okBtn.disabled = true;
+                statusText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Uploading ${file.name}...`;
+                setUploadStatus(`<i class="fas fa-spinner fa-spin"></i> Uploading file to your asset library. After this finishes, click Confirm to add it to the module assets and queue AI knowledge-base sync.`);
+                if (okBtn) {
+                    okBtn.disabled = true;
+                    okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                }
 
                 try {
-                    const formData = new FormData();
-                    formData.append('document', file);
-                    const res = await fetch(`${API_URL}/api/documents/upload`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${getToken()}` },
-                        body: formData
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'Upload failed');
-                    
+                    const data = await uploadAssetFile(file, 'File upload');
                     selectedDocId = data.id;
-                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} (Pronto)`;
-                    if (okBtn) okBtn.disabled = false;
+                    selectedDocMeta = { id: data.id, name: data.name || file.name, type: data.type || file.type };
+                    statusText.innerHTML = `<i class="fas fa-check-circle" style="color: var(--secondary);"></i> ${file.name} uploaded`;
+                    setUploadStatus(`<i class="fas fa-check-circle" style="color: var(--secondary);"></i> Upload complete. Click Confirm to link it and queue AI sync.`);
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Confirm';
+                    }
                     
                     const titleIn = document.getElementById('d-title-in');
                     if (titleIn && !titleIn.value) titleIn.value = file.name;
                 } catch (err) {
-                    alert('Erro no upload: ' + err.message);
+                    setUploadStatus('Upload error: ' + err.message, true);
                     statusText.textContent = 'Click to select a file';
-                    if (okBtn) okBtn.disabled = false;
+                    if (okBtn) {
+                        okBtn.disabled = false;
+                        okBtn.textContent = 'Try Again';
+                    }
                 }
             };
         }
@@ -2144,109 +2819,135 @@ window.toggleDocSelectorMode = (mode) => {
     });
 };
 
+// Quiz Management Logic
+async function refreshQuizContext(moduleId = currentModuleId) {
+    if (moduleId) await loadModuleData(moduleId);
+    switchEditorTab('quiz');
+    switchPreviewTab('quiz');
+}
+
+function getQuizById(quizId) {
+    return (currentModuleData?.quizzes || []).find(quiz => Number(quiz.id) === Number(quizId));
+}
+
+function getQuestionById(quiz, questionId) {
+    return (quiz?.questions || []).find(question => Number(question.id) === Number(questionId));
+}
+
+function collectQuestionOptions() {
+    const selected = document.querySelector('input[name="correct-opt"]:checked');
+    const correctIndex = selected ? parseInt(selected.value, 10) : -1;
+    return Array.from(document.querySelectorAll('.opt-text-in-field'))
+        .map((el, index) => ({ text: el.value.trim(), isCorrect: index === correctIndex }))
+        .filter(option => option.text !== '');
+}
+
+function validateQuestionPayload(text, options) {
+    if (!text.trim()) return 'Preencha o texto da pergunta.';
+    if (options.length < 2) return 'Informe pelo menos 2 opções.';
+    if (options.filter(option => option.isCorrect).length !== 1) return 'Selecione exatamente uma opção correta preenchida.';
+    return '';
+}
+
+function renderQuizQuestions(quiz, { editable = true } = {}) {
+    const questions = quiz.questions || [];
+    if (!questions.length) return '<small style="color:var(--text-muted)">Sem perguntas cadastradas.</small>';
+
+    return questions.map((q, idx) => {
+        const options = q.options || [];
+        return `
+            <div class="question-mini-item" style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 0.8rem; margin-bottom: 0.65rem; display:block;">
+                <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                    <span><strong>${idx + 1}.</strong> ${escapeHtml(q.text)}</span>
+                    ${editable ? `<div style="display:flex; gap:0.35rem; flex-shrink:0;">
+                        <button onclick="showEditQuizQuestionForm(${quiz.id}, ${q.id})" class="btn btn-secondary btn-sm">Edit</button>
+                        <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
+                    </div>` : ''}
+                </div>
+                <div style="margin-top:0.55rem; padding-left:1.25rem; font-size:0.86rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">
+                    ${options.length ? options.map(opt => `
+                        <div style="${opt.isCorrect ? 'color: var(--secondary); font-weight: 700;' : ''}">
+                            ${opt.isCorrect ? '<i class="fas fa-check-circle"></i> Correct: ' : '<i class="far fa-circle"></i> '}${escapeHtml(opt.text)}
+                        </div>
+                    `).join('') : '<span>No options configured.</span>'}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderQuizCard(quiz, context) {
+    const questions = quiz.questions || [];
+    const isPreview = context === 'preview';
+    const cardId = `${isPreview ? 'quiz-prev' : 'quiz-edit'}-${quiz.id}`;
+    const paneId = `${isPreview ? 'quiz-structure' : 'quiz-editor-structure'}-${quiz.id}`;
+    return `
+        <div class="${isPreview ? 'quiz-preview-item' : 'quiz-group-card'} glassmorphism" id="${cardId}" style="margin-bottom:1rem;">
+            <div class="quiz-group-header" style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+                <div>
+                    <h4 style="margin:0 0 0.35rem 0;"><i class="fas fa-tasks"></i> ${escapeHtml(quiz.title || 'Untitled quiz')}</h4>
+                    <span class="badge-sm">${questions.length} ${questions.length === 1 ? 'question' : 'questions'}</span>
+                </div>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleQuizPreviewStructure(${quiz.id}, '${context}')">Review / edit</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showEditQuizTitleForm(${quiz.id})">Edit title</button>
+                    <button class="btn btn-primary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Question</button>
+        <button class="btn btn-secondary btn-sm" onclick="showGenerateAiQuizForm(currentModuleId)">Generate with AI</button>
+                    <button onclick="deleteQuiz(${quiz.id})" class="btn btn-icon-del" title="Delete quiz"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            <div id="${paneId}" class="quiz-structure-pane hidden" style="margin-top:1rem; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.1);">
+                ${renderQuizQuestions(quiz, { editable: true })}
+            </div>
+        </div>
+    `;
+}
+
+function renderQuizList() {
+    const editorList = document.getElementById('q-list');
+    const previewList = document.getElementById('preview-quiz-summary');
+    const quizzes = currentModuleData?.quizzes || [];
+    const empty = '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado para este módulo.</div>';
+
+    if (editorList) {
+        editorList.innerHTML = quizzes.length ? quizzes.map(quiz => renderQuizCard(quiz, 'editor')).join('') : empty;
+    }
+
+    if (previewList) {
+        previewList.innerHTML = quizzes.length ? quizzes.map(quiz => renderQuizCard(quiz, 'preview')).join('') : empty;
+    }
+}
+
+window.toggleQuizPreviewStructure = (quizId, context = 'preview') => {
+    const paneId = `${context === 'editor' ? 'quiz-editor-structure' : 'quiz-structure'}-${quizId}`;
+    const cardId = `${context === 'editor' ? 'quiz-edit' : 'quiz-prev'}-${quizId}`;
+    const pane = document.getElementById(paneId);
+    if (!pane) return;
+    pane.classList.toggle('hidden');
+
+    const btn = document.querySelector(`#${cardId} button[onclick*="toggleQuizPreviewStructure"]`);
+    if (btn) btn.textContent = pane.classList.contains('hidden') ? 'Review / edit' : 'Hide details';
+};
+
 window.deleteQuiz = async (quizId) => {
     if (!confirm('Tem certeza que deseja excluir este quiz?')) return;
     try {
         await apiCall(`/modules/${currentModuleId}/quizzes/${quizId}`, 'DELETE');
-        await loadModuleData(currentModuleId);
+        await refreshQuizContext();
     } catch (err) {
         alert('Erro ao excluir quiz: ' + err.message);
     }
 };
 
-window.deleteQuestion = async (questionId) => {
-    if (!confirm('Tem certeza que deseja excluir esta pergunta?')) return;
+async function deleteQuestion(id) {
+    if (!confirm('Delete pergunta?')) return;
     try {
-        await apiCall(`/modules/${currentModuleId}/quiz/questions/${questionId}`, 'DELETE');
-        await loadModuleData(currentModuleId);
+        await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
+        await refreshQuizContext();
     } catch (err) {
         alert('Erro ao excluir pergunta: ' + err.message);
     }
-};
-
-
-// Quiz Management Logic
-function renderQuizList() {
-    const editorList = document.getElementById('q-list');
-    const previewList = document.getElementById('preview-quiz-summary');
-    
-    const quizzes = currentModuleData.quizzes || [];
-
-    if (editorList) {
-        editorList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado.</div>';
-        quizzes.forEach(quiz => {
-            const div = document.createElement('div');
-            div.className = 'quiz-group-card glassmorphism';
-            div.innerHTML = `
-                <div class="quiz-group-header">
-                    <h4><i class="fas fa-tasks"></i> ${quiz.title}</h4>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="addQuizQuestionToQuiz(${quiz.id})" class="btn btn-primary btn-sm">+ Pergunta</button>
-                        <button onclick="deleteQuiz(${quiz.id})" class="btn btn-icon-del"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>
-                <div class="questions-mini-list">
-                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
-                        <div class="question-mini-item">
-                            <span>${idx + 1}. ${q.text}</span>
-                            <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
-                        </div>
-                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas.</small>'}
-                </div>
-            `;
-            editorList.appendChild(div);
-        });
-    }
-
-    if (previewList) {
-        previewList.innerHTML = quizzes.length ? '' : '<div style="color: var(--text-muted); padding: 1rem;">Nenhum quiz criado para este módulo.</div>';
-        quizzes.forEach(quiz => {
-            const card = document.createElement('div');
-            card.className = 'quiz-preview-item glassmorphism';
-            card.style.marginBottom = '1rem';
-            card.id = `quiz-prev-${quiz.id}`;
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <strong>${quiz.title}</strong>
-                    <span class="badge-sm">${quiz.questions.length} questões</span>
-                </div>
-                <div class="preview-actions" style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary btn-sm" onclick="toggleQuizPreviewStructure(${quiz.id})">Ver Estrutura</button>
-                    <button class="btn btn-secondary btn-sm" onclick="addQuizQuestionToQuiz(${quiz.id})">+ Add Pergunta</button>
-                </div>
-                <div id="quiz-structure-${quiz.id}" class="quiz-structure-pane hidden" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                    ${quiz.questions.length ? quiz.questions.map((q, idx) => `
-                        <div class="question-mini-item" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 0.8rem; margin-bottom: 0.5rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <span><strong>${idx + 1}.</strong> ${q.text}</span>
-                                <button onclick="deleteQuestion(${q.id})" class="btn-icon-del"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <div style="margin-top: 0.5rem; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
-                                ${q.options.map(opt => `
-                                    <div style="${opt.isCorrect ? 'color: var(--secondary); font-weight: bold;' : ''}">
-                                        ${opt.isCorrect ? '<i class="fas fa-check"></i> ' : '<i class="far fa-circle"></i> '} ${opt.text}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `).join('') : '<small style="color:var(--text-muted)">Sem perguntas cadastradas.</small>'}
-                </div>
-            `;
-            previewList.appendChild(card);
-        });
-    }
 }
-
-window.toggleQuizPreviewStructure = (quizId) => {
-    const pane = document.getElementById(`quiz-structure-${quizId}`);
-    if (pane) pane.classList.toggle('hidden');
-    
-    // Toggle button text if needed
-    const btn = document.querySelector(`#quiz-prev-${quizId} button[onclick*="toggleQuizPreviewStructure"]`);
-    if (btn) {
-        btn.textContent = pane.classList.contains('hidden') ? 'Ver Estrutura' : 'Ocultar Estrutura';
-    }
-};
 
 async function showCreateQuizForm() {
     showSubModal('Novo Quiz', `
@@ -2255,7 +2956,7 @@ async function showCreateQuizForm() {
             <input type="text" id="qz-title-in" placeholder="Ex: Avaliação Final">
         </div>
     `, async () => {
-        const title = document.getElementById('qz-title-in').value;
+        const title = document.getElementById('qz-title-in').value.trim();
         if (!title) return alert('Título obrigatório');
 
         const okBtn = document.getElementById('sub-modal-ok');
@@ -2263,74 +2964,162 @@ async function showCreateQuizForm() {
         okBtn.disabled = true;
 
         try {
-            const order = (currentModuleData && currentModuleData.quizzes) ? currentModuleData.quizzes.length : 0;
-            await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { 
-                title, 
-                order
-            });
-            await loadModuleData(currentModuleId);
+            const order = (currentModuleData?.quizzes || []).length;
+            await apiCall(`/modules/${currentModuleId}/quizzes`, 'POST', { title, order });
+            await refreshQuizContext();
             closeSubModal();
         } catch (err) {
             console.error('Quiz Create Error:', err);
             alert('Erro ao criar quiz: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
     });
 }
 
-async function addQuizQuestionToQuiz(quizId) {
-    showSubModal('Nova Pergunta', `
+async function showEditQuizTitleForm(quizId) {
+    const quiz = getQuizById(quizId);
+    if (!quiz) return alert('Quiz not found.');
+
+    showSubModal('Edit Quiz Title', `
         <div class="input-group">
-            <label>Texto da Pergunta</label>
-            <textarea id="q-text-in" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 0.8rem; color: white; background: rgba(0,0,0,0.2);"></textarea>
+            <label>Quiz Title</label>
+            <input type="text" id="qz-title-edit-in" value="${escapeHtml(quiz.title || '')}" placeholder="Quiz title">
+        </div>
+    `, async () => {
+        const title = document.getElementById('qz-title-edit-in').value.trim();
+        if (!title) return alert('Título obrigatório');
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        okBtn.disabled = true;
+        try {
+            await apiCall(`/modules/${currentModuleId}/quizzes/${quizId}`, 'PUT', { title, order: quiz.order ?? 0 });
+            await refreshQuizContext();
+            closeSubModal();
+        } catch (err) {
+            alert('Erro ao atualizar quiz: ' + err.message);
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
+}
+
+async function showGenerateAiQuizForm(moduleId = currentModuleId) {
+    if (!moduleId) return alert('Select a module first.');
+
+    showSubModal('Generate Quiz with AI', `
+        <div class="input-group">
+            <label>Quiz Title</label>
+            <input type="text" id="ai-qz-title-in" placeholder="AI-generated quiz">
+        </div>
+        <div class="input-group">
+            <label>Number of questions</label>
+            <input type="number" id="ai-qz-question-count" min="1" max="30" value="5">
+        </div>
+        <div class="input-group">
+            <label>Options per question</label>
+            <input type="number" id="ai-qz-options-count" min="2" max="8" value="4">
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
+            AI will use the module title, description, videos, and attached files. Very large files are skipped by the backend to avoid timeouts.
+        </p>
+    `, async () => {
+        const title = document.getElementById('ai-qz-title-in').value.trim();
+        const questionCount = parseInt(document.getElementById('ai-qz-question-count').value, 10) || 5;
+        const optionsPerQuestion = parseInt(document.getElementById('ai-qz-options-count').value, 10) || 4;
+        const okBtn = document.getElementById('sub-modal-ok');
+
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating with AI...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/modules/${moduleId}/quizzes/ai-generate`, 'POST', { title, questionCount, optionsPerQuestion });
+            if (currentModuleId === moduleId) await refreshQuizContext(moduleId);
+            closeSubModal();
+            alert('Quiz generated successfully. Review the questions before publishing or using this module.');
+        } catch (err) {
+            console.error('AI Quiz Generate Error:', err);
+            alert('Error generating quiz with AI: ' + err.message);
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
+}
+
+function buildQuestionForm(question = null) {
+    const existingOptions = question?.options?.length ? question.options : [{ text: '', isCorrect: true }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }];
+    const padded = [...existingOptions];
+    while (padded.length < 4) padded.push({ text: '', isCorrect: false });
+    const correctIndex = Math.max(0, padded.findIndex(option => option.isCorrect));
+
+    return `
+        <div class="input-group">
+            <label>Question text</label>
+            <textarea id="q-text-in" class="glassmorphism" style="width: 100%; border-radius: 8px; padding: 0.8rem; color: white; background: rgba(0,0,0,0.2);">${escapeHtml(question?.text || '')}</textarea>
         </div>
         <div id="options-in-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
-            <label>Opções (Marque a correta):</label>
-            ${[0,1,2,3].map(i => `
+            <label>Options (mark exactly one correct):</label>
+            ${padded.map((option, i) => `
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <input type="radio" name="correct-opt" value="${i}" ${i === 0 ? 'checked' : ''}>
-                    <input type="text" class="opt-text-in-field" style="flex: 1; padding: 0.5rem;" placeholder="Opção ${i + 1}">
+                    <input type="radio" name="correct-opt" value="${i}" ${i === correctIndex ? 'checked' : ''}>
+                    <input type="text" class="opt-text-in-field" style="flex: 1; padding: 0.5rem;" value="${escapeHtml(option.text || '')}" placeholder="Opção ${i + 1}">
                 </div>
             `).join('')}
         </div>
-    `, async () => {
-        const text = document.getElementById('q-text-in').value;
-        const optElements = document.querySelectorAll('.opt-text-in-field');
-        const correctIndex = parseInt(document.querySelector('input[name="correct-opt"]:checked').value);
-        
-        const options = Array.from(optElements).map((el, index) => ({
-            text: el.value,
-            isCorrect: index === correctIndex
-        })).filter(o => o.text.trim() !== '');
+    `;
+}
 
-        if (!text || options.length < 2) return alert('Preencha a pergunta e pelo menos 2 opções.');
+async function addQuizQuestionToQuiz(quizId) {
+        showSubModal('New Question', buildQuestionForm(), async () => {
+        const text = document.getElementById('q-text-in').value.trim();
+        const options = collectQuestionOptions();
+        const validation = validateQuestionPayload(text, options);
+        if (validation) return alert(validation);
 
         const okBtn = document.getElementById('sub-modal-ok');
         okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         okBtn.disabled = true;
 
         try {
-            await apiCall(`/quizzes/${quizId}/questions`, 'POST', { 
-                text, 
-                options,
-                order: 0 // Will handle order later if needed
-            });
-            await loadModuleData(currentModuleId);
+            const quiz = getQuizById(quizId);
+            await apiCall(`/quizzes/${quizId}/questions`, 'POST', { text, options, order: (quiz?.questions || []).length });
+            await refreshQuizContext();
             closeSubModal();
         } catch (err) {
             console.error('Question Add Error:', err);
             alert('Erro ao salvar pergunta: ' + err.message);
-            okBtn.textContent = 'Confirmar';
+            okBtn.textContent = 'Confirm';
             okBtn.disabled = false;
         }
     });
 }
 
-async function deleteQuestion(id) {
-    if (!confirm('Delete pergunta?')) return;
-    await apiCall(`/modules/${currentModuleId}/quiz/questions/${id}`, 'DELETE');
-    await loadModuleData(currentModuleId);
+async function showEditQuizQuestionForm(quizId, questionId) {
+    const quiz = getQuizById(quizId);
+    const question = getQuestionById(quiz, questionId);
+    if (!question) return alert('Question not found.');
+
+    showSubModal('Edit Question', buildQuestionForm(question), async () => {
+        const text = document.getElementById('q-text-in').value.trim();
+        const options = collectQuestionOptions();
+        const validation = validateQuestionPayload(text, options);
+        if (validation) return alert(validation);
+
+        const okBtn = document.getElementById('sub-modal-ok');
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        okBtn.disabled = true;
+
+        try {
+            await apiCall(`/quizzes/${quizId}/questions/${questionId}`, 'PUT', { text, options, order: question.order ?? 0 });
+            await refreshQuizContext();
+            closeSubModal();
+        } catch (err) {
+            console.error('Question Edit Error:', err);
+            alert('Erro ao atualizar pergunta: ' + err.message);
+            okBtn.textContent = 'Confirm';
+            okBtn.disabled = false;
+        }
+    });
 }
 
 // Analytics and Reports
@@ -2401,7 +3190,7 @@ function showSubModal(title, bodyHtml, onOk) {
     document.getElementById('sub-modal-body').innerHTML = bodyHtml;
     
     // Reset button state
-    okBtn.textContent = 'Confirmar';
+    okBtn.textContent = 'Confirm';
     okBtn.disabled = false;
     
     // Clear previous listeners by replacing the element
@@ -2438,9 +3227,12 @@ window.deleteVideo = deleteVideo;
 window.deleteModuleDoc = deleteModuleDoc;
 window.showAddDocForm = showAddDocForm;
 window.addQuizQuestionToQuiz = addQuizQuestionToQuiz;
+window.showEditQuizTitleForm = showEditQuizTitleForm;
+window.showEditQuizQuestionForm = showEditQuizQuestionForm;
 window.deleteQuestion = deleteQuestion;
 window.viewUserDetail = viewUserDetail;
 window.showCreateQuizForm = showCreateQuizForm;
+window.showGenerateAiQuizForm = showGenerateAiQuizForm;
 window.switchPreviewTab = switchPreviewTab;
 window.closeSubModal = closeSubModal;
 window.selectModuleForPreview = selectModuleForPreview;
