@@ -1,11 +1,13 @@
 const prisma = require('../config/db');
+const { refreshAiTipsForUser } = require('../services/aiTipsService');
 
 const logAccess = async (req, res) => {
     try {
-        const { source, sceneId, placementId } = req.body; // 'dashboard' or 'multiplayer_world'
+        const { source, sceneId, placementId, courseId } = req.body; // 'dashboard' or 'multiplayer_world'
         const userId = req.user.id;
+        const normalizedSource = String(source || '').toLowerCase();
 
-        if (!['dashboard', 'multiplayer_world'].includes(source)) {
+        if (!['dashboard', 'multiplayer_world'].includes(normalizedSource)) {
             return res.status(400).json({ error: 'Invalid source. Use "dashboard" or "multiplayer_world".' });
         }
 
@@ -13,11 +15,20 @@ const logAccess = async (req, res) => {
             data: {
                 moduleId: parseInt(req.params.id),
                 userId,
-                source,
+                source: normalizedSource.toUpperCase(),
                 sceneId: sceneId || null,
                 placementId: placementId ? parseInt(placementId) : null
             }
         });
+
+        refreshAiTipsForUser({
+            prisma,
+            userId,
+            courseId: courseId ? parseInt(courseId) : null,
+            moduleId: parseInt(req.params.id),
+            reason: 'module access'
+        });
+
         res.status(201).json(log);
     } catch (error) {
         res.status(500).json({ error: 'Failed to log access' });
@@ -27,10 +38,10 @@ const logAccess = async (req, res) => {
 const logVideoProgress = async (req, res) => {
     try {
         const { videoId } = req.params;
-        const { progress, source } = req.body; // progress 0-100
+        const { progress, source, courseId } = req.body; // progress 0-100
         const userId = req.user.id;
 
-        const video = await prisma.moduleVideo.findUnique({ where: { id: parseInt(videoId) } });
+        const video = await prisma.moduleVideo.findUnique({ where: { id: parseInt(videoId) }, select: { id: true, moduleId: true } });
         if (!video) return res.status(404).json({ error: 'Video not found' });
 
         // Calculate if completed (80% rule)
@@ -67,6 +78,14 @@ const logVideoProgress = async (req, res) => {
             }
         });
 
+        refreshAiTipsForUser({
+            prisma,
+            userId,
+            courseId: courseId ? parseInt(courseId) : null,
+            moduleId: video.moduleId,
+            reason: 'video progress'
+        });
+
         res.json(upsertProgress);
     } catch (error) {
         console.error(error);
@@ -80,10 +99,10 @@ const logVideoProgress = async (req, res) => {
 const logDocumentDownload = async (req, res) => {
     try {
         const { documentId } = req.params; // Bridge model ID
-        const { source } = req.body;
+        const { source, courseId } = req.body;
         const userId = req.user.id;
 
-        const modDoc = await prisma.moduleDocument.findUnique({ where: { id: parseInt(documentId) } });
+        const modDoc = await prisma.moduleDocument.findUnique({ where: { id: parseInt(documentId) }, select: { id: true, moduleId: true } });
         if (!modDoc) return res.status(404).json({ error: 'Document not found' });
 
         const log = await prisma.moduleDocumentDownload.create({
@@ -102,6 +121,14 @@ const logDocumentDownload = async (req, res) => {
                 entityId: parseInt(documentId),
                 details: { source }
             }
+        });
+
+        refreshAiTipsForUser({
+            prisma,
+            userId,
+            courseId: courseId ? parseInt(courseId) : null,
+            moduleId: modDoc.moduleId,
+            reason: 'document download'
         });
 
         res.status(201).json(log);
