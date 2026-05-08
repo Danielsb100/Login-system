@@ -1,4 +1,8 @@
+const fs = require('fs');
 const env = require('../config/env');
+const { createLocalAssetStorage } = require('./assetStorage');
+
+const assetStorage = createLocalAssetStorage({ rootDir: env.upload.storageDir });
 
 const DEFAULT_QUESTION_COUNT = 5;
 const DEFAULT_OPTIONS_PER_QUESTION = 4;
@@ -102,6 +106,54 @@ const extractResponseText = (responsePayload) => {
   return message?.text || '';
 };
 
+const getDocumentBuffer = (doc) => {
+  if (doc?.data) {
+    return Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data);
+  }
+
+  if (doc?.storageProvider === 'local' && doc.storageKey) {
+    return fs.readFileSync(assetStorage.resolvePath(doc.storageKey));
+  }
+
+  return null;
+};
+
+const appendDocumentFileContent = (content, doc, label, totalBytesRef) => {
+  if (!doc?.name || !doc?.type) return;
+
+  let buffer;
+  try {
+    if (Number.isFinite(doc.sizeBytes) && doc.sizeBytes > MAX_FILE_BYTES_PER_ITEM) {
+      buffer = Buffer.allocUnsafe(0);
+    } else {
+      buffer = getDocumentBuffer(doc);
+    }
+  } catch (error) {
+    content.push({
+      type: 'input_text',
+      text: `Skipped ${label} ${doc.name}: failed to read stored file content.`
+    });
+    return;
+  }
+
+  if (!buffer) return;
+  const fileSize = Number.isFinite(doc.sizeBytes) && doc.sizeBytes > buffer.length ? doc.sizeBytes : buffer.length;
+  if (fileSize > MAX_FILE_BYTES_PER_ITEM || totalBytesRef.value + fileSize > MAX_TOTAL_FILE_BYTES) {
+    content.push({
+      type: 'input_text',
+      text: `Skipped ${label} ${doc.name}: size ${fileSize} bytes exceeds AI context upload limits.`
+    });
+    return;
+  }
+
+  totalBytesRef.value += fileSize;
+  content.push({
+    type: 'input_file',
+    filename: doc.name,
+    file_data: `data:${doc.type};base64,${buffer.toString('base64')}`
+  });
+};
+
 const buildModuleContextContent = (module, options = {}) => {
   const instructionLines = Array.isArray(options.instructionLines) ? options.instructionLines : [];
   const content = [];
@@ -137,26 +189,9 @@ const buildModuleContextContent = (module, options = {}) => {
     ].filter((line) => line !== null).join('\n')
   });
 
-  let totalBytes = 0;
+  const totalBytesRef = { value: 0 };
   for (const moduleDocument of module.documents || []) {
-    const doc = moduleDocument.document;
-    if (!doc?.data || !doc?.name || !doc?.type) continue;
-
-    const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data);
-    if (buffer.length > MAX_FILE_BYTES_PER_ITEM || totalBytes + buffer.length > MAX_TOTAL_FILE_BYTES) {
-      content.push({
-        type: 'input_text',
-        text: `Skipped file ${doc.name}: size ${buffer.length} bytes exceeds AI context upload limits.`
-      });
-      continue;
-    }
-
-    totalBytes += buffer.length;
-    content.push({
-      type: 'input_file',
-      filename: doc.name,
-      file_data: `data:${doc.type};base64,${buffer.toString('base64')}`
-    });
+    appendDocumentFileContent(content, moduleDocument.document, 'file', totalBytesRef);
   }
 
   for (const video of module.videos || []) {
@@ -165,22 +200,7 @@ const buildModuleContextContent = (module, options = {}) => {
       ? (module.videoAssetDocuments || []).find((candidate) => candidate.id === documentId)
       : null;
 
-    if (!doc?.data || !doc?.name || !doc?.type) continue;
-    const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data);
-    if (buffer.length > MAX_FILE_BYTES_PER_ITEM || totalBytes + buffer.length > MAX_TOTAL_FILE_BYTES) {
-      content.push({
-        type: 'input_text',
-        text: `Skipped video asset ${doc.name}: size ${buffer.length} bytes exceeds AI context upload limits.`
-      });
-      continue;
-    }
-
-    totalBytes += buffer.length;
-    content.push({
-      type: 'input_file',
-      filename: doc.name,
-      file_data: `data:${doc.type};base64,${buffer.toString('base64')}`
-    });
+    appendDocumentFileContent(content, doc, 'video asset', totalBytesRef);
   }
 
   return content;

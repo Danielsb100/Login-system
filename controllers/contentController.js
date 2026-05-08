@@ -25,6 +25,20 @@ const isModuleManager = (user, module) => {
         || roles.has('SUPER_ADMIN');
 };
 
+const inferSubmittedQuizId = (module, resultAnswers = []) => {
+    const answeredQuestionIds = new Set((resultAnswers || [])
+        .map((answer) => parseInt(answer?.questionId, 10))
+        .filter(Number.isFinite));
+    const matchedQuizIds = new Set();
+
+    for (const quiz of module?.quizzes || []) {
+        const hasAnsweredQuestion = (quiz.questions || []).some((question) => answeredQuestionIds.has(question.id));
+        if (hasAnsweredQuestion) matchedQuizIds.add(quiz.id);
+    }
+
+    return matchedQuizIds.size === 1 ? [...matchedQuizIds][0] : null;
+};
+
 const normalizeQuizOptions = (options) => {
     if (!Array.isArray(options) || options.length < 2) {
         const error = new Error('At least 2 options are required.');
@@ -520,6 +534,7 @@ const submitQuiz = async (req, res) => {
 
         const totalQuestions = allQuestions.length || 1;
         const score = (correctCount / totalQuestions) * 100;
+        const quizId = inferSubmittedQuizId(module, resultAnswers);
 
         // Get attempt number
         const lastSubmission = await prisma.quizSubmission.findFirst({
@@ -532,6 +547,7 @@ const submitQuiz = async (req, res) => {
             const createdSubmission = await tx.quizSubmission.create({
                 data: {
                     moduleId,
+                    quizId,
                     userId,
                     score,
                     attemptNumber,
@@ -561,6 +577,7 @@ const submitQuiz = async (req, res) => {
         res.status(201).json({
             message: 'Quiz submitted successfully',
             submissionId: submission.id,
+            quizId,
             score,
             attemptNumber,
             courseId: parsedCourseId
@@ -589,5 +606,6 @@ module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
     createQuiz, updateQuiz, deleteQuiz, createAiGeneratedQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
-    submitQuiz, getQuizzesSubmissions
+    submitQuiz, getQuizzesSubmissions,
+    inferSubmittedQuizId
 };
