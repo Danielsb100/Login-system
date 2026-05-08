@@ -82,6 +82,23 @@
                     </div>
                 </div>
 
+                <section class="operations-panel glassmorphism fade-in" id="ai-tips-panel">
+                    <div class="section-header operations-panel-header">
+                        <div>
+                            <h3>AI Tips</h3>
+                            <p>Personal study guidance based on your course activity, material tracking, and quiz scores.</p>
+                        </div>
+                        <div class="operations-summary-badges">
+                            <span class="operations-pill" id="ai-tips-count">0 tips</span>
+                            <span class="operations-pill warning" id="ai-tips-warning-count">0 attention</span>
+                            <button type="button" id="btn-refresh-ai-tips" class="btn btn-secondary btn-sm">Refresh tips</button>
+                        </div>
+                    </div>
+                    <div id="ai-tips-list" class="operations-list empty-state-list">
+                        <div class="empty-state-inline">Loading AI tips...</div>
+                    </div>
+                </section>
+
                 <section class="operations-panel glassmorphism fade-in">
                     <div class="section-header operations-panel-header">
                         <div>
@@ -506,6 +523,16 @@
                                     </div>
                                     <div id="course-enrollments-list" class="operations-list empty-state-list">
                                         <div class="empty-state-inline">No learners enrolled yet.</div>
+                                    </div>
+                                </section>
+
+                                <section class="operations-card hidden" id="course-ai-tips-card">
+                                    <div class="operations-card-header">
+                                        <h4>AI Tips by student</h4>
+                                        <span id="course-ai-tips-meta" class="operations-meta">0 tips</span>
+                                    </div>
+                                    <div id="course-ai-tips-list" class="operations-list empty-state-list">
+                                        <div class="empty-state-inline">Select a managed course to load student AI tips.</div>
                                     </div>
                                 </section>
                             </div>

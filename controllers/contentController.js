@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const { notifyQuizSubmitted } = require('../services/notificationService');
 const { generateQuizFromModule, getModuleAssetUrl } = require('../services/openaiQuizService');
 const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+const { refreshAiTipsForUser } = require('../services/aiTipsService');
 
 const queueAiKnowledgeRefresh = (reason) => {
     scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
@@ -547,6 +548,14 @@ const submitQuiz = async (req, res) => {
             }, tx);
 
             return createdSubmission;
+        });
+
+        refreshAiTipsForUser({
+            prisma,
+            userId,
+            courseId: parsedCourseId,
+            moduleId,
+            reason: 'quiz submitted'
         });
 
         res.status(201).json({

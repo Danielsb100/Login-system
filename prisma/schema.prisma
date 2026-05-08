@@ -100,6 +100,7 @@ model User {
   ownedCourses Course[] @relation("CourseOwner")
   enrollments Enrollment[]
   moduleCompletions ModuleCompletion[]
+  aiTips       AiTip[]
   landingPages  LandingPage[] @relation("MasterLandingPages")
 
   createdAt     DateTime       @default(now())
@@ -310,6 +311,26 @@ enum LogSource {
   MULTIPLAYER_WORLD
 }
 
+enum AiTipScope {
+  COURSE
+  MODULE
+  QUIZ
+  SCHEDULE
+  MATERIALS
+}
+
+enum AiTipSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AiTipStatus {
+  ACTIVE
+  DISMISSED
+  STALE
+}
+
 enum AiKnowledgeBaseStatus {
   ACTIVE
   DISABLED
@@ -346,6 +367,7 @@ model TrainingModule {
   placements     WorldModulePlacement[]
   courseModules  CourseModule[]
   completions    ModuleCompletion[]
+  aiTips        AiTip[]
   
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -364,6 +386,7 @@ model Course {
   enrollments     Enrollment[]
   completions     ModuleCompletion[]
   placements      WorldModulePlacement[]
+  aiTips         AiTip[]
   landingPage     LandingPage? @relation("CourseLandingPage")
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
@@ -582,6 +605,33 @@ model WorldModulePlacement {
   interactedAnim String?         // Interaction animation name
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+}
+
+model AiTip {
+  id           Int             @id @default(autoincrement())
+  fingerprint  String          @unique
+  userId       Int
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId     Int?
+  course       Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId     Int?
+  module       TrainingModule? @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  scope        AiTipScope
+  severity     AiTipSeverity   @default(INFO)
+  title        String
+  message      String
+  reason       String?
+  actionLabel  String?
+  actionUrl    String?
+  metadata     Json?
+  status       AiTipStatus     @default(ACTIVE)
+  generatedAt  DateTime        @default(now())
+  dismissedAt  DateTime?
+  expiresAt    DateTime?
+
+  @@index([userId, status, generatedAt])
+  @@index([courseId, status])
+  @@index([moduleId, status])
 }
 
 model AiKnowledgeBaseConnection {

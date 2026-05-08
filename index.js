@@ -30,6 +30,7 @@ const moduleAiController = require('./controllers/moduleAiController');
 const aiVoiceController = require('./controllers/aiVoiceController');
 const aiKnowledgeController = require('./controllers/aiKnowledgeController');
 const trainingAiController = require('./controllers/trainingAiController');
+const aiTipsController = require('./controllers/aiTipsController');
 
 const COURSE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
 const MODULE_MANAGER_ROLES = ['MASTER', 'ADMIN', 'TUTOR'];
@@ -213,6 +214,9 @@ app.post('/modules/:id/quiz/submit', authenticateToken, contentController.submit
 app.get('/modules/:id/quiz/submissions', authenticateToken, contentController.getQuizzesSubmissions);
 app.post('/modules/:id/assistant/chat', authenticateToken, moduleAiController.chatWithModuleAssistant);
 app.post('/api/ai/chat', authenticateToken, trainingAiController.chat);
+app.get('/api/ai-tips/me', authenticateToken, aiTipsController.getMyTips);
+app.post('/api/ai-tips/:id/dismiss', authenticateToken, aiTipsController.dismissMyTip);
+app.get('/api/courses/:courseId/ai-tips/students', authenticateToken, roleMiddleware(COURSE_MANAGER_ROLES), aiTipsController.getCourseStudentTips);
 app.get('/api/ai/knowledge-base/config', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.getConfig);
 app.get('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.listConnections);
 app.post('/api/ai/knowledge-base/connections', authenticateToken, roleMiddleware(MODULE_MANAGER_ROLES), aiKnowledgeController.createConnection);
