@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const { notifyQuizSubmitted } = require('../services/notificationService');
 const { generateQuizFromModule, getModuleAssetUrl } = require('../services/openaiQuizService');
 const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+const { refreshAiTipsForUser } = require('../services/aiTipsService');
 
 const queueAiKnowledgeRefresh = (reason) => {
     scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
@@ -22,6 +23,20 @@ const isModuleManager = (user, module) => {
         || roles.has('ADMIN')
         || roles.has('MASTER')
         || roles.has('SUPER_ADMIN');
+};
+
+const inferSubmittedQuizId = (module, resultAnswers = []) => {
+    const answeredQuestionIds = new Set((resultAnswers || [])
+        .map((answer) => parseInt(answer?.questionId, 10))
+        .filter(Number.isFinite));
+    const matchedQuizIds = new Set();
+
+    for (const quiz of module?.quizzes || []) {
+        const hasAnsweredQuestion = (quiz.questions || []).some((question) => answeredQuestionIds.has(question.id));
+        if (hasAnsweredQuestion) matchedQuizIds.add(quiz.id);
+    }
+
+    return matchedQuizIds.size === 1 ? [...matchedQuizIds][0] : null;
 };
 
 const normalizeQuizOptions = (options) => {
@@ -519,6 +534,7 @@ const submitQuiz = async (req, res) => {
 
         const totalQuestions = allQuestions.length || 1;
         const score = (correctCount / totalQuestions) * 100;
+        const quizId = inferSubmittedQuizId(module, resultAnswers);
 
         // Get attempt number
         const lastSubmission = await prisma.quizSubmission.findFirst({
@@ -531,6 +547,7 @@ const submitQuiz = async (req, res) => {
             const createdSubmission = await tx.quizSubmission.create({
                 data: {
                     moduleId,
+                    quizId,
                     userId,
                     score,
                     attemptNumber,
@@ -549,9 +566,18 @@ const submitQuiz = async (req, res) => {
             return createdSubmission;
         });
 
+        refreshAiTipsForUser({
+            prisma,
+            userId,
+            courseId: parsedCourseId,
+            moduleId,
+            reason: 'quiz submitted'
+        });
+
         res.status(201).json({
             message: 'Quiz submitted successfully',
             submissionId: submission.id,
+            quizId,
             score,
             attemptNumber,
             courseId: parsedCourseId
@@ -580,5 +606,6 @@ module.exports = {
     addVideo, updateVideo, deleteVideo,
     addDocument, updateDocument, deleteDocument,
     createQuiz, updateQuiz, deleteQuiz, createAiGeneratedQuiz, addQuizQuestion, updateQuizQuestion, deleteQuizQuestion,
-    submitQuiz, getQuizzesSubmissions
+    submitQuiz, getQuizzesSubmissions,
+    inferSubmittedQuizId
 };

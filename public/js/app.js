@@ -871,6 +871,7 @@ async function loadDashboard() {
         }
 
         await loadUserDocuments();
+        await loadAiTips();
         await initializeTrainingAiPanel({ canManageAi: canManageModules || isAdmin });
     } catch (error) {
         console.error('Dashboard error:', error);
@@ -881,6 +882,79 @@ async function loadDashboard() {
             console.error('Critical Dashboard failure: ', error.message);
         }
     }
+}
+
+function getAiTipSeverityClass(severity) {
+    if (severity === 'CRITICAL') return 'priority-critical';
+    if (severity === 'WARNING') return 'priority-medium';
+    return 'priority-low';
+}
+
+function renderAiTips(payload = {}) {
+    const list = document.getElementById('ai-tips-list');
+    const count = document.getElementById('ai-tips-count');
+    const warning = document.getElementById('ai-tips-warning-count');
+    if (!list) return;
+
+    const tips = Array.isArray(payload.tips) ? payload.tips : [];
+    const counts = payload.severityCounts || {};
+    if (count) count.textContent = `${tips.length} tip${tips.length === 1 ? '' : 's'}`;
+    if (warning) warning.textContent = `${(counts.WARNING || 0) + (counts.CRITICAL || 0)} attention`;
+
+    if (!tips.length) {
+        list.innerHTML = '<div class="empty-state-inline">No AI tips right now. Keep studying and the assistant will surface signals here.</div>';
+        return;
+    }
+
+    list.innerHTML = tips.map((tip) => `
+        <article class="operation-item ${getAiTipSeverityClass(tip.severity)}" data-ai-tip-id="${tip.id}">
+            <div class="operation-item-main">
+                <div class="operation-title-row">
+                    <strong>${escapeHtml(tip.title || 'AI tip')}</strong>
+                    <span class="operation-badge">${escapeHtml(tip.severity || 'INFO')}</span>
+                    <span class="operation-badge">${escapeHtml(tip.scope || 'COURSE')}</span>
+                </div>
+                <p>${escapeHtml(tip.message || '')}</p>
+                ${tip.reason ? `<p class="operation-helper">Why: ${escapeHtml(tip.reason)}</p>` : ''}
+            </div>
+            <div class="operation-actions">
+                ${tip.actionUrl ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(tip.actionUrl)}">${escapeHtml(tip.actionLabel || 'Open')}</a>` : ''}
+                <button type="button" class="btn btn-secondary btn-sm" data-ai-tip-dismiss="${tip.id}">Dismiss</button>
+            </div>
+        </article>
+    `).join('');
+
+    list.querySelectorAll('[data-ai-tip-dismiss]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+                await apiCall(`/api/ai-tips/${button.dataset.aiTipDismiss}/dismiss`, 'POST');
+                await loadAiTips({ refresh: false });
+            } catch (error) {
+                console.error('Failed to dismiss AI tip:', error);
+                button.disabled = false;
+            }
+        });
+    });
+}
+
+async function loadAiTips({ refresh = true } = {}) {
+    const list = document.getElementById('ai-tips-list');
+    if (!list) return;
+    try {
+        if (refresh) list.innerHTML = '<div class="empty-state-inline">Refreshing AI tips...</div>';
+        const payload = await apiCall(`/api/ai-tips/me?refresh=${refresh ? 'true' : 'false'}`);
+        renderAiTips(payload);
+    } catch (error) {
+        console.error('AI tips error:', error);
+        list.innerHTML = '<div class="empty-state-inline">Could not load AI tips yet.</div>';
+    }
+}
+window.loadAiTips = loadAiTips;
+
+const btnRefreshAiTips = document.getElementById('btn-refresh-ai-tips');
+if (btnRefreshAiTips) {
+    btnRefreshAiTips.addEventListener('click', () => loadAiTips({ refresh: true }));
 }
 
 let trainingAiConversationId = localStorage.getItem('training_ai_conversation_id') || `training-ai-${Date.now()}`;

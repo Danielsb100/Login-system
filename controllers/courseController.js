@@ -1,5 +1,7 @@
 const prisma = require('../config/db');
 const { scheduleKnowledgeBaseRefresh } = require('../services/aiKnowledgeSyncService');
+const { notifyEnrollmentChanged } = require('../services/notificationService');
+const { refreshAiTipsForUser } = require('../services/aiTipsService');
 
 const queueAiKnowledgeRefresh = (reason) => {
   scheduleKnowledgeBaseRefresh({ prisma, reason }).catch((error) => {
@@ -18,7 +20,13 @@ function getEffectiveUserRoles(user) {
 
 function isCourseManager(user, course) {
   const roles = getEffectiveUserRoles(user);
-  return course.ownerMasterId === user.id || roles.has('ADMIN') || roles.has('SUPER_ADMIN') || roles.has('MASTER');
+  return course.ownerMasterId === user.id
+    || roles.has('ADMIN')
+    || roles.has('SUPER_ADMIN')
+    || roles.has('MASTER')
+    || roles.has('TEACHER')
+    || roles.has('TUTOR')
+    || roles.has('COORDINATOR');
 }
 
 function slugify(value) {
@@ -366,7 +374,7 @@ async function getMyCourses(req, res) {
 async function getAccessibleCourses(req, res) {
   try {
     const roles = getEffectiveUserRoles(req.user);
-    const canManage = roles.has('MASTER') || roles.has('ADMIN') || roles.has('SUPER_ADMIN') || roles.has('TEACHER') || roles.has('COORDINATOR');
+    const canManage = roles.has('MASTER') || roles.has('ADMIN') || roles.has('SUPER_ADMIN') || roles.has('TEACHER') || roles.has('TUTOR') || roles.has('COORDINATOR');
 
     const courses = await prisma.course.findMany({
       where: canManage
@@ -696,6 +704,13 @@ async function enrollUser(req, res) {
       create: { courseId, userId, status: 'ENROLLED' }
     });
 
+    refreshAiTipsForUser({
+      prisma,
+      userId,
+      courseId,
+      reason: 'course enrollment'
+    });
+
     return res.status(201).json(enrollment);
   } catch (error) {
     console.error(error);
@@ -777,6 +792,14 @@ async function completeCourseModule(req, res) {
         }
       });
     }
+
+    refreshAiTipsForUser({
+      prisma,
+      userId: req.user.id,
+      courseId,
+      moduleId,
+      reason: 'module completion'
+    });
 
     return res.json({
       message: 'Module marked as completed.',

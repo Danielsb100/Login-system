@@ -237,6 +237,50 @@ function renderCourseEnrollments(course) {
     });
 }
 
+async function loadCourseAiTips(course) {
+    const card = document.getElementById('course-ai-tips-card');
+    const meta = document.getElementById('course-ai-tips-meta');
+    const list = document.getElementById('course-ai-tips-list');
+    if (!card || !meta || !list) return;
+
+    card.classList.toggle('hidden', !course?.canManage);
+    if (!course?.canManage) return;
+
+    list.innerHTML = '<div class="empty-state-inline">Loading student AI tips...</div>';
+    try {
+        const payload = await window.apiCall(`/api/courses/${course.id}/ai-tips/students`);
+        const students = Array.isArray(payload.students) ? payload.students : [];
+        const tipTotal = students.reduce((total, student) => total + (student.tips?.length || 0), 0);
+        meta.textContent = `${tipTotal} highlighted tips`;
+        if (!students.length) {
+            list.innerHTML = '<div class="empty-state-inline">No enrolled students yet.</div>';
+            return;
+        }
+        list.innerHTML = students.map((student) => {
+            const counts = student.severityCounts || {};
+            const tips = Array.isArray(student.tips) ? student.tips : [];
+            return `
+                <article class="operation-item ${(counts.CRITICAL || 0) ? 'priority-critical' : (counts.WARNING || 0) ? 'priority-medium' : 'priority-low'}">
+                    <div class="operation-item-main">
+                        <div class="operation-title-row">
+                            <strong>${escapeCourseHtml(student.displayName || student.username || student.email || 'Student')}</strong>
+                            <span class="operation-badge">${Math.round(student.progressPercent || 0)}% progress</span>
+                            <span class="operation-badge">${counts.CRITICAL || 0} critical</span>
+                            <span class="operation-badge">${counts.WARNING || 0} warning</span>
+                        </div>
+                        ${tips.length
+                            ? tips.map((tip) => `<p><strong>${escapeCourseHtml(tip.title || 'AI tip')}:</strong> ${escapeCourseHtml(tip.message || '')}</p>`).join('')
+                            : '<p>No active tips for this student.</p>'}
+                    </div>
+                </article>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Course AI tips error:', error);
+        list.innerHTML = '<div class="empty-state-inline">Could not load student AI tips.</div>';
+    }
+}
+
 function renderCourseDetail(course) {
     coursesState.selectedCourse = course;
     const empty = document.getElementById('course-detail-empty');
@@ -271,6 +315,7 @@ function renderCourseDetail(course) {
 
     renderCourseModules(course);
     renderCourseEnrollments(course);
+    loadCourseAiTips(course);
 }
 
 async function loadCourseDetail(courseId) {
